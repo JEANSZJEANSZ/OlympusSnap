@@ -2,6 +2,7 @@
 <div
 	class="landing"
 	class:reduced
+	class:exiting
 	role="button"
 	tabindex="0"
 	aria-label="Enter Mount Olympus photobooth"
@@ -10,9 +11,13 @@
 	onpointermove={onPointerMove}
 >
 	<div class="world" aria-hidden="true">
-		<div class="olympus-sky-mount" bind:this={skyRootEl}></div>
-		<canvas class="pixel-canvas hero" bind:this={heroCanvasEl}></canvas>
+		<div class="olympus-sky-mount" {@attach attachSkyRoot}></div>
+		<canvas class="pixel-canvas hero" {@attach attachHeroCanvas}></canvas>
 		<div class="light-veil"></div>
+	</div>
+
+	<div class="exit-flash" aria-hidden="true">
+		<div class="exit-bolt"></div>
 	</div>
 
 	<div class="stage">
@@ -56,6 +61,22 @@
 	let heroCanvasEl = $state();
 	let reduced = $state(false);
 	let exiting = $state(false);
+
+	/** @type {import('svelte/attachments').Attachment<HTMLElement>} */
+	const attachSkyRoot = (element) => {
+		skyRootEl = element;
+		return () => {
+			if (skyRootEl === element) skyRootEl = undefined;
+		};
+	};
+
+	/** @type {import('svelte/attachments').Attachment<HTMLCanvasElement>} */
+	const attachHeroCanvas = (element) => {
+		heroCanvasEl = element;
+		return () => {
+			if (heroCanvasEl === element) heroCanvasEl = undefined;
+		};
+	};
 
 	/** @type {null | { setDay: (d: number, immediate?: boolean) => void, nudgeDay: (d: number) => void, setPointer: (x: number, y: number) => void, dispose: () => void }} */
 	let world = null;
@@ -147,6 +168,8 @@
 		inset: 0;
 		z-index: 0;
 		pointer-events: none;
+		transform-origin: 50% 58%;
+		will-change: transform, filter;
 	}
 
 	.pixel-canvas {
@@ -197,6 +220,42 @@
 		mix-blend-mode: multiply;
 	}
 
+	.exit-flash {
+		position: absolute;
+		inset: 0;
+		z-index: 8;
+		display: grid;
+		place-items: center;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+		opacity: 0;
+		background: #fffdf5;
+		will-change: opacity;
+	}
+
+	.exit-bolt {
+		width: clamp(2rem, 5vw, 4rem);
+		height: clamp(18rem, 72vh, 46rem);
+		opacity: 0;
+		background: linear-gradient(180deg, #ffffff 0 38%, var(--gold-bright) 100%);
+		clip-path: polygon(
+			56% 0,
+			96% 0,
+			68% 31%,
+			91% 31%,
+			43% 65%,
+			64% 65%,
+			8% 100%,
+			31% 56%,
+			11% 56%,
+			47% 25%,
+			27% 25%
+		);
+		transform-origin: center;
+		will-change: transform, opacity;
+	}
+
 	.landing:not(.fx-anime):not(.reduced) .light-veil {
 		animation: veil-breathe 8s ease-in-out infinite;
 	}
@@ -210,6 +269,10 @@
 		padding: clamp(0.55rem, 2vh, 1rem) 1rem 0.55rem;
 		pointer-events: none;
 		text-align: center;
+	}
+
+	.landing.exiting .stage {
+		pointer-events: none;
 	}
 
 	.mast {

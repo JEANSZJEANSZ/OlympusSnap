@@ -19,7 +19,7 @@ const _tintC = new Color();
  * @param {import('three').MeshBasicMaterial} mat
  * @param {string} dayHex
  * @param {string} nightHex
- * @param {string} [noonHex]
+ * @param {string | undefined} noonHex
  * @param {number} dayAmt
  */
 function applyDayTint(mat, dayHex, nightHex, noonHex, dayAmt) {
@@ -279,6 +279,35 @@ export function buildTemple() {
 	cell(0, -0.2, W - 10, 13, marbleDark, -0.4, 0.14);
 	cell(0, 0.2, W - 14, 11, pedimentBg, -0.28, 0.12);
 
+	/*
+	 * Cella front — the architectural wall immediately behind the colonnade.
+	 * It is split around a recessed doorway so it closes every open bay
+	 * without reading as a flat, camera-facing backplate.
+	 */
+	const cellaFrontZ = -0.06;
+	const cellaWallW = W - 3;
+	const cellaWallH = 15.8;
+	const cellaWallY = -0.55;
+	const doorW = 5.4;
+	const doorH = 11.8;
+	const doorY = -2.5;
+	const sideWallW = (cellaWallW - doorW) / 2;
+	const sideWallX = (doorW + sideWallW) / 2;
+
+	/* Side wall fields cover all intercolumniation gaps. */
+	cell(-sideWallX, cellaWallY, sideWallW, cellaWallH, marbleMid, cellaFrontZ, 0.08);
+	cell(sideWallX, cellaWallY, sideWallW, cellaWallH, marbleMid, cellaFrontZ, 0.08);
+	/* Lintel closes the area above the doorway. */
+	const lintelBottom = doorY + doorH / 2;
+	const wallTop = cellaWallY + cellaWallH / 2;
+	cell(0, (lintelBottom + wallTop) / 2, doorW, wallTop - lintelBottom, marble, cellaFrontZ, 0.08);
+
+	/* Doorway backing sits deeper than the wall, preserving porch depth. */
+	cell(0, doorY, doorW, doorH, pedimentBg, -0.2, 0.1);
+	cell(-doorW / 2 - 0.3, doorY, 0.6, doorH + 0.5, marbleDark, -0.035, 0.07);
+	cell(doorW / 2 + 0.3, doorY, 0.6, doorH + 0.5, marbleDark, -0.035, 0.07);
+	cell(0, lintelBottom + 0.3, doorW + 1.2, 0.6, marbleLit, -0.03, 0.07);
+
 	/* ——— interior floor — solid pad between columns (was open sky/void) ——— */
 	cell(0, -9.45, W - 4, 1.15, marbleMid, midZ, depth * 0.9);
 	cell(0, -9.05, W - 7, 0.55, marble, midZ + 0.02, depth * 0.8);
@@ -473,66 +502,93 @@ export function buildCloudMush() {
 	const u = 0.042;
 	const cell = makeCell(g, u);
 
-	/* Base slab sits clearly behind / below the stylobate contact plane */
-	cell(0, -1.8, 42, 5.2, mid, -0.12, 0.18);
-	cell(0, -0.9, 40, 3.8, lit, -0.1, 0.16);
-	cell(0, -3.6, 38, 3.0, shade, -0.14, 0.15);
-	cell(0, -5.0, 32, 2.0, deep, -0.16, 0.13);
+	/**
+	 * One pixel-cumulus puff: a deep body, bright crown, and shaded belly.
+	 * Overlapping these clusters makes a scalloped silhouette while the
+	 * staggered Z/depth values expose real volume during pointer yaw.
+	 * @param {number} gx
+	 * @param {number} gy
+	 * @param {number} gw
+	 * @param {number} gh
+	 * @param {number} z
+	 * @param {MeshBasicMaterial} body
+	 * @param {MeshBasicMaterial} cap
+	 * @param {number} depth
+	 */
+	function puff(gx, gy, gw, gh, z, body, cap, depth) {
+		cell(gx, gy, gw, gh, body, z, depth);
+		cell(
+			gx - gw * 0.08,
+			gy + gh * 0.34,
+			gw * 0.68,
+			gh * 0.38,
+			cap,
+			z + depth * 0.22,
+			depth * 0.68
+		);
+		cell(
+			gx + gw * 0.08,
+			gy - gh * 0.34,
+			gw * 0.76,
+			gh * 0.3,
+			body === shade || body === deep ? deep : shade,
+			z + depth * 0.16,
+			depth * 0.74
+		);
+	}
 
 	/**
-	 * Lobes stay under the temple pad (lower gy + more negative z).
-	 * Center volume is flatter so it never coplanar-fights the stylobate.
-	 * @type {[number, number, number, number, MeshBasicMaterial, number][]}
+	 * Back crown: pale, high puffs frame the temple without covering its pad.
+	 * @type {[number, number, number, number, number, MeshBasicMaterial, MeshBasicMaterial, number][]}
 	 */
-	const lobes = [
-		[0, 0.4, 14, 3.2, lit, -0.08],
-		[-4, 0.2, 12, 3.0, litSoft, -0.09],
-		[4.2, 0.25, 11, 2.9, lit, -0.09],
-		[-8.5, -0.1, 10, 3.2, mid, -0.1],
-		[8.8, 0.0, 10, 3.0, midCool, -0.1],
-		[-12.5, -0.5, 9, 3.0, mid, -0.11],
-		[12.8, -0.4, 9, 2.9, mid, -0.11],
-		[-2, 1.4, 7, 2.2, lit, -0.06],
-		[2.5, 1.3, 6.5, 2.1, litSoft, -0.06],
-		[-6.5, 1.0, 6.5, 2.2, lit, -0.07],
-		[7, 1.1, 6.5, 2.1, lit, -0.07],
-		[0.5, 1.9, 5, 1.6, lit, -0.05],
-		[-16, -0.8, 8, 3.0, midCool, -0.12],
-		[16.2, -0.7, 8, 2.8, mid, -0.12],
-		[-18.5, -1.8, 6, 2.4, shade, -0.14],
-		[18.8, -1.6, 6, 2.3, shade, -0.14],
-		[-14, 0.4, 6.5, 2.4, lit, -0.1],
-		[14.2, 0.35, 6.5, 2.3, litSoft, -0.1],
-		[-10, -1.0, 8, 3.2, mid, -0.11],
-		[10.2, -0.9, 8, 3.1, mid, -0.11],
-		[-5.5, -1.2, 9, 2.9, midCool, -0.12],
-		[5.8, -1.1, 9, 2.8, mid, -0.12],
-		[0, -0.4, 18, 2.6, lit, -0.1],
-		[-7, -4.0, 10, 2.2, shade, -0.15],
-		[7.2, -3.8, 10, 2.1, shade, -0.15],
-		[-12, -3.5, 7, 1.9, deep, -0.16],
-		[12.5, -3.4, 7, 1.9, deep, -0.16],
-		[0, -5.4, 18, 1.6, deep, -0.17],
-		[-3.5, -2.8, 8, 2.0, shade, -0.14],
-		[4, -2.7, 8, 1.9, shade, -0.14]
+	const backPuffs = [
+		[-15.5, -0.5, 8.5, 4.1, -0.28, midCool, litSoft, 0.26],
+		[-10.2, 0.3, 10, 4.8, -0.26, mid, lit, 0.3],
+		[-4.3, 0.75, 10.5, 5.1, -0.24, midCool, litSoft, 0.32],
+		[2.3, 0.65, 11.5, 5.2, -0.25, mid, lit, 0.32],
+		[8.8, 0.25, 10.5, 4.7, -0.26, midCool, litSoft, 0.3],
+		[15, -0.7, 8.5, 4, -0.28, mid, lit, 0.26]
 	];
 
-	for (const [gx, gy, gw, gh, mat, z] of lobes) {
-		cell(gx, gy, gw, gh, mat, z, 0.12);
+	/**
+	 * Front crown: brighter, staggered puffs create the near scalloped rim.
+	 * @type {[number, number, number, number, number, MeshBasicMaterial, MeshBasicMaterial, number][]}
+	 */
+	const frontPuffs = [
+		[-18, -1.7, 7, 4.1, -0.04, midCool, litSoft, 0.22],
+		[-14, -0.8, 8.5, 4.8, -0.02, mid, lit, 0.26],
+		[-8.8, -0.45, 9, 5.1, 0, midCool, litSoft, 0.28],
+		[-3.2, -0.65, 9.5, 4.7, 0.01, mid, lit, 0.29],
+		[2.4, -0.55, 10, 4.9, 0.01, midCool, litSoft, 0.29],
+		[8.2, -0.4, 9.2, 5, 0, mid, lit, 0.28],
+		[13.5, -0.9, 8.5, 4.7, -0.02, midCool, litSoft, 0.26],
+		[18, -1.8, 6.8, 3.9, -0.04, mid, lit, 0.22]
+	];
+
+	/**
+	 * Deep hanging lobes give the bank a soft, irregular underbelly.
+	 * @type {[number, number, number, number, number, MeshBasicMaterial, MeshBasicMaterial, number][]}
+	 */
+	const bellyPuffs = [
+		[-15, -4.2, 8.5, 3.7, -0.2, shade, midCool, 0.28],
+		[-9.5, -4.5, 10, 4.1, -0.17, shade, mid, 0.31],
+		[-3.2, -4.8, 11.5, 4.4, -0.15, deep, midCool, 0.32],
+		[3.8, -4.7, 11.5, 4.3, -0.14, shade, mid, 0.32],
+		[10.3, -4.4, 9.8, 4, -0.17, deep, midCool, 0.3],
+		[15.5, -4, 8, 3.5, -0.2, shade, mid, 0.27]
+	];
+
+	for (const def of [...backPuffs, ...bellyPuffs, ...frontPuffs]) {
+		const [gx, gy, gw, gh, z, body, cap, depth] = def;
+		puff(gx, gy, gw, gh, z, body, cap, depth);
 	}
 
-	/* Rim puffs sit on the sides — keep them off the temple pad centerline */
-	const rim = [
-		[-9.5, 2.2, 4.5, 1.8],
-		[-12, 1.6, 3.5, 1.5],
-		[5.5, 2.0, 4.0, 1.6],
-		[11, 1.8, 4, 1.7],
-		[-15, 0.9, 3.5, 1.6],
-		[15.5, 0.8, 3.5, 1.5]
-	];
-	for (const [gx, gy, gw, gh] of rim) {
-		cell(gx, gy, gw, gh, lit, -0.04, 0.09);
-	}
+	/*
+	 * Small contact pad only: hidden under the crepidoma, it gives the temple
+	 * a stable nest without restoring the old full-width platform silhouette.
+	 */
+	cell(0, 1.15, 22, 1.15, litSoft, -0.09, 0.2);
+	cell(0, 0.7, 25, 0.7, mid, -0.12, 0.24);
 
 	/* Edge wisps — peel off the bank, forever loop off-screen */
 	/** @type {Group[]} */

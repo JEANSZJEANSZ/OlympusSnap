@@ -71,29 +71,81 @@ export function createLandingMotion(root, opts = {}) {
 	}
 
 	/**
-	 * Short cart-insert flash, then run `onDone`.
+	 * Rush into the temple, strike lightning, then route under a whiteout.
 	 * @param {() => void} onDone
 	 */
 	function playExit(onDone) {
-		if (reduced) {
-			onDone();
-			return;
-		}
+		root.classList.add('exiting');
+		entrance?.pause();
 		pulseLoop?.pause();
 		shimmerLoop?.pause();
-		const plaque = root.querySelector('.plaque');
-		const veil = root.querySelector('.light-veil');
-		const hero = root.querySelector('.pixel-canvas.hero');
-		const hint = root.querySelector('.ascend-hint');
+
+		const flash = root.querySelector('.exit-flash');
+		const bolt = root.querySelector('.exit-bolt');
+
+		if (reduced) {
+			if (!flash) {
+				onDone();
+				return;
+			}
+			exitTl = createTimeline({
+				defaults: { ease: 'linear' },
+				onComplete: onDone
+			});
+			exitTl.add(flash, { opacity: [0, 1], duration: 120 }, 0);
+			return;
+		}
+
+		const world = root.querySelector('.world');
+		const chrome = root.querySelectorAll('.plaque, .ascend-hint, .oracle');
 		exitTl = createTimeline({
 			defaults: { ease: 'inQuad' },
 			onComplete: onDone
 		});
-		if (plaque) exitTl.add(plaque, { scale: 0.94, opacity: 0.35, duration: 160 }, 0);
-		if (hint) exitTl.add(hint, { opacity: 0, y: '0.3rem', duration: 140 }, 0);
-		if (veil) exitTl.add(veil, { opacity: [0.55, 1.2, 0.2], duration: 180 }, 0);
-		if (hero) exitTl.add(hero, { opacity: 0.25, duration: 160 }, 20);
-		if (!plaque && !hint && !veil && !hero) onDone();
+
+		let hasStep = false;
+		if (chrome.length) {
+			hasStep = true;
+			exitTl.add(
+				chrome,
+				{ opacity: 0, y: '-0.7rem', duration: 280, delay: stagger(35) },
+				0
+			);
+		}
+		if (world) {
+			hasStep = true;
+			exitTl.add(
+				world,
+				{
+					scale: [1, 2.35],
+					y: ['0%', '8%'],
+					filter: ['brightness(1)', 'brightness(1.18)'],
+					duration: 900,
+					ease: 'inExpo'
+				},
+				0
+			);
+		}
+		if (flash) {
+			hasStep = true;
+			exitTl.add(flash, { opacity: [0, 1], duration: 260, ease: 'inExpo' }, 680);
+			exitTl.add(flash, { opacity: 1, duration: 160, ease: 'linear' }, 940);
+		}
+		if (bolt) {
+			hasStep = true;
+			exitTl.add(
+				bolt,
+				{
+					opacity: [0, 1, 0],
+					scaleX: [0.65, 1.15, 0.85],
+					scaleY: [0.7, 1.25, 1.55],
+					duration: 300,
+					ease: 'outQuad'
+				},
+				650
+			);
+		}
+		if (!hasStep) onDone();
 	}
 
 	function dispose() {
@@ -106,6 +158,7 @@ export function createLandingMotion(root, opts = {}) {
 		shimmerLoop = null;
 		exitTl = null;
 		root.classList.remove('fx-anime');
+		root.classList.remove('exiting');
 	}
 
 	return { playExit, dispose };
