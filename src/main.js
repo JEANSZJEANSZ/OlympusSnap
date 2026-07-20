@@ -1,4 +1,5 @@
 import { mount } from 'svelte';
+import '@fontsource/press-start-2p/400.css';
 import App from './App.svelte';
 import './global.css';
 

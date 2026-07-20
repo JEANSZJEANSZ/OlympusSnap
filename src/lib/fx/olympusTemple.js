@@ -182,13 +182,10 @@ function buildFlank(flank, side, u, W, mats) {
 
 	for (let i = 1; i <= bays; i++) {
 		const z = -i * bay;
+		/* plain stone frieze band — no painted metopes */
+		cell(xEdge, 9.15, 1.5, 1.8, triglyph, z, stripThick);
 		if (i % 2 === 1) {
-			cell(xEdge, 9.3, 1.5, 2.2, triglyph, z, stripThick);
-			cell(xEdge, 9.3, 0.35, 2.0, triglyphShade, z + 0.02, stripThick * 0.9);
-			cell(xEdge, 8.15, 1.5, 0.28, triglyphShade, z, stripThick);
-		} else {
-			cell(xEdge, 9.3, 1.5, 2.0, ochreLit, z, stripThick);
-			cell(xEdge, 9.3, 1.0, 1.4, ochre, z + 0.02, stripThick * 0.9);
+			cell(xEdge, 9.15, 0.4, 1.1, triglyphShade, z + 0.02, stripThick * 0.9);
 		}
 	}
 
@@ -196,9 +193,9 @@ function buildFlank(flank, side, u, W, mats) {
 	cell(xEdge, 11.15, 1.9, 0.35, marbleMid, stripZ, stripLen);
 
 	/* low roof eave — seals sky hole when yaw peeks; no steep multi-tier roof */
-	cell(xEdge, 12.0, 2.2, 0.7, marble, stripZ, stripLen);
-	cell(xEdge, 12.55, 1.6, 0.5, marbleLit, stripZ, stripLen * 0.9);
-	cell(xEdge - side * 0.35, 12.2, 0.4, 1.0, shade, stripZ, stripLen * 0.85);
+	cell(xEdge, 11.6, 2.2, 0.55, marble, stripZ, stripLen);
+	cell(xEdge, 12.05, 1.6, 0.4, marbleLit, stripZ, stripLen * 0.9);
+	cell(xEdge - side * 0.35, 11.8, 0.4, 0.85, shade, stripZ, stripLen * 0.85);
 
 	/* inner naos wall + floor ledge along the flank */
 	cell(xEdge - side * 1.4, -1.5, 1.0, 13.5, shade, stripZ - 0.12, stripLen * 0.7);
@@ -218,21 +215,20 @@ export function buildTemple() {
 	pivot.add(leftFlank);
 	pivot.add(rightFlank);
 
-	/* Pentelic / limestone marble — warm ivory, not cool blue-gray or gold leaf */
-	const marble = new MeshBasicMaterial({ color: '#f2ebe0' });
-	const marbleLit = new MeshBasicMaterial({ color: '#fff8f0' });
-	const marbleMid = new MeshBasicMaterial({ color: '#ddd0c0' });
-	const marbleDark = new MeshBasicMaterial({ color: '#c0b09c' });
-	const shade = new MeshBasicMaterial({ color: '#968574' });
+	/* Pantheon / weathered travertine — cream buff, not saturated yellow */
+	const marble = new MeshBasicMaterial({ color: '#d2c1a5' });
+	const marbleLit = new MeshBasicMaterial({ color: '#f5f1e6' });
+	const marbleMid = new MeshBasicMaterial({ color: '#b8a890' });
+	const marbleDark = new MeshBasicMaterial({ color: '#8f8270' });
+	const shade = new MeshBasicMaterial({ color: '#6d5f52' });
 	const pedimentBg = new MeshBasicMaterial({ color: '#5a5046' });
-	/* Doric triglyphs — muted stone blue-gray grooves, not navy paint */
-	const triglyph = new MeshBasicMaterial({ color: '#d8cfc2' });
-	const triglyphShade = new MeshBasicMaterial({ color: '#8a7d6e' });
-	/* Soft clay ochre metopes — Parthenon polychromy whisper, not shrine red */
-	const ochre = new MeshBasicMaterial({ color: '#b08a5c' });
-	const ochreLit = new MeshBasicMaterial({ color: '#c9a574' });
-	const figure = new MeshBasicMaterial({ color: '#f0e8dc' });
-	const figureShade = new MeshBasicMaterial({ color: '#cfc2b0' });
+	/* Inscription / molding accents — same stone family, slightly darker */
+	const triglyph = new MeshBasicMaterial({ color: '#c4b49a' });
+	const triglyphShade = new MeshBasicMaterial({ color: '#7a6e60' });
+	const ochre = new MeshBasicMaterial({ color: '#a89880' });
+	const ochreLit = new MeshBasicMaterial({ color: '#c8bba0' });
+	const figure = new MeshBasicMaterial({ color: '#e8dfd0' });
+	const figureShade = new MeshBasicMaterial({ color: '#b0a490' });
 
 	const mats = {
 		marble,
@@ -323,111 +319,96 @@ export function buildTemple() {
 
 	/* ——— rear wall — closes the cella when peeking past the columns ——— */
 	cell(0, -0.5, W - 3, 15.5, marbleDark, rearZ - 0.03, 0.12);
-	cell(0, 12.6, W - 1, 3.2, marble, rearZ, 0.1);
-	cell(0, 14.2, W - 8, 2.2, marbleMid, rearZ, 0.09);
+	cell(0, 11.8, W - 1, 2.4, marble, rearZ, 0.1);
+	cell(0, 13.0, W - 6, 1.6, marbleMid, rearZ, 0.09);
 
-	/* ——— 6 Doric columns — fully in front of naos ——— */
-	const cols = [-12.5, -7.5, -2.5, 2.5, 7.5, 12.5];
+	/* ——— 8 Corinthian-style columns (Pantheon portico rhythm) ——— */
+	const cols = [-13.125, -9.375, -5.625, -1.875, 1.875, 5.625, 9.375, 13.125];
 	for (const cx of cols) {
-		cell(cx, 6.8, 2.9, 0.65, marbleLit, 0.16, 0.1);
-		cell(cx, 6.2, 2.4, 0.65, marble, 0.16, 0.1);
-		cell(cx, -1.2, 2.1, 13.6, marble, 0.14, 0.12);
-		cell(cx - 0.5, -1.2, 0.3, 13.2, marbleMid, 0.17, 0.08);
-		cell(cx - 0.15, -1.2, 0.25, 13.2, marbleDark, 0.18, 0.07);
-		cell(cx + 0.15, -1.2, 0.25, 13.2, marbleLit, 0.18, 0.07);
-		cell(cx + 0.5, -1.2, 0.3, 13.2, marbleMid, 0.17, 0.08);
-		/* bases sit on the top stylobate tread */
-		cell(cx, -8.55, 2.5, 0.8, marbleDark, 0.15, 0.1);
-		cell(cx, -9.05, 2.8, 0.4, shade, 0.13, 0.09);
+		/* leafy capital stack */
+		cell(cx, 7.15, 3.1, 0.55, marbleLit, 0.17, 0.1);
+		cell(cx, 6.7, 2.7, 0.5, marble, 0.16, 0.1);
+		cell(cx - 0.7, 6.55, 0.7, 0.55, marbleLit, 0.18, 0.08);
+		cell(cx + 0.7, 6.55, 0.7, 0.55, marbleLit, 0.18, 0.08);
+		cell(cx, 6.15, 2.35, 0.45, marbleMid, 0.16, 0.09);
+		/* shaft */
+		cell(cx, -1.35, 2.0, 13.4, marble, 0.14, 0.12);
+		cell(cx - 0.45, -1.35, 0.28, 13.0, marbleMid, 0.17, 0.08);
+		cell(cx - 0.12, -1.35, 0.22, 13.0, marbleDark, 0.18, 0.07);
+		cell(cx + 0.12, -1.35, 0.22, 13.0, marbleLit, 0.18, 0.07);
+		cell(cx + 0.45, -1.35, 0.28, 13.0, marbleMid, 0.17, 0.08);
+		/* tiered base */
+		cell(cx, -8.5, 2.4, 0.7, marbleDark, 0.15, 0.1);
+		cell(cx, -8.95, 2.75, 0.35, shade, 0.13, 0.09);
+		cell(cx, -9.2, 3.0, 0.25, marbleMid, 0.12, 0.08);
 	}
 
-	/* ——— entablature: architrave → Doric triglyph/metope → cornice ——— */
-	cell(0, 7.65, W, 1.4, marble, 0.14, 0.1);
-	cell(0, 7.1, W + 0.2, 0.35, marbleMid, 0.12, 0.09);
+	/* ——— entablature: architrave → inscription frieze → cornice (plain stone) ——— */
+	cell(0, 7.85, W + 0.4, 1.15, marble, 0.14, 0.1);
+	cell(0, 7.25, W + 0.6, 0.3, marbleMid, 0.12, 0.09);
 
-	cell(0, 9.3, W, 2.4, marbleMid, 0.12, 0.09);
-	const unit = 2.5;
-	const count = 12;
-	const frieze0 = -((count - 1) * unit) / 2;
-	for (let i = 0; i < count; i++) {
-		const x = frieze0 + i * unit;
-		if (i % 2 === 0) {
-			/* triglyph — marble block with three vertical guttae grooves */
-			cell(x, 9.3, 1.15, 2.3, triglyph, 0.15, 0.1);
-			cell(x - 0.32, 9.35, 0.18, 2.0, triglyphShade, 0.17, 0.08);
-			cell(x, 9.35, 0.18, 2.0, triglyphShade, 0.17, 0.08);
-			cell(x + 0.32, 9.35, 0.18, 2.0, triglyphShade, 0.17, 0.08);
-			cell(x, 8.2, 1.15, 0.28, triglyphShade, 0.16, 0.08);
-		} else {
-			/* metope — soft ochre panel */
-			cell(x, 9.3, 1.25, 2.05, ochreLit, 0.15, 0.09);
-			cell(x, 9.35, 0.9, 1.55, ochre, 0.16, 0.08);
+	/* Wide Agrippa-style inscription band — dotted “letter” blocks, same stone */
+	cell(0, 9.15, W + 0.2, 2.0, marbleMid, 0.12, 0.09);
+	cell(0, 9.15, W - 1.5, 1.55, triglyph, 0.14, 0.09);
+	const glyphW = 0.55;
+	const glyphGap = 0.95;
+	const glyphCount = 17;
+	const glyph0 = -((glyphCount - 1) * glyphGap) / 2;
+	for (let i = 0; i < glyphCount; i++) {
+		const x = glyph0 + i * glyphGap;
+		if (i % 4 === 3) {
+			cell(x, 9.15, 0.22, 0.22, triglyphShade, 0.16, 0.07);
+			continue;
 		}
+		cell(x, 9.15, glyphW, 1.05, triglyphShade, 0.16, 0.08);
+		cell(x, 9.55, glyphW * 0.7, 0.35, marbleDark, 0.17, 0.07);
 	}
 
-	cell(0, 10.7, W + 0.8, 0.65, marbleLit, 0.14, 0.1);
-	cell(0, 11.15, W + 1.2, 0.4, marbleMid, 0.12, 0.09);
+	cell(0, 10.4, W + 0.8, 0.55, marbleLit, 0.14, 0.1);
+	cell(0, 10.85, W + 1.4, 0.4, marbleMid, 0.12, 0.09);
+	cell(0, 11.2, W + 1.8, 0.35, marble, 0.13, 0.09);
 
-	/* ——— pediment — low classical triangle (no spirit-house horn finials) ——— */
+	/*
+	 * Pediment — Pantheon silhouette: wide base, shallow rise, NO apex tip.
+	 * Peak sits only ~3–4 units above the cornice (low obtuse triangle).
+	 */
 	const pedSteps = [
-		[0, 19.4, 3.4, 1.35],
-		[0, 18.15, 7.0, 1.35],
-		[0, 16.9, 10.6, 1.35],
-		[0, 15.65, 14.2, 1.35],
-		[0, 14.4, 17.8, 1.35],
-		[0, 13.15, 21.4, 1.35],
-		[0, 12.0, 25.0, 1.2],
-		[0, 11.35, W - 2, 0.95]
+		[0, 14.55, 6.0, 0.85],
+		[0, 13.85, 11.0, 0.85],
+		[0, 13.15, 16.0, 0.85],
+		[0, 12.45, 21.0, 0.85],
+		[0, 11.75, 26.0, 0.85],
+		[0, 11.2, W + 1.5, 0.7]
 	];
 	for (const [gx, gy, gw, gh] of pedSteps) {
-		cell(gx, gy, gw + 0.6, gh, marble, 0.16, 0.1);
-		if (gw > 6) cell(gx, gy - 0.45, gw - 2.6, gh * 0.75, pedimentBg, 0.04, 0.08);
+		cell(gx, gy, gw + 0.5, gh, marble, 0.16, 0.1);
+		if (gw > 10) cell(gx, gy - 0.2, gw - 3.5, gh * 0.55, pedimentBg, 0.04, 0.08);
 	}
 
-	/** Classical tympanum figures — standing / seated rhythm, fewer blobs */
+	/* Faint weathered relief only — no tall sculpture stack that reads as a tip */
 	/** @type {[number, number, number, number, MeshBasicMaterial][]} */
 	const sculptures = [
-		[0, 14.6, 1.55, 4.6, figure],
-		[0, 17.3, 1.2, 1.1, figure],
-		[-0.45, 14.6, 0.28, 4.0, figureShade],
-		[0.45, 14.6, 0.28, 4.0, figureShade],
-		[-3.6, 13.9, 1.35, 3.6, figure],
-		[-3.6, 16.1, 1.1, 0.95, figure],
-		[3.6, 13.9, 1.35, 3.6, figure],
-		[3.6, 16.1, 1.1, 0.95, figure],
-		[-6.8, 13.0, 1.5, 2.2, figureShade],
-		[6.8, 13.0, 1.5, 2.2, figureShade],
-		[-9.4, 12.2, 2.0, 1.25, figureShade],
-		[9.4, 12.2, 2.0, 1.25, figureShade]
+		[0, 12.7, 2.2, 0.9, figureShade],
+		[-4.5, 12.35, 1.8, 0.7, figureShade],
+		[4.5, 12.35, 1.8, 0.7, figureShade],
+		[-8.5, 12.05, 1.6, 0.55, marbleDark],
+		[8.5, 12.05, 1.6, 0.55, marbleDark]
 	];
 	for (const [gx, gy, gw, gh, mat] of sculptures) {
-		cell(gx, gy, gw, gh, mat, 0.2, 0.08);
+		cell(gx, gy, gw, gh, mat, 0.18, 0.07);
 	}
 
-	/* Apex akroterion — single stepped block (not crossed horns) */
-	cell(0, 20.55, 2.0, 0.85, marbleLit, 0.18, 0.09);
-	cell(0, 21.35, 1.25, 0.7, marble, 0.18, 0.09);
-	cell(0, 22.0, 0.7, 0.55, marbleLit, 0.19, 0.08);
-	/* Corner akroteria — low plinths only */
-	cell(-(W / 2) + 1.0, 11.7, 1.5, 0.85, marble, 0.17, 0.09);
-	cell(-(W / 2) + 1.0, 12.4, 1.0, 0.55, marbleLit, 0.18, 0.08);
-	cell(W / 2 - 1.0, 11.7, 1.5, 0.85, marble, 0.17, 0.09);
-	cell(W / 2 - 1.0, 12.4, 1.0, 0.55, marbleLit, 0.18, 0.08);
-
-	/* Apollo glint — soft solar flash at apex (not lottery gold leaf) */
+	/* Soft sun kiss on the pediment face — not a rooftop finial */
 	const glintMat = new MeshBasicMaterial({
-		color: '#fff6e0',
+		color: '#fff8e8',
 		transparent: true,
 		opacity: 0,
 		depthWrite: false
 	});
 	const glint = new Group();
-	box(glint, 0, 0, 0, 0.05, 0.05, 0.03, glintMat);
-	box(glint, 0, 0.04, 0.01, 0.028, 0.028, 0.02, glintMat);
-	box(glint, -0.04, 0, 0, 0.035, 0.012, 0.02, glintMat);
-	box(glint, 0.04, 0, 0, 0.035, 0.012, 0.02, glintMat);
-	box(glint, 0, -0.04, 0, 0.012, 0.03, 0.02, glintMat);
-	glint.position.set(0, 22.5 * u, 0.22);
+	box(glint, 0, 0, 0, 0.08, 0.04, 0.02, glintMat);
+	box(glint, 0.06, 0.01, 0, 0.05, 0.03, 0.02, glintMat);
+	glint.position.set(0.15, 13.2 * u, 0.2);
 	facade.add(glint);
 
 	/* real Z flanks — visible only when yaw peeks */
@@ -435,19 +416,19 @@ export function buildTemple() {
 	buildFlank(rightFlank, 1, u, W, mats);
 
 	pivot.rotation.order = 'YXZ';
-	/** Closed-loop tint — warm limestone by day, cool marble at night (no gold leaf noon) */
+	/** Closed-loop tint — Pantheon travertine day / warm dusk / cool night */
 	pivot.userData.tintSlots = [
-		{ mat: marble, day: '#f2ebe0', noon: '#fff6ea', night: '#c8c0b4' },
-		{ mat: marbleLit, day: '#fff8f0', noon: '#fffaf4', night: '#d8d0c4' },
-		{ mat: marbleMid, day: '#ddd0c0', noon: '#e8dcc8', night: '#9a9084' },
-		{ mat: marbleDark, day: '#c0b09c', noon: '#d0c0a8', night: '#7a7064' },
-		{ mat: shade, day: '#968574', noon: '#a89880', night: '#5a5248' },
-		{ mat: figure, day: '#f0e8dc', noon: '#f8f0e4', night: '#b8b0a4' },
-		{ mat: figureShade, day: '#cfc2b0', noon: '#ddd0bc', night: '#887c70' },
-		{ mat: ochre, day: '#b08a5c', noon: '#c09868', night: '#6a5438' },
-		{ mat: ochreLit, day: '#c9a574', noon: '#d8b484', night: '#7a6448' },
-		{ mat: triglyph, day: '#d8cfc2', noon: '#e4dcd0', night: '#9a9288' },
-		{ mat: triglyphShade, day: '#8a7d6e', noon: '#9a8d7c', night: '#4a443c' }
+		{ mat: marble, day: '#d2c1a5', noon: '#e0d0b4', night: '#8a8070' },
+		{ mat: marbleLit, day: '#f5f1e6', noon: '#fff8ec', night: '#a8a090' },
+		{ mat: marbleMid, day: '#b8a890', noon: '#c8b8a0', night: '#6e6658' },
+		{ mat: marbleDark, day: '#8f8270', noon: '#9e9180', night: '#524840' },
+		{ mat: shade, day: '#6d5f52', noon: '#7a6c5e', night: '#3a342c' },
+		{ mat: figure, day: '#e8dfd0', noon: '#f0e8dc', night: '#9a9288' },
+		{ mat: figureShade, day: '#b0a490', noon: '#c0b4a0', night: '#6a6258' },
+		{ mat: ochre, day: '#a89880', noon: '#b8a890', night: '#5a5248' },
+		{ mat: ochreLit, day: '#c8bba0', noon: '#d8cbb0', night: '#7a7268' },
+		{ mat: triglyph, day: '#c4b49a', noon: '#d4c4aa', night: '#7a7268' },
+		{ mat: triglyphShade, day: '#7a6e60', noon: '#8a7e70', night: '#403830' }
 	];
 	pivot.userData.glintMat = glintMat;
 	pivot.userData.glint = glint;

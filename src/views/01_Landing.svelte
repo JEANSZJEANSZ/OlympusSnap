@@ -288,7 +288,7 @@
 		width: min(100%, 26rem);
 		padding: clamp(0.55rem, 1.8vh, 0.9rem) clamp(0.8rem, 2.5vw, 1.2rem);
 		background: color-mix(in srgb, #0a1c32 90%, #1a3048);
-		border: 3px solid #e2d4bc;
+		border: 3px solid #d2c1a5;
 		box-shadow:
 			0 0 0 3px #081424,
 			5px 5px 0 #143a5c;
@@ -306,9 +306,9 @@
 		background: linear-gradient(
 			115deg,
 			transparent 40%,
-			color-mix(in srgb, #e8dcc4 45%, transparent) 48%,
-			color-mix(in srgb, #fff 65%, transparent) 50%,
-			color-mix(in srgb, #e8dcc4 35%, transparent) 52%,
+			color-mix(in srgb, #e8dfd0 50%, transparent) 48%,
+			color-mix(in srgb, #fff8ec 70%, transparent) 50%,
+			color-mix(in srgb, #d2c1a5 40%, transparent) 52%,
 			transparent 60%
 		);
 		transform: translateX(-30%) rotate(8deg);
@@ -324,7 +324,7 @@
 		content: '';
 		position: absolute;
 		inset: 0;
-		border: 1px solid color-mix(in srgb, #e2d4bc 45%, transparent);
+		border: 1px solid color-mix(in srgb, #d2c1a5 50%, transparent);
 		pointer-events: none;
 	}
 
@@ -364,7 +364,7 @@
 		font-family: var(--font-pixel);
 		font-size: clamp(0.36rem, 1vw, 0.48rem);
 		letter-spacing: 0.14em;
-		color: #e2d4bc;
+		color: #d2c1a5;
 		margin-bottom: 0.45rem;
 	}
 
@@ -407,10 +407,10 @@
 	}
 
 	.snap {
-		color: #e8d4a8;
+		color: #e0d0b4;
 		text-shadow:
 			4px 4px 0 #081424,
-			-1px 0 0 #fff8f0;
+			-1px 0 0 #f5f1e6;
 	}
 
 	.landing:not(.fx-anime):not(.reduced) .snap {
@@ -424,7 +424,7 @@
 		font-family: var(--font-pixel);
 		font-size: clamp(0.4rem, 1.1vw, 0.5rem);
 		line-height: 1.85;
-		color: color-mix(in srgb, #e8f0f8 82%, #e2d4bc);
+		color: color-mix(in srgb, #f0ebe0 80%, #d2c1a5);
 	}
 
 	.landing:not(.fx-anime):not(.reduced) .tagline {
@@ -438,7 +438,7 @@
 		gap: 0.3rem;
 		padding: 0.45rem 0.9rem;
 		background: color-mix(in srgb, #143a5c 90%, transparent);
-		border: 2px solid #e2d4bc;
+		border: 2px solid #d2c1a5;
 		box-shadow: 3px 3px 0 #081424;
 	}
 
@@ -449,11 +449,11 @@
 	.pulse {
 		font-family: var(--font-greek);
 		font-size: clamp(0.9rem, 2.4vw, 1.2rem);
-		color: #f0e4c8;
+		color: #e8dfd0;
 		letter-spacing: 0.08em;
 		text-shadow:
 			2px 2px 0 #081424,
-			0 0 18px color-mix(in srgb, #e2d4bc 40%, transparent);
+			0 0 18px color-mix(in srgb, #d2c1a5 40%, transparent);
 	}
 
 	.landing:not(.fx-anime):not(.reduced) .pulse {
