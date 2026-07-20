@@ -211,11 +211,11 @@
 		inset: 0;
 		z-index: 2;
 		pointer-events: none;
-		opacity: 0.55;
+		opacity: 0.5;
 		background: radial-gradient(
-			ellipse 90% 45% at 50% 108%,
-			color-mix(in srgb, var(--primary) 40%, transparent),
-			transparent 70%
+			ellipse 90% 42% at 50% 110%,
+			color-mix(in srgb, #1a4a72 38%, transparent),
+			transparent 72%
 		);
 		mix-blend-mode: multiply;
 	}
@@ -287,11 +287,11 @@
 		position: relative;
 		width: min(100%, 26rem);
 		padding: clamp(0.55rem, 1.8vh, 0.9rem) clamp(0.8rem, 2.5vw, 1.2rem);
-		background: color-mix(in srgb, var(--text) 94%, var(--primary));
-		border: 3px solid var(--gold-bright);
+		background: color-mix(in srgb, #0a1c32 90%, #1a3048);
+		border: 3px solid #e2d4bc;
 		box-shadow:
-			0 0 0 3px var(--text),
-			5px 5px 0 var(--primary);
+			0 0 0 3px #081424,
+			5px 5px 0 #143a5c;
 		overflow: hidden;
 	}
 
@@ -306,13 +306,14 @@
 		background: linear-gradient(
 			115deg,
 			transparent 40%,
-			color-mix(in srgb, var(--gold-bright) 55%, transparent) 48%,
-			color-mix(in srgb, #fff 70%, transparent) 50%,
-			color-mix(in srgb, var(--gold-bright) 45%, transparent) 52%,
+			color-mix(in srgb, #e8dcc4 45%, transparent) 48%,
+			color-mix(in srgb, #fff 65%, transparent) 50%,
+			color-mix(in srgb, #e8dcc4 35%, transparent) 52%,
 			transparent 60%
 		);
 		transform: translateX(-30%) rotate(8deg);
 		pointer-events: none;
+		opacity: 0;
 	}
 
 	.landing:not(.reduced) .plaque::before {
@@ -323,7 +324,7 @@
 		content: '';
 		position: absolute;
 		inset: 0;
-		border: 1px solid color-mix(in srgb, var(--gold-bright) 40%, transparent);
+		border: 1px solid color-mix(in srgb, #e2d4bc 45%, transparent);
 		pointer-events: none;
 	}
 
@@ -363,7 +364,7 @@
 		font-family: var(--font-pixel);
 		font-size: clamp(0.36rem, 1vw, 0.48rem);
 		letter-spacing: 0.14em;
-		color: var(--gold-bright);
+		color: #e2d4bc;
 		margin-bottom: 0.45rem;
 	}
 
@@ -396,9 +397,9 @@
 	.olympus {
 		color: #ffffff;
 		text-shadow:
-			4px 4px 0 var(--text),
-			-2px 0 0 var(--gold-bright),
-			0 0 0 1px var(--text);
+			4px 4px 0 #081424,
+			-2px 0 0 #c8d8e8,
+			0 0 0 1px #081424;
 	}
 
 	.landing:not(.fx-anime):not(.reduced) .olympus {
@@ -406,10 +407,10 @@
 	}
 
 	.snap {
-		color: var(--gold-bright);
+		color: #e8d4a8;
 		text-shadow:
-			4px 4px 0 var(--text),
-			-1px 0 0 #fff;
+			4px 4px 0 #081424,
+			-1px 0 0 #fff8f0;
 	}
 
 	.landing:not(.fx-anime):not(.reduced) .snap {
@@ -423,7 +424,7 @@
 		font-family: var(--font-pixel);
 		font-size: clamp(0.4rem, 1.1vw, 0.5rem);
 		line-height: 1.85;
-		color: color-mix(in srgb, var(--bg-base) 88%, var(--gold-bright));
+		color: color-mix(in srgb, #e8f0f8 82%, #e2d4bc);
 	}
 
 	.landing:not(.fx-anime):not(.reduced) .tagline {
@@ -436,9 +437,9 @@
 		align-items: center;
 		gap: 0.3rem;
 		padding: 0.45rem 0.9rem;
-		background: color-mix(in srgb, var(--primary) 88%, transparent);
-		border: 2px solid var(--gold);
-		box-shadow: 3px 3px 0 var(--text);
+		background: color-mix(in srgb, #143a5c 90%, transparent);
+		border: 2px solid #e2d4bc;
+		box-shadow: 3px 3px 0 #081424;
 	}
 
 	.landing:not(.fx-anime):not(.reduced) .ascend-hint {
@@ -448,11 +449,11 @@
 	.pulse {
 		font-family: var(--font-greek);
 		font-size: clamp(0.9rem, 2.4vw, 1.2rem);
-		color: var(--gold-bright);
+		color: #f0e4c8;
 		letter-spacing: 0.08em;
 		text-shadow:
-			2px 2px 0 var(--text),
-			0 0 18px color-mix(in srgb, var(--gold-bright) 55%, transparent);
+			2px 2px 0 #081424,
+			0 0 18px color-mix(in srgb, #e2d4bc 40%, transparent);
 	}
 
 	.landing:not(.fx-anime):not(.reduced) .pulse {

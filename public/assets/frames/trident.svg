@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" fill="none">
-  <rect x="8" y="8" width="284" height="384" stroke="#0C4A6E" stroke-width="16"/>
-  <rect x="28" y="28" width="244" height="344" stroke="#38BDF8" stroke-width="8"/>
-  <path d="M40 360 Q80 340 120 360 T200 360 T260 360" stroke="#38BDF8" stroke-width="4" fill="none"/>
-  <text x="150" y="30" text-anchor="middle" fill="#38BDF8" font-size="10" font-family="monospace">POSEIDON</text>
-</svg>

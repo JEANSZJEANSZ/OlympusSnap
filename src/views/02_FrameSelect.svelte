@@ -4,6 +4,7 @@
 	import { go } from '../router/index.js';
 	import { frames } from '../lib/assets/assetStore.js';
 	import { createFrameSelectMotion } from '../lib/fx/frameSelectMotion.js';
+	import { beginFrameHandoff } from '../lib/fx/frameHandoff.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 
@@ -11,9 +12,14 @@
 	let reduced = $state(false);
 	let exiting = $state(false);
 	let rootEl;
+	/** @type {ReturnType<typeof createFrameSelectMotion> | undefined} */
 	let motion;
 	const list = $derived($frames);
 	const frame = $derived(list[Math.min(index, Math.max(0, list.length - 1))]);
+	/** Unitless w/h for CSS aspect-ratio + width cap calc (fallback ≈ strip-4). */
+	const frameAr = $derived(
+		frame?.w && frame?.h && frame.h > 0 ? frame.w / frame.h : 220 / 828
+	);
 
 	function attachRoot(node) {
 		rootEl = node;
@@ -36,6 +42,27 @@
 			motion?.dispose();
 			motion = undefined;
 		};
+	});
+
+	$effect(() => {
+		const current = frame;
+		const i = index;
+		motion?.setSelectHandlers({
+			onBroken: () => {
+				exiting = true;
+			},
+			onGone: () => {
+				const f = list[Math.min(i, Math.max(0, list.length - 1))] ?? current;
+				if (f) {
+					selectedFrameId.set(f.id);
+					const fromEl = rootEl?.querySelector('.frame-body');
+					if (fromEl && f.src) {
+						beginFrameHandoff({ src: f.src, fromEl, reduced });
+					}
+				}
+				go('camera');
+			}
+		});
 	});
 
 	function selectFrame(target, direction) {
@@ -63,26 +90,32 @@
 		selectFrame(index + 1, 1);
 	}
 
-	function selectDot(target) {
-		selectFrame(target, target < index ? -1 : 1);
-	}
-
 	function back() {
 		if (!exiting) go('landing');
 	}
 
+	/** Reduced-motion fallback: click confirms without pull. */
 	function confirmFrame() {
-		if (exiting || !frame) return;
-
+		if (exiting || !frame || !reduced) return;
 		selectedFrameId.set(frame.id);
 		exiting = true;
-
+		const fromEl = rootEl?.querySelector('.frame-body');
+		if (fromEl && frame.src) {
+			beginFrameHandoff({ src: frame.src, fromEl, reduced: true });
+		}
 		if (motion) {
 			motion.playConfirm(() => go('camera'));
 		} else {
 			go('camera');
 		}
 	}
+
+	const pagerLabel = $derived(
+		list.length ? `${index + 1} / ${list.length}` : '0 / 0'
+	);
+	const pagerProgress = $derived(
+		list.length > 1 ? index / (list.length - 1) : list.length === 1 ? 1 : 0
+	);
 </script>
 
 <section class="frame-view" class:exiting {@attach attachRoot}>
@@ -147,17 +180,30 @@
 				<button
 					type="button"
 					class="frame-body"
+					style:--frame-ar={frameAr}
 					data-motif={frame?.id ?? 'none'}
-					aria-label={frame ? `Select ${frame.name}` : 'Select frame'}
+					aria-label={frame
+						? reduced
+							? `Select ${frame.name}`
+							: `Pull ${frame.name} taut, then release to drop`
+						: 'Select frame'}
 					disabled={!frame || exiting}
 					onclick={confirmFrame}
 				>
-					<div class="strip-slots" aria-hidden="true">
-						<span class="strip-slot"></span>
-						<span class="strip-slot"></span>
-						<span class="strip-slot"></span>
+					<div class="frame-slots" aria-hidden="true">
+						{#each frame?.slots ?? [] as slot (slot.id)}
+							<span
+								class="frame-slot"
+								style:left="{(slot.x * 100).toFixed(3)}%"
+								style:top="{(slot.y * 100).toFixed(3)}%"
+								style:width="{(slot.w * 100).toFixed(3)}%"
+								style:height="{(slot.h * 100).toFixed(3)}%"
+							></span>
+						{/each}
 					</div>
-					<span class="strip-footer">{frame?.name ?? '—'}</span>
+					{#if frame?.src}
+						<img class="frame-art" src={frame.src} alt="" draggable="false" />
+					{/if}
 				</button>
 			</div>
 		</div>
@@ -167,24 +213,25 @@
 		</button>
 	</main>
 
-	<div class="dots" aria-label="Choose a frame">
-		{#each list as f, i (f.id)}
-			<button
-				type="button"
-				class="dot"
-				class:active={i === index}
-				aria-label={`Select ${f.name}`}
-				aria-pressed={i === index}
-				onclick={() => selectDot(i)}
-			><span>{i + 1}</span></button>
-		{/each}
+	<div class="pager" aria-live="polite" aria-atomic="true">
+		<p class="pager-name">{frame?.name ?? 'NO RELIC'}</p>
+		<p class="pager-count">{pagerLabel}</p>
+		<div
+			class="pager-track"
+			role="presentation"
+			style:--pager-progress={pagerProgress}
+		>
+			<span class="pager-fill"></span>
+		</div>
 	</div>
 
 	<footer class="footer">
 		<DialogBox
 			speaker="HEPHAESTUS"
 			text={frame
-				? `${frame.name} hangs ready. Tap the strip to send it skyward.`
+				? reduced
+					? `${frame.name} hangs ready. Tap the strip to proceed.`
+					: `${frame.name} hangs ready. Pull hard, hold if you wish, then release to drop.`
 				: 'The courier bears no relic. Open Admin to add a frame.'}
 			typewriter={false}
 		/>
@@ -215,6 +262,19 @@
 
 	.frame-view.exiting {
 		pointer-events: none;
+	}
+
+	.frame-view.exiting .head,
+	.frame-view.exiting .pager,
+	.frame-view.exiting .footer,
+	.frame-view.exiting .nav {
+		opacity: 0;
+		transition: opacity 280ms steps(4);
+	}
+
+	.frame-view.exiting .sky-wash {
+		filter: brightness(0.72);
+		transition: filter 320ms steps(4);
 	}
 
 	.sky-wash {
@@ -332,7 +392,7 @@
 
 	.nav {
 		position: relative;
-		z-index: 3;
+		z-index: 1;
 		display: grid;
 		place-items: center;
 		width: clamp(44px, 5vw, 3.25rem);
@@ -373,7 +433,6 @@
 	}
 
 	.nav:focus-visible,
-	.dot:focus-visible,
 	.frame-body:focus-visible {
 		outline: 3px solid #fff8df;
 		outline-offset: 3px;
@@ -381,6 +440,7 @@
 
 	.flight-stage {
 		position: relative;
+		z-index: 2;
 		width: 100%;
 		height: 100%;
 		max-height: min(62dvh, 400px);
@@ -402,6 +462,7 @@
 		width: clamp(150px, 20vw, 180px);
 		translate: -50% 0;
 		transform-origin: center 35%;
+		pointer-events: none;
 	}
 
 	.bird {
@@ -437,7 +498,7 @@
 	.rope-line {
 		fill: none;
 		stroke: #c08a43;
-		stroke-width: 4;
+		stroke-width: 3;
 		stroke-linecap: round;
 		stroke-linejoin: round;
 		filter: drop-shadow(2px 1px 0 #3a241d);
@@ -468,33 +529,42 @@
 	.snap-spark i:nth-child(4) { transform: rotate(135deg); }
 
 	.hang-group {
-		z-index: 2;
+		z-index: 4;
 		top: 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		translate: -50% 100px;
-		transform-origin: center;
+		translate: -50% 0;
+		/* Match Matter body center so tilt follows the simulation, not a pinned corner. */
+		transform-origin: center center;
 		will-change: transform;
 	}
 
 	.frame-body {
+		/* Cap both axes so tall strips stay narrow and landscapes stay wide. */
+		--frame-ar: 220 / 828;
 		position: relative;
-		display: flex;
-		flex-direction: column;
-		width: clamp(72px, 10vh, 92px);
-		aspect-ratio: 1 / 2.35;
-		padding: 7% 8% 0;
+		display: block;
+		width: min(58vw, 300px, calc(min(48dvh, 340px) * var(--frame-ar)));
+		height: auto;
+		aspect-ratio: var(--frame-ar);
+		padding: 0;
 		border: 0;
 		border-radius: 0;
-		background: #f7f3ea;
+		background: transparent;
 		box-shadow:
 			0 10px 18px rgba(3, 12, 27, 0.42),
 			0 2px 4px rgba(3, 12, 27, 0.18);
 		font: inherit;
 		color: #1c1a17;
-		cursor: pointer;
-		text-align: center;
+		cursor: grab;
+		touch-action: none;
+		user-select: none;
+		overflow: hidden;
+	}
+
+	.frame-view:global(.pulling) .frame-body {
+		cursor: grabbing;
 	}
 
 	.frame-body:disabled {
@@ -502,74 +572,82 @@
 		opacity: 0.72;
 	}
 
-	.strip-slots {
-		display: flex;
-		flex: 1 1 auto;
-		flex-direction: column;
-		gap: 3px;
-		min-height: 0;
+	.frame-slots {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		pointer-events: none;
 	}
 
-	.strip-slot {
-		display: block;
-		flex: 1 1 0;
-		min-height: 0;
+	.frame-slot {
+		position: absolute;
 		background:
-			linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, transparent 42%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, transparent 42%),
 			#1a1c1f;
 	}
 
-	.strip-footer {
+	.frame-art {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: fill;
+		pointer-events: none;
+		-webkit-user-drag: none;
+	}
+
+	.pager {
 		display: grid;
-		place-items: center;
-		flex: 0 0 auto;
-		min-height: 18%;
-		padding: 0.35em 0.15em 0.55em;
-		font-size: clamp(0.38rem, 1.4vh, 0.52rem);
-		font-weight: 700;
-		letter-spacing: 0.14em;
-		line-height: 1.1;
-		text-transform: uppercase;
-		color: #1c1a17;
+		justify-items: center;
+		align-content: center;
+		gap: 0.28rem;
+		min-height: 44px;
+		padding: 0 0.75rem;
+		text-align: center;
+	}
+
+	.pager-name {
+		margin: 0;
+		max-width: min(90vw, 28rem);
+		font-family: var(--font-pixel);
+		font-size: clamp(0.42rem, 1.5vw, 0.55rem);
+		letter-spacing: 0.12em;
+		color: #ffd978;
+		text-shadow: 2px 2px 0 #07152d;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.dots {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		gap: 0.2rem;
-		min-height: 44px;
-		overflow-x: auto;
-		scrollbar-width: none;
+	.pager-count {
+		margin: 0;
+		font-family: var(--font-pixel);
+		font-size: clamp(0.5rem, 1.8vw, 0.65rem);
+		letter-spacing: 0.16em;
+		color: #f3e6c8;
+		text-shadow: 2px 2px 0 #07152d;
 	}
 
-	.dot {
-		display: grid;
-		place-items: center;
-		width: 44px;
-		height: 44px;
-		border: 0;
-		background: transparent;
-		cursor: pointer;
-	}
-
-	.dot span {
-		display: grid;
-		place-items: center;
-		width: 12px;
-		height: 12px;
+	.pager-track {
+		--pager-progress: 0;
+		position: relative;
+		width: min(220px, 48vw);
+		height: 8px;
 		border: 2px solid #f1d29a;
-		background: #274f73;
-		color: transparent;
+		background: #102f56;
 		box-shadow: 2px 2px 0 #07152d;
+		overflow: hidden;
 	}
 
-	.dot.active span {
+	.pager-fill {
+		display: block;
+		height: 100%;
+		width: calc(var(--pager-progress) * 100%);
 		background: #b84a43;
-		box-shadow: 0 0 0 2px #ffd978, 2px 2px 0 2px #07152d;
+		box-shadow: inset 0 0 0 1px #ffd978;
+		transition: width 160ms steps(3);
 	}
 
 	.footer {
@@ -608,7 +686,7 @@
 		}
 
 		.frame-body {
-			width: clamp(72px, 20vw, 92px);
+			width: min(72vw, 260px, calc(min(42dvh, 300px) * var(--frame-ar)));
 		}
 
 		.footer {
@@ -634,20 +712,13 @@
 			transform-origin: top center;
 		}
 
-		.hang-group {
-			translate: -50% 100px;
-		}
-
 		.frame-body {
-			width: clamp(70px, 18vh, 88px);
+			width: min(56vw, 240px, calc(min(40dvh, 260px) * var(--frame-ar)));
 		}
 
-		.dots {
+		.pager {
 			min-height: 34px;
-		}
-
-		.dot {
-			height: 34px;
+			gap: 0.18rem;
 		}
 	}
 

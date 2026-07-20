@@ -1,11 +1,16 @@
 /**
  * Thin IndexedDB helper for custom frame/sticker assets.
- * Record: { id, kind, name, motif?, src (data URL), custom: true }
+ * Record: { id, kind, name, motif?, src (data URL), slots?, custom: true }
  */
 
 const DB_NAME = 'olympus-snap-assets';
 const DB_VERSION = 1;
 const STORE = 'assets';
+
+/**
+ * Normalized photo region on a frame image (0–1 of natural width/height).
+ * @typedef {{ id: string; x: number; y: number; w: number; h: number }} FrameSlot
+ */
 
 /**
  * @typedef {{
@@ -14,6 +19,7 @@ const STORE = 'assets';
  *   name: string;
  *   motif?: string;
  *   src: string;
+ *   slots?: FrameSlot[];
  *   custom: true;
  * }} CustomAsset
  */

@@ -3,11 +3,12 @@
 		<button
 			type="button"
 			class="brand"
-			aria-label="Long-press for Admin"
+			aria-label="Home — long-press for Admin"
 			onpointerdown={onBrandPointerDown}
 			onpointerup={clearPress}
 			onpointerleave={clearPress}
 			onpointercancel={clearPress}
+			onclick={onBrandClick}
 		>
 			OLYMPUS_SNAP
 		</button>
@@ -19,6 +20,7 @@
 			{@const View = $currentRoute.component}
 			<View />
 		{/key}
+		<FrameHandoffOverlay />
 	</main>
 </div>
 
@@ -26,17 +28,22 @@
 	import { onMount } from 'svelte';
 	import { currentRoute, go } from './router/index.js';
 	import { initAssets } from './lib/assets/assetStore.js';
+	import FrameHandoffOverlay from './lib/components/FrameHandoffOverlay.svelte';
 
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let pressTimer = null;
+	/** After long-press opens Admin, ignore the click that follows pointerup. */
+	let suppressClick = false;
 
 	onMount(() => {
 		initAssets();
 	});
 
 	function onBrandPointerDown() {
+		suppressClick = false;
 		pressTimer = setTimeout(() => {
 			pressTimer = null;
+			suppressClick = true;
 			go('admin');
 		}, 900);
 	}
@@ -46,6 +53,14 @@
 			clearTimeout(pressTimer);
 			pressTimer = null;
 		}
+	}
+
+	function onBrandClick() {
+		if (suppressClick) {
+			suppressClick = false;
+			return;
+		}
+		go('landing');
 	}
 </script>
 

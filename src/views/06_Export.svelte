@@ -56,12 +56,13 @@
 </section>
 
 <script>
-import {
+	import {
 		finalCompositedImage,
 		capturedImageData,
 		activeStickers,
-		selectedFrameId
-		} from '../lib/stores/stores.js';
+		selectedFrameId,
+		clearCaptures
+	} from '../lib/stores/stores.js';
 	import { go } from '../router/index.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
@@ -70,7 +71,7 @@ import {
 
 	function restart() {
 		selectedFrameId.set(null);
-		capturedImageData.set(null);
+		clearCaptures();
 		activeStickers.set([]);
 		finalCompositedImage.set(null);
 		go('landing');

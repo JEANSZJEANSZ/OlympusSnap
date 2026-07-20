@@ -1,6 +1,7 @@
 /**
- * Olympus HERO layer — Temple of Apollo on a dense cloud mush (2.5D peek).
- * Edit this file for shrine art. Sky/cycle lives in olympusSkyDom.js + dayCycle.js.
+ * Olympus HERO layer — Temple of Apollo on a cloud bank (2.5D peek).
+ * Classical Doric marble shrine (Parthenon-adjacent), not a painted spirit house.
+ * Sky/cycle lives in olympusSkyDom.js + dayCycle.js.
  *
  * Hierarchy: templePivot → facade + flanks + roof/floor decks along −Z.
  * Pointer springs clamped yaw/pitch so guests can peek sides, never orbit behind.
@@ -137,10 +138,10 @@ function buildFlank(flank, side, u, W, mats) {
 		marbleMid,
 		marbleDark,
 		shade,
-		aegean,
-		aegeanDeep,
-		terracotta,
-		terracottaLit
+		triglyph,
+		triglyphShade,
+		ochre,
+		ochreLit
 	} = mats;
 
 	const xEdge = side * 12.5;
@@ -174,7 +175,7 @@ function buildFlank(flank, side, u, W, mats) {
 		cell(cx, -8.55, 2.3, 0.75, marbleDark, z, colD);
 	}
 
-	/* architrave + polychrome frieze along flank */
+	/* architrave + Doric frieze along flank */
 	const stripThick = 1.5 * u;
 	cell(xEdge, 7.65, 1.7, 1.3, marble, stripZ, stripLen);
 	cell(xEdge, 7.1, 1.8, 0.3, marbleMid, stripZ, stripLen);
@@ -182,23 +183,22 @@ function buildFlank(flank, side, u, W, mats) {
 	for (let i = 1; i <= bays; i++) {
 		const z = -i * bay;
 		if (i % 2 === 1) {
-			cell(xEdge, 9.3, 1.5, 2.2, aegean, z, stripThick);
-			cell(xEdge, 9.3, 0.35, 2.0, aegeanDeep, z + 0.02, stripThick * 0.9);
-			cell(xEdge, 8.15, 1.5, 0.28, aegeanDeep, z, stripThick);
+			cell(xEdge, 9.3, 1.5, 2.2, triglyph, z, stripThick);
+			cell(xEdge, 9.3, 0.35, 2.0, triglyphShade, z + 0.02, stripThick * 0.9);
+			cell(xEdge, 8.15, 1.5, 0.28, triglyphShade, z, stripThick);
 		} else {
-			cell(xEdge, 9.3, 1.5, 2.0, terracottaLit, z, stripThick);
-			cell(xEdge, 9.3, 1.0, 1.4, terracotta, z + 0.02, stripThick * 0.9);
+			cell(xEdge, 9.3, 1.5, 2.0, ochreLit, z, stripThick);
+			cell(xEdge, 9.3, 1.0, 1.4, ochre, z + 0.02, stripThick * 0.9);
 		}
 	}
 
 	cell(xEdge, 10.7, 1.8, 0.55, marbleLit, stripZ, stripLen);
 	cell(xEdge, 11.15, 1.9, 0.35, marbleMid, stripZ, stripLen);
 
-	/* roof eave + side slope — seals the sky hole when yaw peeks */
+	/* low roof eave — seals sky hole when yaw peeks; no steep multi-tier roof */
 	cell(xEdge, 12.0, 2.2, 0.7, marble, stripZ, stripLen);
-	cell(xEdge, 12.7, 1.8, 0.65, marbleLit, stripZ, stripLen * 0.95);
-	cell(xEdge, 13.35, 1.3, 0.55, marbleMid, stripZ * 0.9, stripLen * 0.8);
-	cell(xEdge - side * 0.35, 12.35, 0.45, 1.4, shade, stripZ, stripLen * 0.9);
+	cell(xEdge, 12.55, 1.6, 0.5, marbleLit, stripZ, stripLen * 0.9);
+	cell(xEdge - side * 0.35, 12.2, 0.4, 1.0, shade, stripZ, stripLen * 0.85);
 
 	/* inner naos wall + floor ledge along the flank */
 	cell(xEdge - side * 1.4, -1.5, 1.0, 13.5, shade, stripZ - 0.12, stripLen * 0.7);
@@ -218,18 +218,21 @@ export function buildTemple() {
 	pivot.add(leftFlank);
 	pivot.add(rightFlank);
 
-	const marble = new MeshBasicMaterial({ color: '#f4f6fa' });
-	const marbleLit = new MeshBasicMaterial({ color: '#ffffff' });
-	const marbleMid = new MeshBasicMaterial({ color: '#d5dde8' });
-	const marbleDark = new MeshBasicMaterial({ color: '#a8b4c4' });
-	const shade = new MeshBasicMaterial({ color: '#8a96a8' });
-	const pedimentBg = new MeshBasicMaterial({ color: '#4a5564' });
-	const aegean = new MeshBasicMaterial({ color: '#0f4c81' });
-	const aegeanDeep = new MeshBasicMaterial({ color: '#0a355c' });
-	const terracotta = new MeshBasicMaterial({ color: '#8b3a2f' });
-	const terracottaLit = new MeshBasicMaterial({ color: '#a84838' });
-	const figure = new MeshBasicMaterial({ color: '#eef2f7' });
-	const figureShade = new MeshBasicMaterial({ color: '#c5ceda' });
+	/* Pentelic / limestone marble — warm ivory, not cool blue-gray or gold leaf */
+	const marble = new MeshBasicMaterial({ color: '#f2ebe0' });
+	const marbleLit = new MeshBasicMaterial({ color: '#fff8f0' });
+	const marbleMid = new MeshBasicMaterial({ color: '#ddd0c0' });
+	const marbleDark = new MeshBasicMaterial({ color: '#c0b09c' });
+	const shade = new MeshBasicMaterial({ color: '#968574' });
+	const pedimentBg = new MeshBasicMaterial({ color: '#5a5046' });
+	/* Doric triglyphs — muted stone blue-gray grooves, not navy paint */
+	const triglyph = new MeshBasicMaterial({ color: '#d8cfc2' });
+	const triglyphShade = new MeshBasicMaterial({ color: '#8a7d6e' });
+	/* Soft clay ochre metopes — Parthenon polychromy whisper, not shrine red */
+	const ochre = new MeshBasicMaterial({ color: '#b08a5c' });
+	const ochreLit = new MeshBasicMaterial({ color: '#c9a574' });
+	const figure = new MeshBasicMaterial({ color: '#f0e8dc' });
+	const figureShade = new MeshBasicMaterial({ color: '#cfc2b0' });
 
 	const mats = {
 		marble,
@@ -237,10 +240,10 @@ export function buildTemple() {
 		marbleMid,
 		marbleDark,
 		shade,
-		aegean,
-		aegeanDeep,
-		terracotta,
-		terracottaLit
+		triglyph,
+		triglyphShade,
+		ochre,
+		ochreLit
 	};
 
 	const u = 0.032;
@@ -313,14 +316,10 @@ export function buildTemple() {
 	cell(0, -9.05, W - 7, 0.55, marble, midZ + 0.02, depth * 0.8);
 	cell(0, -9.65, W - 5, 0.4, shade, midZ - 0.02, depth * 0.85);
 
-	/* ——— roof deck + ceiling — seals the open top when yaw peeks ——— */
+	/* ——— roof deck + ceiling — low classical lid, not a stepped pagoda ——— */
 	cell(0, 11.45, W - 1, 0.55, shade, midZ, depth * 0.95);
-	cell(0, 12.05, W + 1.6, 0.85, marbleMid, midZ, depth);
-	cell(0, 12.75, W + 0.4, 0.7, marble, midZ, depth * 0.95);
-	cell(0, 13.4, W - 6, 0.55, marbleLit, midZ * 0.92, depth * 0.82);
-	/* shallow pitch sides */
-	cell(-10, 12.55, 8, 0.55, marbleMid, midZ, depth * 0.9);
-	cell(10, 12.55, 8, 0.55, marbleMid, midZ, depth * 0.9);
+	cell(0, 12.0, W + 1.2, 0.7, marbleMid, midZ, depth);
+	cell(0, 12.55, W - 0.5, 0.55, marble, midZ, depth * 0.92);
 
 	/* ——— rear wall — closes the cella when peeking past the columns ——— */
 	cell(0, -0.5, W - 3, 15.5, marbleDark, rearZ - 0.03, 0.12);
@@ -342,83 +341,82 @@ export function buildTemple() {
 		cell(cx, -9.05, 2.8, 0.4, shade, 0.13, 0.09);
 	}
 
-	/* ——— entablature ——— */
+	/* ——— entablature: architrave → Doric triglyph/metope → cornice ——— */
 	cell(0, 7.65, W, 1.4, marble, 0.14, 0.1);
 	cell(0, 7.1, W + 0.2, 0.35, marbleMid, 0.12, 0.09);
 
-	cell(0, 9.3, W, 2.4, terracotta, 0.12, 0.09);
+	cell(0, 9.3, W, 2.4, marbleMid, 0.12, 0.09);
 	const unit = 2.5;
 	const count = 12;
 	const frieze0 = -((count - 1) * unit) / 2;
 	for (let i = 0; i < count; i++) {
 		const x = frieze0 + i * unit;
 		if (i % 2 === 0) {
-			cell(x, 9.3, 1.15, 2.3, aegean, 0.15, 0.1);
-			cell(x - 0.28, 9.3, 0.2, 2.1, aegeanDeep, 0.17, 0.08);
-			cell(x, 9.3, 0.2, 2.1, aegeanDeep, 0.17, 0.08);
-			cell(x + 0.28, 9.3, 0.2, 2.1, aegeanDeep, 0.17, 0.08);
-			cell(x, 8.15, 1.15, 0.3, aegeanDeep, 0.16, 0.08);
+			/* triglyph — marble block with three vertical guttae grooves */
+			cell(x, 9.3, 1.15, 2.3, triglyph, 0.15, 0.1);
+			cell(x - 0.32, 9.35, 0.18, 2.0, triglyphShade, 0.17, 0.08);
+			cell(x, 9.35, 0.18, 2.0, triglyphShade, 0.17, 0.08);
+			cell(x + 0.32, 9.35, 0.18, 2.0, triglyphShade, 0.17, 0.08);
+			cell(x, 8.2, 1.15, 0.28, triglyphShade, 0.16, 0.08);
 		} else {
-			cell(x, 9.3, 1.2, 2.1, terracottaLit, 0.15, 0.09);
-			cell(x, 9.3, 0.85, 1.5, terracotta, 0.16, 0.08);
+			/* metope — soft ochre panel */
+			cell(x, 9.3, 1.25, 2.05, ochreLit, 0.15, 0.09);
+			cell(x, 9.35, 0.9, 1.55, ochre, 0.16, 0.08);
 		}
 	}
 
 	cell(0, 10.7, W + 0.8, 0.65, marbleLit, 0.14, 0.1);
 	cell(0, 11.15, W + 1.2, 0.4, marbleMid, 0.12, 0.09);
 
-	/* ——— pediment — rim in front, dark tympanum recessed behind ——— */
+	/* ——— pediment — low classical triangle (no spirit-house horn finials) ——— */
 	const pedSteps = [
-		[0, 20.2, 3.2, 1.4],
-		[0, 18.9, 6.6, 1.4],
-		[0, 17.6, 10, 1.4],
-		[0, 16.3, 13.4, 1.4],
-		[0, 15.0, 16.8, 1.4],
-		[0, 13.7, 20.2, 1.4],
-		[0, 12.4, 23.6, 1.4],
-		[0, 11.55, W - 2, 1.1]
+		[0, 19.4, 3.4, 1.35],
+		[0, 18.15, 7.0, 1.35],
+		[0, 16.9, 10.6, 1.35],
+		[0, 15.65, 14.2, 1.35],
+		[0, 14.4, 17.8, 1.35],
+		[0, 13.15, 21.4, 1.35],
+		[0, 12.0, 25.0, 1.2],
+		[0, 11.35, W - 2, 0.95]
 	];
 	for (const [gx, gy, gw, gh] of pedSteps) {
-		cell(gx, gy, gw + 0.8, gh, marble, 0.16, 0.1);
-		if (gw > 6) cell(gx, gy - 0.5, gw - 2.4, gh * 0.8, pedimentBg, 0.04, 0.08);
+		cell(gx, gy, gw + 0.6, gh, marble, 0.16, 0.1);
+		if (gw > 6) cell(gx, gy - 0.45, gw - 2.6, gh * 0.75, pedimentBg, 0.04, 0.08);
 	}
 
+	/** Classical tympanum figures — standing / seated rhythm, fewer blobs */
 	/** @type {[number, number, number, number, MeshBasicMaterial][]} */
 	const sculptures = [
-		[0, 15.0, 1.5, 5.0, figure],
-		[0, 17.9, 1.3, 1.2, figure],
-		[-0.4, 15.0, 0.3, 4.4, figureShade],
-		[0.4, 15.0, 0.3, 4.4, figureShade],
-		[-1.2, 16.2, 1.2, 0.4, figure],
-		[1.2, 16.2, 1.2, 0.4, figure],
-		[-4.0, 14.2, 1.3, 4.0, figure],
-		[-4.0, 16.6, 1.1, 1.0, figure],
-		[4.0, 14.2, 1.3, 4.0, figure],
-		[4.0, 16.6, 1.1, 1.0, figure],
-		[-7.0, 13.2, 1.4, 2.5, figureShade],
-		[7.0, 13.2, 1.4, 2.5, figureShade],
-		[-9.6, 12.4, 2.0, 1.4, figureShade],
-		[9.6, 12.4, 2.0, 1.4, figureShade],
-		[-2.1, 13.8, 1.0, 3.2, figureShade],
-		[2.1, 13.8, 1.0, 3.2, figureShade]
+		[0, 14.6, 1.55, 4.6, figure],
+		[0, 17.3, 1.2, 1.1, figure],
+		[-0.45, 14.6, 0.28, 4.0, figureShade],
+		[0.45, 14.6, 0.28, 4.0, figureShade],
+		[-3.6, 13.9, 1.35, 3.6, figure],
+		[-3.6, 16.1, 1.1, 0.95, figure],
+		[3.6, 13.9, 1.35, 3.6, figure],
+		[3.6, 16.1, 1.1, 0.95, figure],
+		[-6.8, 13.0, 1.5, 2.2, figureShade],
+		[6.8, 13.0, 1.5, 2.2, figureShade],
+		[-9.4, 12.2, 2.0, 1.25, figureShade],
+		[9.4, 12.2, 2.0, 1.25, figureShade]
 	];
 	for (const [gx, gy, gw, gh, mat] of sculptures) {
 		cell(gx, gy, gw, gh, mat, 0.2, 0.08);
 	}
 
-	cell(0, 21.8, 1.1, 0.9, marbleLit, 0.18, 0.09);
-	cell(0, 22.7, 1.6, 0.65, marble, 0.18, 0.09);
-	cell(-0.65, 23.3, 0.4, 1.1, marbleMid, 0.19, 0.08);
-	cell(0.65, 23.3, 0.4, 1.1, marbleMid, 0.19, 0.08);
-	cell(0, 24.0, 0.65, 0.65, marbleLit, 0.2, 0.08);
-	cell(-(W / 2) + 0.5, 11.9, 1.3, 1.1, marble, 0.17, 0.09);
-	cell(-(W / 2) + 0.5, 12.8, 0.9, 0.9, marbleLit, 0.18, 0.08);
-	cell(W / 2 - 0.5, 11.9, 1.3, 1.1, marble, 0.17, 0.09);
-	cell(W / 2 - 0.5, 12.8, 0.9, 0.9, marbleLit, 0.18, 0.08);
+	/* Apex akroterion — single stepped block (not crossed horns) */
+	cell(0, 20.55, 2.0, 0.85, marbleLit, 0.18, 0.09);
+	cell(0, 21.35, 1.25, 0.7, marble, 0.18, 0.09);
+	cell(0, 22.0, 0.7, 0.55, marbleLit, 0.19, 0.08);
+	/* Corner akroteria — low plinths only */
+	cell(-(W / 2) + 1.0, 11.7, 1.5, 0.85, marble, 0.17, 0.09);
+	cell(-(W / 2) + 1.0, 12.4, 1.0, 0.55, marbleLit, 0.18, 0.08);
+	cell(W / 2 - 1.0, 11.7, 1.5, 0.85, marble, 0.17, 0.09);
+	cell(W / 2 - 1.0, 12.4, 1.0, 0.55, marbleLit, 0.18, 0.08);
 
-	/* Apollo glint — pediment apex flash (opacity driven in tick) */
+	/* Apollo glint — soft solar flash at apex (not lottery gold leaf) */
 	const glintMat = new MeshBasicMaterial({
-		color: '#ffe08a',
+		color: '#fff6e0',
 		transparent: true,
 		opacity: 0,
 		depthWrite: false
@@ -429,7 +427,7 @@ export function buildTemple() {
 	box(glint, -0.04, 0, 0, 0.035, 0.012, 0.02, glintMat);
 	box(glint, 0.04, 0, 0, 0.035, 0.012, 0.02, glintMat);
 	box(glint, 0, -0.04, 0, 0.012, 0.03, 0.02, glintMat);
-	glint.position.set(0, 24.6 * u, 0.22);
+	glint.position.set(0, 22.5 * u, 0.22);
 	facade.add(glint);
 
 	/* real Z flanks — visible only when yaw peeks */
@@ -437,19 +435,19 @@ export function buildTemple() {
 	buildFlank(rightFlank, 1, u, W, mats);
 
 	pivot.rotation.order = 'YXZ';
-	/** Closed-loop tint slots — day / noon gold / night cool */
+	/** Closed-loop tint — warm limestone by day, cool marble at night (no gold leaf noon) */
 	pivot.userData.tintSlots = [
-		{ mat: marble, day: '#f4f6fa', noon: '#fff2d8', night: '#b8c4d4' },
-		{ mat: marbleLit, day: '#ffffff', noon: '#fff8e8', night: '#c8d4e4' },
-		{ mat: marbleMid, day: '#d5dde8', noon: '#e8dcc8', night: '#8a9ab0' },
-		{ mat: marbleDark, day: '#a8b4c4', noon: '#c4b098', night: '#6a7a90' },
-		{ mat: shade, day: '#8a96a8', noon: '#9a8a78', night: '#4a5868' },
-		{ mat: figure, day: '#eef2f7', noon: '#fff0dc', night: '#b0bcc8' },
-		{ mat: figureShade, day: '#c5ceda', noon: '#d8c8b0', night: '#7a8a9c' },
-		{ mat: terracotta, day: '#8b3a2f', noon: '#a84830', night: '#5a2830' },
-		{ mat: terracottaLit, day: '#a84838', noon: '#c06040', night: '#6a3038' },
-		{ mat: aegean, day: '#0f4c81', noon: '#1a5a90', night: '#0a2848' },
-		{ mat: aegeanDeep, day: '#0a355c', noon: '#124868', night: '#061828' }
+		{ mat: marble, day: '#f2ebe0', noon: '#fff6ea', night: '#c8c0b4' },
+		{ mat: marbleLit, day: '#fff8f0', noon: '#fffaf4', night: '#d8d0c4' },
+		{ mat: marbleMid, day: '#ddd0c0', noon: '#e8dcc8', night: '#9a9084' },
+		{ mat: marbleDark, day: '#c0b09c', noon: '#d0c0a8', night: '#7a7064' },
+		{ mat: shade, day: '#968574', noon: '#a89880', night: '#5a5248' },
+		{ mat: figure, day: '#f0e8dc', noon: '#f8f0e4', night: '#b8b0a4' },
+		{ mat: figureShade, day: '#cfc2b0', noon: '#ddd0bc', night: '#887c70' },
+		{ mat: ochre, day: '#b08a5c', noon: '#c09868', night: '#6a5438' },
+		{ mat: ochreLit, day: '#c9a574', noon: '#d8b484', night: '#7a6448' },
+		{ mat: triglyph, day: '#d8cfc2', noon: '#e4dcd0', night: '#9a9288' },
+		{ mat: triglyphShade, day: '#8a7d6e', noon: '#9a8d7c', night: '#4a443c' }
 	];
 	pivot.userData.glintMat = glintMat;
 	pivot.userData.glint = glint;

@@ -1,5 +1,14 @@
 /* Olympus Snap — global pixels + marble arcade shell */
 
+/* Bundled locally — not loaded from CDN. Demo/personal-use face; license for commercial booths. */
+@font-face {
+	font-family: 'Greek-Freak';
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url('./assets/fonts/Greek-Freak.woff') format('woff');
+}
+
 *,
 *::before,
 *::after {
