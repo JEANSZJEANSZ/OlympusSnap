@@ -8,7 +8,6 @@
 	import DialogBox from '../lib/components/DialogBox.svelte';
 
 	let index = $state(0);
-	let imgFailed = $state(false);
 	let reduced = $state(false);
 	let exiting = $state(false);
 	let rootEl;
@@ -27,7 +26,6 @@
 	onMount(() => {
 		const unsubscribeFrames = frames.subscribe((items) => {
 			if (index >= items.length && items.length > 0) index = items.length - 1;
-			imgFailed = false;
 		});
 
 		reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -46,9 +44,15 @@
 		const nextIndex = ((target % list.length) + list.length) % list.length;
 		if (nextIndex === index) return;
 
-		index = nextIndex;
-		imgFailed = false;
-		motion?.playSwap(direction);
+		const apply = () => {
+			index = nextIndex;
+		};
+
+		if (motion && !reduced) {
+			motion.playSwap(direction, apply);
+		} else {
+			apply();
+		}
 	}
 
 	function prev() {
@@ -100,7 +104,7 @@
 
 	<main class="carousel" aria-label="Frame selection">
 		<button class="nav nav-prev" type="button" onclick={prev} aria-label="Previous frame">
-			<span aria-hidden="true">‹</span>
+			<span class="chev" aria-hidden="true"></span>
 		</button>
 
 		<div class="flight-stage">
@@ -140,27 +144,26 @@
 			<div class="snap-spark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 
 			<div class="hang-group">
-				<div class="frame-body" data-motif={frame?.id ?? 'none'}>
-					<div class="photo-window">
-						<div class="portrait-silhouette" aria-hidden="true">
-							<span class="portrait-head"></span>
-							<span class="portrait-body"></span>
-						</div>
+				<button
+					type="button"
+					class="frame-body"
+					data-motif={frame?.id ?? 'none'}
+					aria-label={frame ? `Select ${frame.name}` : 'Select frame'}
+					disabled={!frame || exiting}
+					onclick={confirmFrame}
+				>
+					<div class="strip-slots" aria-hidden="true">
+						<span class="strip-slot"></span>
+						<span class="strip-slot"></span>
+						<span class="strip-slot"></span>
 					</div>
-					{#if frame && !imgFailed}
-						<img
-							class="frame-overlay"
-							src={frame.src}
-							alt=""
-							onerror={() => (imgFailed = true)}
-						/>
-					{/if}
-				</div>
+					<span class="strip-footer">{frame?.name ?? '—'}</span>
+				</button>
 			</div>
 		</div>
 
 		<button class="nav nav-next" type="button" onclick={next} aria-label="Next frame">
-			<span aria-hidden="true">›</span>
+			<span class="chev" aria-hidden="true"></span>
 		</button>
 	</main>
 
@@ -181,18 +184,12 @@
 		<DialogBox
 			speaker="HEPHAESTUS"
 			text={frame
-				? `${frame.name} is secured beneath the courier. Arm the camera to send it skyward.`
+				? `${frame.name} hangs ready. Tap the strip to send it skyward.`
 				: 'The courier bears no relic. Open Admin to add a frame.'}
 			typewriter={false}
 		/>
 		<div class="actions">
 			<PixelButton label="BACK" variant="ghost" onclick={back} />
-			<PixelButton
-				label="ARM CAMERA"
-				variant="primary"
-				disabled={!frame || exiting}
-				onclick={confirmFrame}
-			/>
 		</div>
 	</footer>
 </section>
@@ -336,21 +333,38 @@
 	.nav {
 		position: relative;
 		z-index: 3;
+		display: grid;
+		place-items: center;
 		width: clamp(44px, 5vw, 3.25rem);
 		height: clamp(44px, 5vw, 3.25rem);
+		padding: 0;
 		border: 3px solid #f2d89e;
 		background: #8e2f36;
 		box-shadow: 4px 4px 0 #07152d, inset 0 0 0 2px #c86c52;
 		font: inherit;
-		font-size: clamp(1.7rem, 4vw, 2.4rem);
-		line-height: 1;
 		color: #fff4cf;
 		cursor: pointer;
 	}
 
+	.nav .chev {
+		display: block;
+		width: 0;
+		height: 0;
+		border-style: solid;
+	}
+
+	.nav-prev .chev {
+		border-width: 8px 12px 8px 0;
+		border-color: transparent #fff4cf transparent transparent;
+	}
+
+	.nav-next .chev {
+		border-width: 8px 0 8px 12px;
+		border-color: transparent transparent transparent #fff4cf;
+	}
+
 	.nav span {
-		position: relative;
-		top: -0.12em;
+		line-height: 1;
 	}
 
 	.nav:active {
@@ -359,7 +373,8 @@
 	}
 
 	.nav:focus-visible,
-	.dot:focus-visible {
+	.dot:focus-visible,
+	.frame-body:focus-visible {
 		outline: 3px solid #fff8df;
 		outline-offset: 3px;
 	}
@@ -368,8 +383,8 @@
 		position: relative;
 		width: 100%;
 		height: 100%;
-		max-height: min(54dvh, 340px);
-		min-height: 220px;
+		max-height: min(62dvh, 400px);
+		min-height: 260px;
 		margin: 0 auto;
 		overflow: visible;
 	}
@@ -458,67 +473,67 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		translate: -50% 90px;
+		translate: -50% 100px;
 		transform-origin: center;
 		will-change: transform;
 	}
 
 	.frame-body {
 		position: relative;
-		width: clamp(145px, 24vh, 205px);
-		aspect-ratio: 3 / 4;
-		background: transparent;
-		filter: drop-shadow(5px 7px 3px rgba(3, 12, 27, 0.55));
+		display: flex;
+		flex-direction: column;
+		width: clamp(72px, 10vh, 92px);
+		aspect-ratio: 1 / 2.35;
+		padding: 7% 8% 0;
+		border: 0;
+		border-radius: 0;
+		background: #f7f3ea;
+		box-shadow:
+			0 10px 18px rgba(3, 12, 27, 0.42),
+			0 2px 4px rgba(3, 12, 27, 0.18);
+		font: inherit;
+		color: #1c1a17;
+		cursor: pointer;
+		text-align: center;
 	}
 
-	.photo-window {
-		position: absolute;
-		inset: 9% 11% 10%;
-		z-index: 0;
+	.frame-body:disabled {
+		cursor: default;
+		opacity: 0.72;
+	}
+
+	.strip-slots {
+		display: flex;
+		flex: 1 1 auto;
+		flex-direction: column;
+		gap: 3px;
+		min-height: 0;
+	}
+
+	.strip-slot {
+		display: block;
+		flex: 1 1 0;
+		min-height: 0;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, transparent 42%),
+			#1a1c1f;
+	}
+
+	.strip-footer {
 		display: grid;
 		place-items: center;
+		flex: 0 0 auto;
+		min-height: 18%;
+		padding: 0.35em 0.15em 0.55em;
+		font-size: clamp(0.38rem, 1.4vh, 0.52rem);
+		font-weight: 700;
+		letter-spacing: 0.14em;
+		line-height: 1.1;
+		text-transform: uppercase;
+		color: #1c1a17;
 		overflow: hidden;
-		background:
-			linear-gradient(180deg, rgba(255, 240, 203, 0.18), transparent 44%),
-			linear-gradient(180deg, #7690a1 0 54%, #5a4950 55%);
-	}
-
-	.portrait-silhouette {
-		position: relative;
-		width: 72%;
-		height: 78%;
-		margin-top: 22%;
-	}
-
-	.portrait-head {
-		position: absolute;
-		top: 5%;
-		left: 50%;
-		width: 36%;
-		aspect-ratio: 1;
-		transform: translateX(-50%);
-		background: #343b4b;
-		box-shadow: 3px 0 #24283a, -3px 0 #24283a;
-	}
-
-	.portrait-body {
-		position: absolute;
-		right: 4%;
-		bottom: -8%;
-		left: 4%;
-		height: 54%;
-		background: #343b4b;
-		clip-path: polygon(18% 0, 82% 0, 100% 100%, 0 100%);
-	}
-
-	.frame-overlay {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
-		pointer-events: none;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.dots {
@@ -593,7 +608,7 @@
 		}
 
 		.frame-body {
-			width: clamp(135px, 34vw, 175px);
+			width: clamp(72px, 20vw, 92px);
 		}
 
 		.footer {
@@ -610,8 +625,8 @@
 		}
 
 		.flight-stage {
-			max-height: 270px;
-			min-height: 220px;
+			max-height: 320px;
+			min-height: 240px;
 		}
 
 		.bird-rig {
@@ -620,11 +635,11 @@
 		}
 
 		.hang-group {
-			translate: -50% 82px;
+			translate: -50% 100px;
 		}
 
 		.frame-body {
-			width: clamp(135px, 28vh, 165px);
+			width: clamp(70px, 18vh, 88px);
 		}
 
 		.dots {

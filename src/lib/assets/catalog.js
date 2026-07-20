@@ -7,55 +7,58 @@
 /** @typedef {{ id: string; name: string; src: string; motif?: string; thumb?: string }} FrameAsset */
 /** @typedef {{ id: string; name: string; src: string }} StickerAsset */
 
+/** Respect Vite `base` so public assets resolve under IIS subpaths. */
+const assetUrl = (/** @type {string} */ path) => `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`;
+
 /** @type {FrameAsset[]} */
 export const FRAMES = [
 	{
 		id: 'olympus',
 		name: 'OLYMPUS',
 		motif: 'Columns',
-		src: '/assets/frames/olympus.svg',
-		thumb: '/assets/frames/olympus.svg'
+		src: assetUrl('assets/frames/olympus.svg'),
+		thumb: assetUrl('assets/frames/olympus.svg')
 	},
 	{
 		id: 'laurel',
 		name: 'LAUREL',
 		motif: 'Victory wreath',
-		src: '/assets/frames/laurel.svg',
-		thumb: '/assets/frames/laurel.svg'
+		src: assetUrl('assets/frames/laurel.svg'),
+		thumb: assetUrl('assets/frames/laurel.svg')
 	},
 	{
 		id: 'trident',
 		name: 'POSEIDON',
 		motif: 'Wave border',
-		src: '/assets/frames/trident.svg',
-		thumb: '/assets/frames/trident.svg'
+		src: assetUrl('assets/frames/trident.svg'),
+		thumb: assetUrl('assets/frames/trident.svg')
 	},
 	{
 		id: 'lyre',
 		name: 'LYRE',
 		motif: 'Golden lyre',
-		src: '/assets/frames/lyre.svg',
-		thumb: '/assets/frames/lyre.svg'
+		src: assetUrl('assets/frames/lyre.svg'),
+		thumb: assetUrl('assets/frames/lyre.svg')
 	},
 	{
 		id: 'owl',
 		name: 'ATHENA',
 		motif: 'Owl crest',
-		src: '/assets/frames/owl.svg',
-		thumb: '/assets/frames/owl.svg'
+		src: assetUrl('assets/frames/owl.svg'),
+		thumb: assetUrl('assets/frames/owl.svg')
 	}
 ];
 
 /** @type {StickerAsset[]} */
 export const STICKERS = [
-	{ id: 'lightning', name: 'ZEUS BOLT', src: '/assets/stickers/lightning.svg' },
-	{ id: 'laurel', name: 'LAUREL', src: '/assets/stickers/laurel.svg' },
-	{ id: 'lyre', name: 'LYRE', src: '/assets/stickers/lyre.svg' },
-	{ id: 'owl', name: 'OWL', src: '/assets/stickers/owl.svg' },
-	{ id: 'trident', name: 'TRIDENT', src: '/assets/stickers/trident.svg' },
-	{ id: 'sun', name: 'SOLAR', src: '/assets/stickers/sun.svg' },
-	{ id: 'star', name: 'STAR', src: '/assets/stickers/star.svg' },
-	{ id: 'heart', name: 'AEGIS', src: '/assets/stickers/heart.svg' }
+	{ id: 'lightning', name: 'ZEUS BOLT', src: assetUrl('assets/stickers/lightning.svg') },
+	{ id: 'laurel', name: 'LAUREL', src: assetUrl('assets/stickers/laurel.svg') },
+	{ id: 'lyre', name: 'LYRE', src: assetUrl('assets/stickers/lyre.svg') },
+	{ id: 'owl', name: 'OWL', src: assetUrl('assets/stickers/owl.svg') },
+	{ id: 'trident', name: 'TRIDENT', src: assetUrl('assets/stickers/trident.svg') },
+	{ id: 'sun', name: 'SOLAR', src: assetUrl('assets/stickers/sun.svg') },
+	{ id: 'star', name: 'STAR', src: assetUrl('assets/stickers/star.svg') },
+	{ id: 'heart', name: 'AEGIS', src: assetUrl('assets/stickers/heart.svg') }
 ];
 
 /**

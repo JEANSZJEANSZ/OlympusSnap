@@ -1,6 +1,9 @@
 /**
  * Tiny history router (Vue Router–style), no library.
- * URLs: / | /frame | /camera | /studio | /reveal | /export | /admin
+ * URLs (app-relative): / | /frame | /camera | /studio | /reveal | /export | /admin
+ *
+ * IIS base = same role as Vue's:
+ *   createWebHistory("/Debug/Vue3Template")
  */
 import { writable, derived } from 'svelte/store';
 import { routes, routesByName, routesByPath, landingRoute } from './routes.js';
@@ -11,6 +14,12 @@ import { routes, routesByName, routesByPath, landingRoute } from './routes.js';
 
 /** @type {AppRoute} */
 const FALLBACK = landingRoute;
+
+/** Same idea as createWebHistory("/Debug/TestDeploy3") — must match IIS app folder. */
+const HISTORY_BASE = '/Debug/TestDeploy3';
+
+/** Empty in `npm run dev` so localhost still works; baked path for production builds. */
+const APP_BASE = import.meta.env.DEV ? '' : HISTORY_BASE.replace(/\/+$/, '');
 
 /**
  * Normalize pathname: strip trailing slash (except root), drop query/hash.
@@ -24,6 +33,33 @@ export function normalizePath(pathname = typeof location !== 'undefined' ? locat
 }
 
 /**
+ * Strip deploy base → app-relative path (`/frame`).
+ * @param {string} pathname
+ * @returns {string}
+ */
+export function toAppPath(pathname) {
+	const full = normalizePath(pathname);
+	if (!APP_BASE) return full;
+	if (full === APP_BASE) return '/';
+	if (full.startsWith(`${APP_BASE}/`)) {
+		return full.slice(APP_BASE.length) || '/';
+	}
+	return full;
+}
+
+/**
+ * App-relative path → full browser URL path for history API.
+ * @param {string} appPath
+ * @returns {string}
+ */
+export function toFullPath(appPath) {
+	const path = normalizePath(appPath);
+	if (!APP_BASE) return path;
+	if (path === '/') return `${APP_BASE}/`;
+	return `${APP_BASE}${path}`;
+}
+
+/**
  * Resolve a route by path (`/frame`) or name (`frame`).
  * @param {string} to
  * @returns {AppRoute}
@@ -31,7 +67,7 @@ export function normalizePath(pathname = typeof location !== 'undefined' ? locat
 export function resolve(to) {
 	if (!to) return FALLBACK;
 	if (to.startsWith('/')) {
-		return routesByPath.get(normalizePath(to)) ?? FALLBACK;
+		return routesByPath.get(toAppPath(to)) ?? FALLBACK;
 	}
 	return routesByName.get(to) ?? FALLBACK;
 }
@@ -47,11 +83,11 @@ export function matchLocation() {
 	const hash = location.hash.replace(/^#\/?/, '').split(/[/?#]/)[0]?.trim();
 	if (hash && routesByName.has(hash)) {
 		const matched = routesByName.get(hash) ?? FALLBACK;
-		history.replaceState(null, '', matched.path);
+		history.replaceState(null, '', toFullPath(matched.path));
 		return matched;
 	}
 
-	return resolve(normalizePath(location.pathname));
+	return resolve(toAppPath(location.pathname));
 }
 
 /** @type {import('svelte/store').Writable<AppRoute>} */
@@ -70,8 +106,9 @@ export function go(to) {
 		currentRoute.set(matched);
 		return;
 	}
-	if (normalizePath(location.pathname) !== matched.path) {
-		history.pushState(null, '', matched.path);
+	const next = toFullPath(matched.path);
+	if (normalizePath(location.pathname) !== normalizePath(next)) {
+		history.pushState(null, '', next);
 	}
 	currentRoute.set(matched);
 }
@@ -79,8 +116,10 @@ export function go(to) {
 function syncFromLocation() {
 	const matched = matchLocation();
 	currentRoute.set(matched);
-	if (typeof location !== 'undefined' && normalizePath(location.pathname) !== matched.path) {
-		history.replaceState(null, '', matched.path);
+	if (typeof location === 'undefined') return;
+	const next = toFullPath(matched.path);
+	if (normalizePath(location.pathname) !== normalizePath(next)) {
+		history.replaceState(null, '', next);
 	}
 }
 
