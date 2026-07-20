@@ -192,10 +192,11 @@ function buildFlank(flank, side, u, W, mats) {
 	cell(xEdge, 10.7, 1.8, 0.55, marbleLit, stripZ, stripLen);
 	cell(xEdge, 11.15, 1.9, 0.35, marbleMid, stripZ, stripLen);
 
-	/* low roof eave — seals sky hole when yaw peeks; no steep multi-tier roof */
-	cell(xEdge, 11.6, 2.2, 0.55, marble, stripZ, stripLen);
-	cell(xEdge, 12.05, 1.6, 0.4, marbleLit, stripZ, stripLen * 0.9);
-	cell(xEdge - side * 0.35, 11.8, 0.4, 0.85, shade, stripZ, stripLen * 0.85);
+	/* low roof eave — follows taller pediment, still no tip */
+	cell(xEdge, 12.2, 2.2, 0.55, marble, stripZ, stripLen);
+	cell(xEdge, 12.85, 1.7, 0.55, marbleLit, stripZ, stripLen * 0.9);
+	cell(xEdge, 13.4, 1.2, 0.45, marbleMid, stripZ * 0.95, stripLen * 0.75);
+	cell(xEdge - side * 0.35, 12.5, 0.4, 1.1, shade, stripZ, stripLen * 0.85);
 
 	/* inner naos wall + floor ledge along the flank */
 	cell(xEdge - side * 1.4, -1.5, 1.0, 13.5, shade, stripZ - 0.12, stripLen * 0.7);
@@ -319,8 +320,8 @@ export function buildTemple() {
 
 	/* ——— rear wall — closes the cella when peeking past the columns ——— */
 	cell(0, -0.5, W - 3, 15.5, marbleDark, rearZ - 0.03, 0.12);
-	cell(0, 11.8, W - 1, 2.4, marble, rearZ, 0.1);
-	cell(0, 13.0, W - 6, 1.6, marbleMid, rearZ, 0.09);
+	cell(0, 12.4, W - 1, 2.8, marble, rearZ, 0.1);
+	cell(0, 14.2, W - 5, 2.0, marbleMid, rearZ, 0.09);
 
 	/* ——— 8 Corinthian-style columns (Pantheon portico rhythm) ——— */
 	const cols = [-13.125, -9.375, -5.625, -1.875, 1.875, 5.625, 9.375, 13.125];
@@ -369,30 +370,33 @@ export function buildTemple() {
 	cell(0, 11.2, W + 1.8, 0.35, marble, 0.13, 0.09);
 
 	/*
-	 * Pediment — Pantheon silhouette: wide base, shallow rise, NO apex tip.
-	 * Peak sits only ~3–4 units above the cornice (low obtuse triangle).
+	 * Pediment — clear triangle silhouette, but blunt peak (no spirit-house tip).
+	 * Rise ~6 units above cornice; top step stays wide (~7) so it reads as a roof,
+	 * not a needle.
 	 */
 	const pedSteps = [
-		[0, 14.55, 6.0, 0.85],
-		[0, 13.85, 11.0, 0.85],
-		[0, 13.15, 16.0, 0.85],
-		[0, 12.45, 21.0, 0.85],
-		[0, 11.75, 26.0, 0.85],
-		[0, 11.2, W + 1.5, 0.7]
+		[0, 17.35, 7.0, 1.0],
+		[0, 16.45, 11.5, 1.0],
+		[0, 15.55, 16.0, 1.0],
+		[0, 14.65, 20.5, 1.0],
+		[0, 13.75, 25.0, 1.0],
+		[0, 12.85, 28.5, 0.95],
+		[0, 11.95, W + 2.0, 0.85],
+		[0, 11.25, W + 2.4, 0.65]
 	];
 	for (const [gx, gy, gw, gh] of pedSteps) {
 		cell(gx, gy, gw + 0.5, gh, marble, 0.16, 0.1);
-		if (gw > 10) cell(gx, gy - 0.2, gw - 3.5, gh * 0.55, pedimentBg, 0.04, 0.08);
+		if (gw > 12) cell(gx, gy - 0.25, gw - 3.8, gh * 0.55, pedimentBg, 0.04, 0.08);
 	}
 
-	/* Faint weathered relief only — no tall sculpture stack that reads as a tip */
+	/* Soft tympanum relief — kept low so it doesn’t rebuild a tip */
 	/** @type {[number, number, number, number, MeshBasicMaterial][]} */
 	const sculptures = [
-		[0, 12.7, 2.2, 0.9, figureShade],
-		[-4.5, 12.35, 1.8, 0.7, figureShade],
-		[4.5, 12.35, 1.8, 0.7, figureShade],
-		[-8.5, 12.05, 1.6, 0.55, marbleDark],
-		[8.5, 12.05, 1.6, 0.55, marbleDark]
+		[0, 14.4, 2.4, 1.1, figureShade],
+		[-5.0, 13.7, 2.0, 0.85, figureShade],
+		[5.0, 13.7, 2.0, 0.85, figureShade],
+		[-9.0, 13.0, 1.8, 0.65, marbleDark],
+		[9.0, 13.0, 1.8, 0.65, marbleDark]
 	];
 	for (const [gx, gy, gw, gh, mat] of sculptures) {
 		cell(gx, gy, gw, gh, mat, 0.18, 0.07);
@@ -408,7 +412,7 @@ export function buildTemple() {
 	const glint = new Group();
 	box(glint, 0, 0, 0, 0.08, 0.04, 0.02, glintMat);
 	box(glint, 0.06, 0.01, 0, 0.05, 0.03, 0.02, glintMat);
-	glint.position.set(0.15, 13.2 * u, 0.2);
+	glint.position.set(0.15, 15.2 * u, 0.2);
 	facade.add(glint);
 
 	/* real Z flanks — visible only when yaw peeks */
@@ -638,10 +642,10 @@ export function createOlympusTemple(canvas, opts = {}) {
 
 	scene.add(olympus);
 
-	/* —— Apollo day dust (gold sparkle around temple) —— */
+	/* —— Apollo day dust (cream sparkle around temple) —— */
 	const dustCount = 36;
 	const dustGeo = new BoxGeometry(0.018, 0.018, 0.018);
-	const dustMat = new MeshBasicMaterial({ color: '#e8c84a', transparent: true, opacity: 0, depthWrite: false });
+	const dustMat = new MeshBasicMaterial({ color: '#e8dfd0', transparent: true, opacity: 0, depthWrite: false });
 	const dust = new InstancedMesh(dustGeo, dustMat, dustCount);
 	const matrix = new Matrix4();
 	/** @type {{ x: number, y: number, z: number, sp: number, ph: number }[]} */
@@ -685,11 +689,11 @@ export function createOlympusTemple(canvas, opts = {}) {
 	let glintLife = 0;
 	let glintCooldown = 4 + Math.random() * 6;
 
-	/* —— Dusk/dawn fireflies: soft gold motes, peak at twilight —— */
+	/* —— Dusk/dawn fireflies: soft cream motes, peak at twilight —— */
 	const flyCount = 18;
 	const flyGeo = new BoxGeometry(0.014, 0.014, 0.014);
 	const flyMat = new MeshBasicMaterial({
-		color: '#e8d060',
+		color: '#e8dfd0',
 		transparent: true,
 		opacity: 0,
 		depthWrite: false

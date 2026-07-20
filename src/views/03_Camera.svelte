@@ -414,7 +414,7 @@
 
 	.hole.active {
 		box-shadow:
-			inset 0 0 0 2px #ffd978,
+			inset 0 0 0 2px var(--gold-bright),
 			0 0 0 1px rgba(255, 217, 120, 0.5);
 		z-index: 3;
 	}
@@ -436,7 +436,7 @@
 		place-items: center;
 		height: 100%;
 		font-size: 0.7rem;
-		color: #ffd978;
+		color: var(--gold-bright);
 		opacity: 0.55;
 	}
 

@@ -164,17 +164,17 @@ function cloudLit(dayTint) {
 }
 
 const SUN_SVG = `<svg width="48" height="48" viewBox="0 0 16 16" aria-hidden="true">
-	<rect x="7" y="0" width="2" height="2" fill="#f0d060"/>
-	<rect x="6" y="2" width="4" height="1" fill="#f0d060"/>
-	<rect x="5" y="3" width="6" height="2" fill="#e8c84a"/>
-	<rect x="4" y="5" width="8" height="2" fill="#e8c84a"/>
-	<rect x="3" y="7" width="10" height="2" fill="#fff2a8"/>
-	<rect x="3" y="9" width="10" height="2" fill="#e8c84a"/>
-	<rect x="4" y="11" width="8" height="2" fill="#d4a018"/>
-	<rect x="5" y="13" width="6" height="1" fill="#d4a018"/>
-	<rect x="0" y="7" width="2" height="2" fill="#f0d060"/>
-	<rect x="14" y="7" width="2" height="2" fill="#f0d060"/>
-	<rect x="7" y="14" width="2" height="2" fill="#f0d060"/>
+	<rect x="7" y="0" width="2" height="2" fill="#e8dfd0"/>
+	<rect x="6" y="2" width="4" height="1" fill="#e8dfd0"/>
+	<rect x="5" y="3" width="6" height="2" fill="#e8dfd0"/>
+	<rect x="4" y="5" width="8" height="2" fill="#e8dfd0"/>
+	<rect x="3" y="7" width="10" height="2" fill="#f5f1e6"/>
+	<rect x="3" y="9" width="10" height="2" fill="#d2c1a5"/>
+	<rect x="4" y="11" width="8" height="2" fill="#b8a890"/>
+	<rect x="5" y="13" width="6" height="1" fill="#b8a890"/>
+	<rect x="0" y="7" width="2" height="2" fill="#e8dfd0"/>
+	<rect x="14" y="7" width="2" height="2" fill="#e8dfd0"/>
+	<rect x="7" y="14" width="2" height="2" fill="#e8dfd0"/>
 </svg>`;
 
 const MOON_SVG = `<svg width="40" height="40" viewBox="0 0 14 14" aria-hidden="true">

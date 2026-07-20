@@ -344,7 +344,7 @@
 		font-size: clamp(1rem, 3.4vw, 1.75rem);
 		line-height: 1;
 		letter-spacing: 0.12em;
-		color: #ffd978;
+		color: var(--gold-bright);
 		text-wrap: balance;
 	}
 
@@ -373,7 +373,7 @@
 		padding-left: 0.65rem;
 		font-size: 0.42rem;
 		letter-spacing: 0.12em;
-		color: #ffd978;
+		color: var(--gold-bright);
 		white-space: nowrap;
 	}
 
@@ -398,7 +398,7 @@
 		width: clamp(44px, 5vw, 3.25rem);
 		height: clamp(44px, 5vw, 3.25rem);
 		padding: 0;
-		border: 3px solid #f2d89e;
+		border: 3px solid var(--gold);
 		background: #8e2f36;
 		box-shadow: 4px 4px 0 #07152d, inset 0 0 0 2px #c86c52;
 		font: inherit;
@@ -614,7 +614,7 @@
 		font-family: var(--font-pixel);
 		font-size: clamp(0.42rem, 1.5vw, 0.55rem);
 		letter-spacing: 0.12em;
-		color: #ffd978;
+		color: var(--gold-bright);
 		text-shadow: 2px 2px 0 #07152d;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -635,7 +635,7 @@
 		position: relative;
 		width: min(220px, 48vw);
 		height: 8px;
-		border: 2px solid #f1d29a;
+		border: 2px solid var(--gold);
 		background: #102f56;
 		box-shadow: 2px 2px 0 #07152d;
 		overflow: hidden;
@@ -646,7 +646,7 @@
 		height: 100%;
 		width: calc(var(--pager-progress) * 100%);
 		background: #b84a43;
-		box-shadow: inset 0 0 0 1px #ffd978;
+		box-shadow: inset 0 0 0 1px var(--gold-bright);
 		transition: width 160ms steps(3);
 	}
 

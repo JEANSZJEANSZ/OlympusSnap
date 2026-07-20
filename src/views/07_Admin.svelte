@@ -712,7 +712,7 @@
 		font-size: clamp(0.95rem, 3.2vw, 1.55rem);
 		line-height: 1.15;
 		letter-spacing: 0.1em;
-		color: #ffd978;
+		color: var(--gold-bright);
 		text-wrap: balance;
 	}
 
@@ -811,7 +811,7 @@
 		letter-spacing: 0.08em;
 		background: #8e2f36;
 		color: #fff4cf;
-		border: 3px solid #f2d89e;
+		border: 3px solid var(--gold);
 		box-shadow:
 			4px 4px 0 #07152d,
 			inset 0 0 0 2px #c86c52;
@@ -832,7 +832,7 @@
 
 	.tab.on {
 		background: #8e2f36;
-		color: #ffd978;
+		color: var(--gold-bright);
 		filter: brightness(1.05);
 	}
 
@@ -915,7 +915,7 @@
 
 	.badge.custom {
 		background: var(--primary);
-		color: #ffd978;
+		color: var(--gold-bright);
 	}
 
 	.card-actions {
@@ -938,14 +938,14 @@
 
 	.edit-slots {
 		background: var(--primary);
-		color: #ffd978;
-		border: 2px solid #f2d89e;
+		color: var(--gold-bright);
+		border: 2px solid var(--gold);
 	}
 
 	.del {
 		background: var(--danger);
 		color: #fff8df;
-		border: 2px solid #f2d89e;
+		border: 2px solid var(--gold);
 	}
 
 	.edit-slots:active:not(:disabled),
@@ -962,7 +962,7 @@
 
 	.status {
 		font-size: 0.45rem;
-		color: #ffd978;
+		color: var(--gold-bright);
 		text-align: center;
 		text-shadow: 2px 2px 0 #06152d;
 		margin: 0;
@@ -995,7 +995,7 @@
 		gap: 0.75rem;
 		min-height: 3rem;
 		padding: 0.65rem 0.85rem;
-		border: 2px solid #f2d89e;
+		border: 2px solid var(--gold);
 		background: #102f56;
 		color: #f3e6c8;
 		font-family: var(--font-pixel);
@@ -1011,7 +1011,7 @@
 
 	.seed-toggle.on {
 		background: var(--primary);
-		color: #ffd978;
+		color: var(--gold-bright);
 	}
 
 	.seed-toggle:hover {
@@ -1030,9 +1030,9 @@
 
 	.seed-toggle-state {
 		padding: 0.2rem 0.45rem;
-		border: 2px solid #f1d29a;
+		border: 2px solid var(--gold);
 		background: #07152d;
-		color: #ffd978;
+		color: var(--gold-bright);
 		font-size: 0.38rem;
 		letter-spacing: 0.14em;
 	}
