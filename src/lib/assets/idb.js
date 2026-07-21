@@ -1,6 +1,6 @@
 /**
  * Thin IndexedDB helper for custom frame/sticker assets.
- * Record: { id, kind, name, motif?, src (data URL), slots?, custom: true }
+ * Record: { id, kind, name, motif?, src (data URL), w?, h?, slots?, custom: true }
  */
 
 const DB_NAME = 'olympus-snap-assets';
@@ -19,6 +19,8 @@ const STORE = 'assets';
  *   name: string;
  *   motif?: string;
  *   src: string;
+ *   w?: number;
+ *   h?: number;
  *   slots?: FrameSlot[];
  *   custom: true;
  * }} CustomAsset

@@ -60,40 +60,78 @@
 
 			{#if frameDraft}
 				<div class="editor-panel forge-panel">
-					<p class="panel-kicker">
-						{frameDraft.mode === 'edit' ? 'EDIT FRAME CANVASES' : 'PLACE PHOTO CANVASES'}
-					</p>
-					<label class="field">
-						<span>Name</span>
-						<input type="text" bind:value={frameDraft.name} placeholder="Display name" />
-					</label>
-					<label class="field">
-						<span>Motif</span>
-						<input type="text" bind:value={frameDraft.motif} placeholder="Optional tag" />
-					</label>
-					<p class="hint">
-						Drawn rectangles are the photo windows — captures paint on top of those areas.
-					</p>
-					{#key frameDraft.src}
-						<FrameSlotEditor imageSrc={frameDraft.src} bind:slots={frameDraft.slots} />
-					{/key}
-					{#if editorError}
-						<p class="err">{editorError}</p>
+					{#if frameDraft.step === 'crop'}
+						<p class="panel-kicker">CROP FRAME</p>
+						<label class="field">
+							<span>Name</span>
+							<input type="text" bind:value={frameDraft.name} placeholder="Display name" />
+						</label>
+						<label class="field">
+							<span>Motif</span>
+							<input type="text" bind:value={frameDraft.motif} placeholder="Optional tag" />
+						</label>
+						<p class="hint">
+							Crop trims excess border. Photo canvases are placed on the trimmed image.
+						</p>
+						{#key frameDraft.src}
+							<FrameCropEditor
+								imageSrc={frameDraft.src}
+								onApply={onCropReady}
+								onUseFull={onCropReady}
+							/>
+						{/key}
+						<div class="actions">
+							<PixelButton
+								label="CANCEL"
+								variant="ghost"
+								disabled={busy}
+								onclick={cancelFrameDraft}
+							/>
+						</div>
+					{:else}
+						<p class="panel-kicker">
+							{frameDraft.mode === 'edit' ? 'EDIT FRAME CANVASES' : 'PLACE PHOTO CANVASES'}
+						</p>
+						<label class="field">
+							<span>Name</span>
+							<input type="text" bind:value={frameDraft.name} placeholder="Display name" />
+						</label>
+						<label class="field">
+							<span>Motif</span>
+							<input type="text" bind:value={frameDraft.motif} placeholder="Optional tag" />
+						</label>
+						<p class="hint">
+							Drawn rectangles are the photo windows — captures paint on top of those areas.
+						</p>
+						{#key frameDraft.src}
+							<FrameSlotEditor imageSrc={frameDraft.src} bind:slots={frameDraft.slots} />
+						{/key}
+						{#if editorError}
+							<p class="err">{editorError}</p>
+						{/if}
+						<div class="actions">
+							{#if frameDraft.mode === 'edit'}
+								<PixelButton
+									label="RE-CROP"
+									variant="ghost"
+									disabled={busy}
+									onclick={startRecrop}
+								/>
+							{/if}
+							<PixelButton
+								label={busy ? 'WAIT…' : 'SAVE'}
+								variant="gold"
+								disabled={busy}
+								onclick={saveFrameDraft}
+							/>
+							<PixelButton
+								label="CANCEL"
+								variant="ghost"
+								disabled={busy}
+								onclick={cancelFrameDraft}
+							/>
+						</div>
 					{/if}
-					<div class="actions">
-						<PixelButton
-							label={busy ? 'WAIT…' : 'SAVE'}
-							variant="gold"
-							disabled={busy}
-							onclick={saveFrameDraft}
-						/>
-						<PixelButton
-							label="CANCEL"
-							variant="ghost"
-							disabled={busy}
-							onclick={cancelFrameDraft}
-						/>
-					</div>
 				</div>
 			{:else}
 				<div class="upload forge-panel">
@@ -287,15 +325,19 @@
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import FrameSlotEditor from '../lib/components/FrameSlotEditor.svelte';
+	import FrameCropEditor from '../lib/components/FrameCropEditor.svelte';
 
 	/**
 	 * @typedef {{ id: string; x: number; y: number; w: number; h: number }} FrameSlot
 	 * @typedef {{
 	 *   mode: 'create' | 'edit';
+	 *   step: 'crop' | 'slots';
 	 *   id?: string;
 	 *   name: string;
 	 *   motif: string;
 	 *   src: string;
+	 *   w?: number;
+	 *   h?: number;
 	 *   slots: FrameSlot[];
 	 * }} FrameDraft
 	 */
@@ -351,7 +393,7 @@
 	}
 
 	/**
-	 * @param {{ id: string; name: string; src: string; motif?: string; slots?: FrameSlot[]; custom?: boolean }} item
+	 * @param {{ id: string; name: string; src: string; motif?: string; w?: number; h?: number; slots?: FrameSlot[]; custom?: boolean }} item
 	 */
 	function openEditCanvases(item) {
 		if (!item.custom) {
@@ -361,12 +403,39 @@
 		editorError = '';
 		frameDraft = {
 			mode: 'edit',
+			step: 'slots',
 			id: item.id,
 			name: item.name,
 			motif: item.motif ?? '',
 			src: item.src,
+			w: item.w,
+			h: item.h,
 			slots: (item.slots ?? []).map((s) => ({ ...s }))
 		};
+	}
+
+	function startRecrop() {
+		if (!frameDraft) return;
+		frameDraft = { ...frameDraft, step: 'crop' };
+	}
+
+	/**
+	 * @param {{ src: string; w: number; h: number }} result
+	 */
+	function onCropReady(result) {
+		if (!frameDraft) return;
+		const changed = frameDraft.src !== result.src;
+		frameDraft = {
+			...frameDraft,
+			step: 'slots',
+			src: result.src,
+			w: result.w,
+			h: result.h,
+			slots: changed ? [] : frameDraft.slots
+		};
+		status = changed
+			? 'Crop applied — draw photo canvases on the trimmed frame.'
+			: 'Frame ready — draw photo canvases.';
 	}
 
 	async function saveFrameDraft() {
@@ -383,6 +452,8 @@
 					name: frameDraft.name,
 					motif: frameDraft.motif || undefined,
 					src: frameDraft.src,
+					w: frameDraft.w,
+					h: frameDraft.h,
 					slots: frameDraft.slots
 				});
 				status = 'Frame added.';
@@ -392,9 +463,12 @@
 				await updateAsset(frameDraft.id, {
 					name: frameDraft.name,
 					motif: frameDraft.motif || undefined,
+					src: frameDraft.src,
+					w: frameDraft.w,
+					h: frameDraft.h,
 					slots: frameDraft.slots
 				});
-				status = 'Canvases updated.';
+				status = 'Frame updated.';
 			}
 			frameDraft = null;
 		} catch (err) {
@@ -419,12 +493,13 @@
 				editorError = '';
 				frameDraft = {
 					mode: 'create',
+					step: 'crop',
 					name: uploadName || file.name.replace(/\.[^.]+$/, ''),
 					motif: uploadMotif,
 					src,
 					slots: []
 				};
-				status = 'Draw at least one photo canvas, then SAVE.';
+				status = 'Crop your frame, then place photo canvases.';
 			} else {
 				await addSticker({
 					name: uploadName || file.name.replace(/\.[^.]+$/, ''),

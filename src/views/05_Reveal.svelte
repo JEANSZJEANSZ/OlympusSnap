@@ -30,8 +30,8 @@
 			<div class="roll top" aria-hidden="true"></div>
 			<div class="cloth">
 				<div class="painting">
-					{#if $capturedImageData}
-						<img src={$capturedImageData} alt="" />
+					{#if previewImage}
+						<img src={previewImage} alt="" />
 					{:else}
 						<div class="mock"></div>
 					{/if}
@@ -51,16 +51,15 @@
 	import { get } from 'svelte/store';
 	import {
 		capturedImageData,
-		capturedPhotos,
 		finalCompositedImage,
-		selectedFrameId,
 		activeStickers
 	} from '../lib/stores/stores.js';
 	import { go } from '../router/index.js';
-	import { compositeFinalImage, compositeFramePhotos } from '../lib/utils/canvasRenderer.js';
+	import { compositeWithStickers } from '../lib/utils/canvasRenderer.js';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 
 	let phase = $state(/** @type {'idle' | 'snipped' | 'unrolling' | 'done'} */ ('idle'));
+	let previewImage = $state(/** @type {string | null} */ (null));
 
 	const hint = $derived(
 		phase === 'idle'
@@ -80,14 +79,11 @@
 	}
 
 	async function prepareComposite() {
-		const photos = get(capturedPhotos);
-		const frameId = get(selectedFrameId);
+		const base = get(capturedImageData);
 		const stickers = get(activeStickers);
-		const composited =
-			photos.length > 0
-				? await compositeFramePhotos(photos, frameId, stickers)
-				: await compositeFinalImage(get(capturedImageData) || '', frameId, stickers);
-		finalCompositedImage.set(composited || get(capturedImageData));
+		const composited = await compositeWithStickers(base || '', stickers);
+		finalCompositedImage.set(composited || base);
+		previewImage = composited || base;
 	}
 
 	async function cutRope() {

@@ -170,7 +170,7 @@
 		position: fixed;
 		z-index: 2;
 		display: block;
-		object-fit: fill;
+		object-fit: contain;
 		opacity: 0;
 		pointer-events: none;
 		-webkit-user-drag: none;

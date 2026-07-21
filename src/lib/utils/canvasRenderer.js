@@ -63,11 +63,12 @@ export function drawCoverFit(ctx, img, dx, dy, dw, dh, iw, ih) {
  * @param {number} studioH
  * @param {number} canvasW
  * @param {number} canvasH
+ * @param {boolean} [nativeCoords=false]
  */
-function drawSticker(ctx, img, sticker, studioW, studioH, canvasW, canvasH) {
+function drawSticker(ctx, img, sticker, studioW, studioH, canvasW, canvasH, nativeCoords = false) {
 	const BASE = 64;
-	const sx = canvasW / studioW;
-	const sy = canvasH / studioH;
+	const sx = nativeCoords ? 1 : canvasW / studioW;
+	const sy = nativeCoords ? 1 : canvasH / studioH;
 	const scaleX = sticker.scale * sx;
 	const scaleY = sticker.scale * sy;
 	const w = BASE * scaleX;
@@ -92,8 +93,9 @@ function drawSticker(ctx, img, sticker, studioW, studioH, canvasW, canvasH) {
  * @param {Array<{ id: string; src: string; x: number; y: number; scale: number; rotation?: number }>} stickers
  * @param {number} studioW
  * @param {number} studioH
+ * @param {boolean} [nativeCoords=false]
  */
-async function drawStickers(ctx, canvasW, canvasH, stickers, studioW, studioH) {
+async function drawStickers(ctx, canvasW, canvasH, stickers, studioW, studioH, nativeCoords = false) {
 	for (const sticker of stickers) {
 		if (!sticker.src) continue;
 		try {
@@ -110,7 +112,8 @@ async function drawStickers(ctx, canvasW, canvasH, stickers, studioW, studioH) {
 				studioW,
 				studioH,
 				canvasW,
-				canvasH
+				canvasH,
+				nativeCoords
 			);
 		} catch {
 			/* skip broken sticker */
@@ -122,7 +125,7 @@ async function drawStickers(ctx, canvasW, canvasH, stickers, studioW, studioH) {
  * @param {string[]} photos data URLs in slot order
  * @param {string | null} frameId
  * @param {Array<{ id: string; src: string; x: number; y: number; scale: number; rotation?: number }>} stickers
- * @param {{ studioWidth?: number; studioHeight?: number; skipStickers?: boolean }} [opts]
+ * @param {{ studioWidth?: number; studioHeight?: number; skipStickers?: boolean; nativeCoords?: boolean }} [opts]
  * @returns {Promise<string>}
  */
 export async function compositeFramePhotos(photos, frameId, stickers, opts = {}) {
@@ -172,7 +175,15 @@ export async function compositeFramePhotos(photos, frameId, stickers, opts = {})
 	}
 
 	if (!opts.skipStickers) {
-		await drawStickers(ctx, canvas.width, canvas.height, stickers, studioW, studioH);
+		await drawStickers(
+			ctx,
+			canvas.width,
+			canvas.height,
+			stickers,
+			studioW,
+			studioH,
+			opts.nativeCoords ?? false
+		);
 	}
 
 	return canvas.toDataURL('image/png');
@@ -183,7 +194,7 @@ export async function compositeFramePhotos(photos, frameId, stickers, opts = {})
  * @param {string} imageData
  * @param {string | null} frameId
  * @param {Array<{ id: string; src: string; x: number; y: number; scale: number; rotation?: number }>} stickers
- * @param {{ studioWidth?: number; studioHeight?: number }} [opts]
+ * @param {{ studioWidth?: number; studioHeight?: number; nativeCoords?: boolean }} [opts]
  * @returns {Promise<string>}
  */
 export async function compositeFinalImage(imageData, frameId, stickers, opts = {}) {
@@ -217,7 +228,39 @@ export async function compositeFinalImage(imageData, frameId, stickers, opts = {
 		}
 	}
 
-	await drawStickers(ctx, canvas.width, canvas.height, stickers, studioW, studioH);
+	await drawStickers(
+		ctx,
+		canvas.width,
+		canvas.height,
+		stickers,
+		studioW,
+		studioH,
+		opts.nativeCoords ?? false
+	);
+
+	return canvas.toDataURL('image/png');
+}
+
+/**
+ * Draw stickers on an already-framed composite (Studio export path).
+ * @param {string} compositeDataUrl
+ * @param {Array<{ id: string; src: string; x: number; y: number; scale: number; rotation?: number }>} stickers
+ * @returns {Promise<string>}
+ */
+export async function compositeWithStickers(compositeDataUrl, stickers) {
+	if (!compositeDataUrl) return '';
+
+	const base = await loadImage(compositeDataUrl).catch(() => null);
+	if (!base) return compositeDataUrl;
+
+	const canvas = document.createElement('canvas');
+	canvas.width = base.naturalWidth || base.width;
+	canvas.height = base.naturalHeight || base.height;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return compositeDataUrl;
+
+	ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
+	await drawStickers(ctx, canvas.width, canvas.height, stickers, canvas.width, canvas.height, true);
 
 	return canvas.toDataURL('image/png');
 }

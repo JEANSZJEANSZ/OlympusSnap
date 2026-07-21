@@ -45,6 +45,9 @@
 	--shadow-btn-press:
 		0 0 0 3px var(--text),
 		1px 1px 0 var(--text);
+
+	/* Ancient hand cursor — hotspot ≈ index fingertip (128×128 art) */
+	/* --cursor-ancient: url('./assets/Ancienthand.png') 14 10, auto; */
 }
 
 html,
@@ -60,6 +63,7 @@ body {
 	color: var(--text);
 	line-height: 1.6;
 	overflow: hidden;
+	/* cursor: var(--cursor-ancient); */
 	-webkit-font-smoothing: none;
 	-moz-osx-font-smoothing: unset;
 	image-rendering: pixelated;
@@ -233,3 +237,22 @@ a {
 		transition-duration: 0.01ms !important;
 	}
 }
+
+/*
+ * Sitewide hand — overrides grab/resize/crosshair on tool screens
+ * Uncomment :root --cursor-ancient above when ready.
+ *
+ * html {
+ * 	cursor: var(--cursor-ancient);
+ * }
+ *
+ * #app,
+ * body *:not(:disabled):not([disabled]) {
+ * 	cursor: var(--cursor-ancient) !important;
+ * }
+ *
+ * button:disabled,
+ * [disabled] {
+ * 	cursor: not-allowed !important;
+ * }
+ */

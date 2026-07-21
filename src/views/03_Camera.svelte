@@ -1,110 +1,126 @@
-<section class="view" class:handoff-pending={$frameHandoffBusy}>
-	<header class="head">
-		<h1>CAMERA TEMPLE</h1>
-		<p>
-			{frameName} ·
-			{#if snapTotal > 1}
-				SNAP {slotIndex + 1} / {snapTotal}
-			{:else}
-				Mirrored preview
-			{/if}
-		</p>
-	</header>
+<section
+	class="camera-view"
+	class:handoff-pending={$frameHandoffBusy}
+	class:ritual-busy={ritualOpen}
+>
+	<div class="sky-wash" aria-hidden="true"></div>
+	<div class="stars" aria-hidden="true">
+		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+	</div>
+	<div class="mountains mountains-far" aria-hidden="true"></div>
+	<div class="mountains mountains-near" aria-hidden="true"></div>
 
-	<div
-		class="viewport scanlines"
-		class:framed={!!frameSrc}
-		style:--frame-ar={frameAspect}
-		data-frame-handoff-target={!useSlots ? true : undefined}
-	>
-		{#if cameraError}
-			<div class="placeholder">
-				<p>CAMERA OFFLINE</p>
-				<p class="hint">Grant webcam access — or continue with a mock capture later.</p>
-			</div>
-		{:else}
-			<!-- Full mirrored feed behind; slotted mode clips live hole + shows filled thumbs -->
-			<video bind:this={videoEl} class="feed" class:hidden-feed={useSlots} playsinline muted autoplay
-			></video>
-
-			{#if useSlots && frameSrc}
-				<div class="slot-stage" bind:this={stageEl}>
-					<img
-						class="frame-art"
-						src={frameSrc}
-						alt=""
-						draggable="false"
-						data-frame-handoff-target
-					/>
-					<div
-						class="content-layer"
-						style:left="{contentBox.left}px"
-						style:top="{contentBox.top}px"
-						style:width="{contentBox.w}px"
-						style:height="{contentBox.h}px"
-					>
-						{#each slots as slot, i (slot.id)}
-							<div
-								class="hole"
-								class:active={i === slotIndex}
-								class:done={!!photos[i] && i !== slotIndex}
-								style:left="{slot.x * 100}%"
-								style:top="{slot.y * 100}%"
-								style:width="{slot.w * 100}%"
-								style:height="{slot.h * 100}%"
-							>
-								{#if photos[i] && i !== slotIndex}
-									<img class="hole-shot" src={photos[i]} alt="" />
-								{:else if i === slotIndex && !cameraError}
-									<video
-										class="hole-live"
-										bind:this={holeVideoEl}
-										playsinline
-										muted
-										autoplay
-									></video>
-								{:else}
-									<span class="hole-num">{i + 1}</span>
+	<main class="stage">
+		<aside class="dock-column">
+			{#if cameraError}
+				<div class="frame-dock offline">
+					<p>CAMERA OFFLINE</p>
+					<p class="hint">Grant webcam access to begin the ritual.</p>
+				</div>
+			{:else if frameSrc || !useSlots}
+				<div
+					class="frame-dock"
+					bind:this={dockEl}
+					style:--frame-ar={frameAspect}
+					data-frame-handoff-target
+				>
+					{#if useSlots && frameSrc}
+						<img class="frame-art" src={frameSrc} alt="" draggable="false" />
+						<div class="content-layer">
+							{#each slots as slot, i (slot.id)}
+								<div
+									class="hole"
+									class:active={i === slotIndex && !ritualOpen}
+									class:done={!!photos[i] && i !== slotIndex}
+									data-slot-index={i}
+									style:left="{slot.x * 100}%"
+									style:top="{slot.y * 100}%"
+									style:width="{slot.w * 100}%"
+									style:height="{slot.h * 100}%"
+								>
+									{#if photos[i] && (i !== slotIndex || ritualOpen)}
+										<img class="hole-shot" src={photos[i]} alt="" />
+									{:else if i === slotIndex && !cameraError && !ritualOpen}
+										<canvas class="hole-live-canvas" bind:this={previewCanvas}></canvas>
+									{:else}
+										<span class="hole-num">{i + 1}</span>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{:else}
+						{#if frameSrc}
+							<img class="frame-art" src={frameSrc} alt="" draggable="false" />
+						{/if}
+						<div class="content-layer">
+							<div class="hole active full-bleed" data-slot-index="0">
+								{#if photos[0]}
+									<img class="hole-shot" src={photos[0]} alt="" />
+								{:else if !ritualOpen}
+									<canvas class="hole-live-canvas" bind:this={previewCanvas}></canvas>
 								{/if}
 							</div>
-						{/each}
-					</div>
+						</div>
+					{/if}
 				</div>
 			{/if}
-		{/if}
 
-		{#if counting}
-			<div class="countdown" aria-live="assertive">{count}</div>
-		{/if}
+			<video bind:this={videoEl} class="capture-source" playsinline muted autoplay></video>
+		</aside>
 
-		{#if flashing}
-			<div class="flash" aria-hidden="true"></div>
-		{/if}
+		<div class="ritual-panel">
+			<header class="head">
+				<p class="eyebrow">THE MORTAL LENS AWAITS</p>
+				<h1>CAMERA TEMPLE</h1>
+				<p class="sub">{frameName}</p>
+			</header>
 
-		{#if !useSlots}
-			<div class="viewfinder" aria-hidden="true"></div>
-		{/if}
-	</div>
+			<p class="progress">
+				{#if snapTotal > 1}
+					SNAP {Math.min(slotIndex + 1, snapTotal)} / {snapTotal}
+				{:else}
+					SINGLE RELIC CAPTURE
+				{/if}
+			</p>
 
-	<div class="bottom">
-		<DialogBox speaker="POSE CHALLENGE" text={poseText} typewriter={false} />
-		<div class="actions">
-			<PixelButton label="BACK" variant="ghost" onclick={goBack} />
-			<PixelButton
-				label={counting
-					? 'HOLD STILL…'
-					: snapTotal > 1
-						? `SNAP ${slotIndex + 1}/${snapTotal}`
-						: 'SNAP (3s)'}
-				variant="accent"
-				disabled={counting || !cameraReady || $frameHandoffBusy}
-				onclick={startCountdown}
-			/>
-			{#if !useSlots}
-				<PixelButton label="SKIP → STUDIO" variant="gold" onclick={skipToStudio} />
-			{/if}
+			<DialogBox speaker="POSE CHALLENGE" text={poseText} typewriter={false} />
+
+			<div class="actions">
+				<PixelButton label="BACK" variant="ghost" disabled={ritualOpen} onclick={goBack} />
+				<PixelButton
+					label={ritualOpen ? 'RITUAL…' : 'BEGIN RITUAL'}
+					variant="accent"
+					disabled={ritualOpen || !cameraReady || $frameHandoffBusy}
+					onclick={beginRitual}
+				/>
+				{#if !useSlots}
+					<PixelButton
+						label="SKIP → STUDIO"
+						variant="gold"
+						disabled={ritualOpen}
+						onclick={skipToStudio}
+					/>
+				{/if}
+			</div>
 		</div>
-	</div>
+
+		<FilterGallery
+			selectedId={filterPreset}
+			disabled={ritualOpen || !cameraReady}
+			onSelect={(id) => (filterPreset = id)}
+		/>
+	</main>
+
+	<CameraSnapOverlay
+		open={ritualOpen}
+		{ritualKey}
+		fromRect={snapFromRect}
+		{videoEl}
+		{reduced}
+		{filterPreset}
+		onCaptured={onSnapCaptured}
+		onSettled={onSnapSettled}
+	/>
 </section>
 
 <script>
@@ -119,32 +135,50 @@
 	} from '../lib/stores/stores.js';
 	import { getLiveFrameById } from '../lib/assets/assetStore.js';
 	import { frameHandoffBusy } from '../lib/fx/frameHandoff.js';
+	import { getActiveHoleRect } from '../lib/fx/cameraLayout.js';
 	import { go } from '../router/index.js';
-	import { startCamera, stopCamera, captureFrame } from '../lib/utils/camera.js';
+	import { startCamera, stopCamera } from '../lib/utils/camera.js';
 	import { compositeFramePhotos } from '../lib/utils/canvasRenderer.js';
+	import { initFaceBeauty, disposeFaceBeauty } from '../lib/vision/faceBeauty.js';
+	import { startLivePreview, stopLivePreview } from '../lib/vision/livePreview.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
+	import FilterGallery from '../lib/components/FilterGallery.svelte';
+	import CameraSnapOverlay from '../lib/components/CameraSnapOverlay.svelte';
 
 	/** @type {HTMLVideoElement | undefined} */
 	let videoEl = $state();
-	/** @type {HTMLVideoElement | undefined} */
-	let holeVideoEl = $state();
+	/** @type {HTMLCanvasElement | undefined} */
+	let previewCanvas = $state();
 	/** @type {HTMLElement | undefined} */
-	let stageEl = $state();
+	let dockEl = $state();
+
 	let cameraReady = $state(false);
 	let cameraError = $state(false);
-	let counting = $state(false);
-	let count = $state(3);
-	let flashing = $state(false);
+	let reduced = $state(false);
 	let slotIndex = $state(0);
 	/** @type {string[]} */
 	let photos = $state([]);
 	/** @type {MediaStream | null} */
 	let stream = $state(null);
+
+	let ritualOpen = $state(false);
+	let ritualKey = $state(0);
+	/** @type {DOMRect | null} */
+	let snapFromRect = $state(null);
+	/** @type {import('../lib/canvas/photoKonva.js').FilterPresetId} */
+	let filterPreset = $state('natural');
+
 	let frameNatW = $state(300);
 	let frameNatH = $state(400);
-	let stageW = $state(1);
-	let stageH = $state(1);
+
+	const poses = [
+		'Strike a HEROIC Zeus pose — fists to the sky!',
+		'Channel Aphrodite: soft smile, shoulders square.',
+		'Athena wisdom look — chin up, one eyebrow raised.',
+		'Group huddle! Fill the frame like a temple frieze.'
+	];
+	let sessionPose = $state(poses[0]);
 
 	const frame = $derived(getLiveFrameById($selectedFrameId));
 	const slots = $derived(frame?.slots?.length ? frame.slots : []);
@@ -154,68 +188,53 @@
 	const frameName = $derived(frame?.name ?? $selectedFrameId ?? 'none');
 	const frameAspect = $derived(`${frameNatW} / ${frameNatH}`);
 
-	/** Image content box inside the stage (object-fit: contain). */
-	const contentBox = $derived.by(() => {
-		const scale = Math.min(stageW / frameNatW, stageH / frameNatH);
-		const w = frameNatW * scale;
-		const h = frameNatH * scale;
-		return {
-			left: (stageW - w) / 2,
-			top: (stageH - h) / 2,
-			w,
-			h
-		};
-	});
-
-	const poses = [
-		'Strike a HEROIC Zeus pose — fists to the sky!',
-		'Channel Aphrodite: soft smile, shoulders square.',
-		'Athena wisdom look — chin up, one eyebrow raised.',
-		'Group huddle! Fill the frame like a temple frieze.'
-	];
 	const poseText = $derived(
 		useSlots
 			? `Canvas ${slotIndex + 1} of ${snapTotal}. ${poses[slotIndex % poses.length]}`
-			: poses[Math.floor(Math.random() * poses.length)]
+			: sessionPose
 	);
-
-	function measureStage() {
-		if (!stageEl) return;
-		const r = stageEl.getBoundingClientRect();
-		stageW = Math.max(1, r.width);
-		stageH = Math.max(1, r.height);
-	}
 
 	function loadFrameMetrics(src) {
 		if (!src) return;
 		const img = new Image();
 		img.onload = () => {
-			frameNatW = img.naturalWidth || 300;
-			frameNatH = img.naturalHeight || 400;
-			requestAnimationFrame(measureStage);
+			frameNatW = img.naturalWidth || frame?.w || 300;
+			frameNatH = img.naturalHeight || frame?.h || 400;
 		};
 		img.src = src;
 	}
 
-	function attachHoleStream() {
-		if (holeVideoEl && stream) {
-			holeVideoEl.srcObject = stream;
-			holeVideoEl.play?.().catch(() => {});
-		}
-	}
-
 	$effect(() => {
 		if (frameSrc) loadFrameMetrics(frameSrc);
+		else if (frame?.w && frame?.h) {
+			frameNatW = frame.w;
+			frameNatH = frame.h;
+		}
 	});
 
 	$effect(() => {
-		if (useSlots && holeVideoEl && stream) attachHoleStream();
+		if (ritualOpen || !cameraReady || !videoEl || !previewCanvas) {
+			stopLivePreview();
+			return;
+		}
+
+		startLivePreview({
+			video: videoEl,
+			canvas: previewCanvas,
+			getPreset: () => filterPreset
+		});
+
+		return () => stopLivePreview();
 	});
 
 	onMount(() => {
 		clearCaptures();
 		photos = [];
 		slotIndex = 0;
+		sessionPose = poses[Math.floor(Math.random() * poses.length)];
+		reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+		initFaceBeauty();
 
 		let cancelled = false;
 		const timeout = setTimeout(() => {
@@ -232,39 +251,34 @@
 			stream = s;
 			cameraReady = !!s;
 			cameraError = !s;
-			attachHoleStream();
-			measureStage();
 		})();
 
 		return () => {
 			cancelled = true;
 			clearTimeout(timeout);
+			stopLivePreview();
 			stopCamera();
+			disposeFaceBeauty();
 			stream = null;
 		};
 	});
 
-	$effect(() => {
-		if (!stageEl) return;
-		measureStage();
-		const ro = new ResizeObserver(() => measureStage());
-		ro.observe(stageEl);
-		return () => ro.disconnect();
-	});
-
 	function goBack() {
+		stopLivePreview();
 		stopCamera();
 		clearCaptures();
 		go('frame');
 	}
 
 	function skipToStudio() {
+		stopLivePreview();
 		stopCamera();
 		clearCaptures();
 		go('studio');
 	}
 
 	async function finishSession() {
+		stopLivePreview();
 		stopCamera();
 		const list = get(capturedPhotos);
 		const frameId = get(selectedFrameId);
@@ -277,26 +291,27 @@
 		go('studio');
 	}
 
-	async function startCountdown() {
-		if (counting || !cameraReady) return;
-		counting = true;
-		count = 3;
-		for (let i = 3; i >= 1; i--) {
-			count = i;
-			await new Promise((r) => setTimeout(r, 900));
-		}
-		flashing = true;
-		const source = videoEl;
-		if (source) {
-			const data = captureFrame(source);
-			if (data) {
-				appendCapture(data);
-				photos = [...photos, data];
-			}
-		}
-		await new Promise((r) => setTimeout(r, 350));
-		flashing = false;
-		counting = false;
+	function beginRitual() {
+		if (ritualOpen || !cameraReady || $frameHandoffBusy) return;
+		const rect = getActiveHoleRect(dockEl, slotIndex);
+		if (!rect) return;
+		stopLivePreview();
+		snapFromRect = rect;
+		ritualOpen = true;
+		ritualKey += 1;
+	}
+
+	/** @param {string} dataUrl */
+	function onSnapCaptured(dataUrl) {
+		appendCapture(dataUrl);
+		const next = [...photos];
+		next[slotIndex] = dataUrl;
+		photos = next;
+	}
+
+	async function onSnapSettled() {
+		ritualOpen = false;
+		snapFromRect = null;
 
 		if (slotIndex + 1 >= snapTotal) {
 			await finishSession();
@@ -307,85 +322,124 @@
 </script>
 
 <style>
-	.view {
+	.camera-view {
+		--sky-top: #071936;
+		--sky-mid: #153d69;
+		--sky-low: #be6f62;
+		position: relative;
+		isolation: isolate;
+		height: 100%;
+		min-height: 100%;
+		overflow: hidden;
+		padding: clamp(0.65rem, 1.5vh, 1rem) clamp(0.75rem, 2vw, 1.25rem);
+		color: #fff8df;
+		background: var(--sky-top);
+	}
+
+	.sky-wash {
+		position: absolute;
+		inset: 0;
+		z-index: -4;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 18%),
+			linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 58%, var(--sky-low) 130%);
+	}
+
+	.stars {
+		position: absolute;
+		inset: 0;
+		z-index: -3;
+		pointer-events: none;
+	}
+
+	.stars i {
+		position: absolute;
+		width: 3px;
+		height: 3px;
+		background: #fff4bd;
+		box-shadow: 3px 0 #fff4bd, 0 3px #fff4bd, 3px 3px #fff4bd;
+	}
+
+	.stars i:nth-child(1) { left: 8%; top: 15%; }
+	.stars i:nth-child(2) { left: 21%; top: 34%; transform: scale(0.65); }
+	.stars i:nth-child(3) { left: 36%; top: 12%; transform: scale(0.7); }
+	.stars i:nth-child(4) { right: 36%; top: 23%; }
+	.stars i:nth-child(5) { right: 21%; top: 11%; transform: scale(0.6); }
+	.stars i:nth-child(6) { right: 8%; top: 29%; transform: scale(0.8); }
+	.stars i:nth-child(7) { right: 14%; top: 51%; transform: scale(0.55); }
+
+	.mountains {
+		position: absolute;
+		right: -5%;
+		bottom: -1px;
+		left: -5%;
+		z-index: -2;
+		height: 46%;
+		clip-path: polygon(0 72%, 8% 48%, 15% 62%, 25% 25%, 36% 58%, 47% 35%, 58% 67%, 70% 30%, 80% 56%, 91% 22%, 100% 61%, 100% 100%, 0 100%);
+		background: #102f56;
+	}
+
+	.mountains-far {
+		opacity: 0.55;
+		transform: scale(1.08);
+		filter: brightness(0.85);
+	}
+
+	.mountains-near {
+		height: 38%;
+		background: #31577a;
+		clip-path: polygon(0 100%, 0 68%, 12% 52%, 22% 72%, 34% 40%, 48% 64%, 60% 34%, 72% 58%, 84% 28%, 100% 55%, 100% 100%);
+	}
+
+	.stage {
+		position: relative;
+		z-index: 1;
 		height: 100%;
 		display: grid;
-		grid-template-rows: auto 1fr auto;
-		gap: 0.85rem;
-		padding: 1rem;
+		grid-template-columns: minmax(0, 1fr) minmax(240px, 0.85fr) minmax(120px, 168px);
+		gap: clamp(0.65rem, 1.5vw, 1.25rem);
+		align-items: center;
 	}
 
-	.view.handoff-pending .frame-art {
-		opacity: 0;
-	}
-
-	.view.handoff-pending .head,
-	.view.handoff-pending .bottom {
-		opacity: 0.35;
-		transition: opacity 280ms steps(3);
-	}
-
-	.view:not(.handoff-pending) .head,
-	.view:not(.handoff-pending) .bottom,
-	.view:not(.handoff-pending) .frame-art {
-		transition: opacity 220ms steps(3);
-	}
-
-	.head {
-		text-align: center;
-	}
-
-	.head h1 {
-		font-size: clamp(0.8rem, 2.8vw, 1.05rem);
-		color: var(--primary);
-	}
-
-	.head p {
-		margin-top: 0.35rem;
-		font-size: 0.48rem;
-		color: var(--ink-soft);
-	}
-
-	.viewport {
-		position: relative;
-		max-width: 720px;
-		width: 100%;
-		margin: 0 auto;
-		aspect-ratio: 4 / 3;
-		max-height: min(52dvh, 480px);
-		background: var(--text);
-		box-shadow:
-			0 0 0 4px var(--gold),
-			0 0 0 8px var(--text),
-			8px 8px 0 var(--primary);
-		overflow: hidden;
-	}
-
-	.viewport.framed {
-		aspect-ratio: var(--frame-ar, 3 / 4);
-		max-width: min(420px, 100%);
-	}
-
-	.feed {
-		width: 100%;
+	.dock-column {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 0;
 		height: 100%;
-		object-fit: cover;
-		transform: scaleX(-1);
-		display: block;
+		position: relative;
 	}
 
-	.feed.hidden-feed {
+	.frame-dock {
+		position: relative;
+		width: min(34vw, calc(min(72dvh, 640px) * var(--frame-ar)));
+		max-height: min(72dvh, 640px);
+		aspect-ratio: var(--frame-ar);
+		background: transparent;
+		filter: drop-shadow(6px 8px 0 color-mix(in srgb, var(--primary) 35%, transparent));
+	}
+
+	.frame-dock.offline {
+		aspect-ratio: 3 / 4;
+		width: min(32vw, 280px);
+		display: grid;
+		place-content: center;
+		gap: 0.65rem;
+		padding: 1rem;
+		text-align: center;
+		font-size: 0.55rem;
+		color: var(--ink-soft);
+		background: var(--surface);
+		box-shadow: var(--shadow-panel);
+	}
+
+	.capture-source {
 		position: absolute;
 		width: 1px;
 		height: 1px;
 		opacity: 0;
 		pointer-events: none;
-	}
-
-	.slot-stage {
-		position: absolute;
-		inset: 0;
-		background: #0a1220;
+		overflow: hidden;
 	}
 
 	.frame-art {
@@ -393,23 +447,28 @@
 		inset: 0;
 		width: 100%;
 		height: 100%;
-		object-fit: contain;
-		object-position: center;
+		object-fit: fill;
 		pointer-events: none;
 		z-index: 1;
 	}
 
 	.content-layer {
 		position: absolute;
+		inset: 0;
 		z-index: 2;
 	}
 
 	.hole {
 		position: absolute;
 		overflow: hidden;
-		z-index: 1;
 		background: #111;
 		box-shadow: inset 0 0 0 1px rgba(255, 217, 120, 0.35);
+	}
+
+	.hole.full-bleed {
+		inset: 0;
+		width: 100%;
+		height: 100%;
 	}
 
 	.hole.active {
@@ -418,16 +477,12 @@
 			0 0 0 1px rgba(255, 217, 120, 0.5);
 	}
 
-	.hole-live,
+	.hole-live-canvas,
 	.hole-shot {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 		display: block;
-	}
-
-	.hole-live {
-		transform: scaleX(-1);
 	}
 
 	.hole-num {
@@ -439,97 +494,87 @@
 		opacity: 0.55;
 	}
 
-	.placeholder {
-		height: 100%;
-		display: grid;
-		place-content: center;
-		gap: 0.75rem;
-		padding: 1rem;
-		text-align: center;
-		color: var(--bg-base);
-		font-size: 0.65rem;
-		background: repeating-linear-gradient(
-			45deg,
-			#0f172a,
-			#0f172a 10px,
-			#1e293b 10px,
-			#1e293b 20px
-		);
-	}
-
 	.hint {
-		font-size: 0.48rem;
+		font-size: 0.42rem;
 		line-height: 1.7;
-		opacity: 0.8;
-		max-width: 18rem;
-		margin: 0 auto;
+		opacity: 0.85;
 	}
 
-	.countdown {
-		position: absolute;
-		inset: 0;
-		display: grid;
-		place-items: center;
-		font-size: clamp(4rem, 20vw, 7rem);
-		color: var(--gold-bright);
-		text-shadow: 4px 4px 0 var(--text);
-		z-index: 4;
-		animation: countdown-pop 0.85s steps(3) both;
-		pointer-events: none;
-	}
-
-	.flash {
-		position: absolute;
-		inset: 0;
-		background: var(--flash);
-		z-index: 5;
-		animation: flash-white 0.35s ease-out forwards;
-		pointer-events: none;
-	}
-
-	.viewfinder {
-		position: absolute;
-		inset: 12px;
-		border: 2px dashed color-mix(in srgb, var(--bg-base) 50%, transparent);
-		pointer-events: none;
-		z-index: 3;
-	}
-
-	.viewfinder::before,
-	.viewfinder::after {
-		content: '';
-		position: absolute;
-		width: 18px;
-		height: 18px;
-		border-color: var(--gold-bright);
-		border-style: solid;
-	}
-
-	.viewfinder::before {
-		top: -2px;
-		left: -2px;
-		border-width: 3px 0 0 3px;
-	}
-
-	.viewfinder::after {
-		bottom: -2px;
-		right: -2px;
-		border-width: 0 3px 3px 0;
-	}
-
-	.bottom {
+	.ritual-panel {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
-		max-width: 720px;
+		gap: 0.85rem;
+		max-width: 420px;
 		width: 100%;
-		margin: 0 auto;
+		justify-self: center;
+	}
+
+	.head .eyebrow {
+		font-size: 0.42rem;
+		color: var(--gold-bright);
+		letter-spacing: 0.08em;
+		margin-bottom: 0.35rem;
+	}
+
+	.head h1 {
+		font-size: clamp(0.85rem, 2.5vw, 1.1rem);
+		color: #fff8df;
+		text-shadow: 2px 2px 0 color-mix(in srgb, var(--gold) 40%, transparent);
+	}
+
+	.sub {
+		margin-top: 0.35rem;
+		font-size: 0.45rem;
+		color: color-mix(in srgb, #fff8df 72%, transparent);
+		line-height: 1.6;
+	}
+
+	.progress {
+		font-size: 0.48rem;
+		background: #102f56;
+		color: #fff8df;
+		display: inline-block;
+		padding: 0.35rem 0.55rem;
+		width: fit-content;
+		box-shadow: 2px 2px 0 #071936;
 	}
 
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.65rem;
-		justify-content: center;
+	}
+
+	.camera-view.handoff-pending .frame-art {
+		opacity: 0;
+	}
+
+	.camera-view.handoff-pending .ritual-panel,
+	.camera-view.handoff-pending :global(.filter-rail),
+	.camera-view.ritual-busy .ritual-panel,
+	.camera-view.ritual-busy :global(.filter-rail) {
+		opacity: 0.4;
+		transition: opacity 220ms steps(3);
+	}
+
+	@media (max-width: 980px) {
+		.stage {
+			grid-template-columns: 1fr;
+			grid-template-rows: auto auto auto;
+			align-items: start;
+		}
+
+		.frame-dock {
+			width: min(72vw, calc(min(42dvh, 480px) * var(--frame-ar)));
+			margin: 0 auto;
+		}
+
+		.dock-column {
+			justify-content: center;
+		}
+
+		.ritual-panel {
+			max-width: none;
+		}
 	}
 </style>

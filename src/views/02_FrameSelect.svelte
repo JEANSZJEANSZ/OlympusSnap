@@ -12,14 +12,37 @@
 	let reduced = $state(false);
 	let exiting = $state(false);
 	let rootEl;
+	/** @type {Record<string, { w: number; h: number }>} */
+	let measuredDims = $state({});
 	/** @type {ReturnType<typeof createFrameSelectMotion> | undefined} */
 	let motion;
 	const list = $derived($frames);
 	const frame = $derived(list[Math.min(index, Math.max(0, list.length - 1))]);
-	/** Unitless w/h for CSS aspect-ratio + width cap calc (fallback ≈ strip-4). */
-	const frameAr = $derived(
-		frame?.w && frame?.h && frame.h > 0 ? frame.w / frame.h : 220 / 828
-	);
+
+	$effect(() => {
+		const f = frame;
+		if (!f?.src || (f.w && f.h)) return;
+		if (measuredDims[f.id]) return;
+		const img = new Image();
+		img.onload = () => {
+			if (img.naturalWidth && img.naturalHeight) {
+				measuredDims = {
+					...measuredDims,
+					[f.id]: { w: img.naturalWidth, h: img.naturalHeight }
+				};
+			}
+		};
+		img.src = f.src;
+	});
+
+	/** Unitless w/h for CSS aspect-ratio + width cap calc. */
+	const frameAr = $derived.by(() => {
+		const f = frame;
+		if (f?.w && f?.h && f.h > 0) return f.w / f.h;
+		const m = f?.id ? measuredDims[f.id] : null;
+		if (m?.w && m?.h) return m.w / m.h;
+		return 3 / 4;
+	});
 
 	function attachRoot(node) {
 		rootEl = node;
@@ -542,7 +565,7 @@
 
 	.frame-body {
 		/* Cap both axes so tall strips stay narrow and landscapes stay wide. */
-		--frame-ar: 220 / 828;
+		--frame-ar: 3 / 4;
 		position: relative;
 		display: block;
 		width: min(58vw, 300px, calc(min(48dvh, 340px) * var(--frame-ar)));
@@ -593,7 +616,7 @@
 		display: block;
 		width: 100%;
 		height: 100%;
-		object-fit: fill;
+		object-fit: contain;
 		pointer-events: none;
 		-webkit-user-drag: none;
 	}

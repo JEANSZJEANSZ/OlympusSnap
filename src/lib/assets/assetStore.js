@@ -4,6 +4,7 @@
 import { get, writable } from 'svelte/store';
 import { FRAMES as SEED_FRAMES, STICKERS as SEED_STICKERS } from './catalog.js';
 import { idbDelete, idbListAll, idbPut, idbReplaceAllCustoms } from './idb.js';
+import { measureImage } from '../utils/imageCrop.js';
 
 const PIN_KEY = 'olympus-snap-admin-pin';
 const DEFAULT_PIN = 'olympus';
@@ -106,6 +107,8 @@ function rebuildStores(customs) {
 			src: a.src,
 			motif: a.motif,
 			thumb: a.src,
+			w: a.w,
+			h: a.h,
 			slots: normalizeSlots(a.slots),
 			custom: true
 		}));
@@ -178,15 +181,22 @@ function makeId(prefix) {
 }
 
 /**
- * @param {{ name: string; motif?: string; file?: File; src?: string; slots: FrameSlot[] }} opts
+ * @param {{ name: string; motif?: string; file?: File; src?: string; slots: FrameSlot[]; w?: number; h?: number }} opts
  */
-export async function addFrame({ name, motif, file, src: srcIn, slots }) {
+export async function addFrame({ name, motif, file, src: srcIn, slots, w, h }) {
 	const cleaned = normalizeSlots(slots);
 	if (!cleaned?.length) throw new Error('Add at least one photo canvas');
 	let src = srcIn;
 	if (!src) {
 		if (!file) throw new Error('Frame image required');
 		src = await fileToDataUrl(file);
+	}
+	let frameW = w;
+	let frameH = h;
+	if (!frameW || !frameH) {
+		const dims = await measureImage(src);
+		frameW = dims.w;
+		frameH = dims.h;
 	}
 	/** @type {import('./idb.js').CustomAsset} */
 	const record = {
@@ -195,6 +205,8 @@ export async function addFrame({ name, motif, file, src: srcIn, slots }) {
 		name: name.trim() || 'CUSTOM FRAME',
 		motif: motif?.trim() || undefined,
 		src,
+		w: frameW,
+		h: frameH,
 		slots: cleaned,
 		custom: true
 	};
@@ -226,7 +238,7 @@ export async function addSticker({ name, file }) {
 /**
  * Rename / update slots on a custom asset (seeds are read-only).
  * @param {string} id
- * @param {{ name?: string; motif?: string; slots?: FrameSlot[] }} patch
+ * @param {{ name?: string; motif?: string; src?: string; w?: number; h?: number; slots?: FrameSlot[] }} patch
  */
 export async function updateAsset(id, patch) {
 	const customs = await idbListAll();
@@ -234,6 +246,9 @@ export async function updateAsset(id, patch) {
 	if (!row) throw new Error('Only custom assets can be edited');
 	if (patch.name !== undefined) row.name = patch.name.trim() || row.name;
 	if (patch.motif !== undefined) row.motif = patch.motif.trim() || undefined;
+	if (patch.src !== undefined) row.src = patch.src;
+	if (patch.w !== undefined) row.w = patch.w;
+	if (patch.h !== undefined) row.h = patch.h;
 	if (patch.slots !== undefined) {
 		if (row.kind !== 'frame') throw new Error('Only frames have canvases');
 		const cleaned = normalizeSlots(patch.slots);
@@ -296,6 +311,10 @@ export async function importCatalog(payload) {
 		if (a.kind === 'frame') {
 			const slots = normalizeSlots(a.slots);
 			if (slots) row.slots = slots;
+			if (typeof a.w === 'number' && typeof a.h === 'number') {
+				row.w = a.w;
+				row.h = a.h;
+			}
 		}
 		cleaned.push(row);
 	}
