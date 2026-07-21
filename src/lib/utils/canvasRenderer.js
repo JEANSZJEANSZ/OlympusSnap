@@ -3,8 +3,8 @@
  *
  * Slotted frames:
  * 1. Canvas = frame natural size
- * 2. Cover-fit each photo into its normalized slot rect
- * 3. Draw frame art on top
+ * 2. Draw frame art (opaque custom frames OK)
+ * 3. Cover-fit each photo into its normalized slot rect on top
  * 4. Stickers
  *
  * Legacy (no slots):
@@ -154,6 +154,7 @@ export async function compositeFramePhotos(photos, frameId, stickers, opts = {})
 
 	ctx.fillStyle = '#111';
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
 
 	for (let i = 0; i < slots.length; i++) {
 		const slot = slots[i];
@@ -169,8 +170,6 @@ export async function compositeFramePhotos(photos, frameId, stickers, opts = {})
 		const ih = photo.naturalHeight || photo.height;
 		drawCoverFit(ctx, photo, dx, dy, dw, dh, iw, ih);
 	}
-
-	ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
 
 	if (!opts.skipStickers) {
 		await drawStickers(ctx, canvas.width, canvas.height, stickers, studioW, studioH);

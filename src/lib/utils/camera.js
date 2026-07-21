@@ -1,10 +1,47 @@
 /**
  * Camera helpers — navigator.mediaDevices getUserMedia + device switching.
- * Stubbed for the UI / layout pass.
  */
 
 /** @type {MediaStream | null} */
 let activeStream = null;
+
+/** @param {string} [deviceId] */
+function buildVideoConstraints(deviceId) {
+	const size = {
+		width: { ideal: 1920, min: 640 },
+		height: { ideal: 1080, min: 480 }
+	};
+	if (deviceId) {
+		return {
+			video: { deviceId: { exact: deviceId }, facingMode: 'user', ...size },
+			audio: false
+		};
+	}
+	return {
+		video: { facingMode: 'user', ...size },
+		audio: false
+	};
+}
+
+/** @param {MediaStream} stream */
+async function upgradeVideoTrack(stream) {
+	const track = stream.getVideoTracks()[0];
+	if (!track) return;
+	try {
+		const caps = track.getCapabilities?.();
+		if (!caps) return;
+		const width = caps.width?.max;
+		const height = caps.height?.max;
+		if (width && height) {
+			await track.applyConstraints({
+				width: { ideal: width },
+				height: { ideal: height }
+			});
+		}
+	} catch {
+		/* best effort — keep negotiated stream */
+	}
+}
 
 /**
  * @param {HTMLVideoElement} videoEl
@@ -14,13 +51,8 @@ let activeStream = null;
 export async function startCamera(videoEl, deviceId) {
 	stopCamera();
 	try {
-		const constraints = {
-			video: deviceId
-				? { deviceId: { exact: deviceId }, facingMode: 'user' }
-				: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-			audio: false
-		};
-		activeStream = await navigator.mediaDevices.getUserMedia(constraints);
+		activeStream = await navigator.mediaDevices.getUserMedia(buildVideoConstraints(deviceId));
+		await upgradeVideoTrack(activeStream);
 		videoEl.srcObject = activeStream;
 		await videoEl.play();
 		return activeStream;

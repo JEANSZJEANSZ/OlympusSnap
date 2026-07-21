@@ -71,6 +71,9 @@
 						<span>Motif</span>
 						<input type="text" bind:value={frameDraft.motif} placeholder="Optional tag" />
 					</label>
+					<p class="hint">
+						Drawn rectangles are the photo windows — captures paint on top of those areas.
+					</p>
 					{#key frameDraft.src}
 						<FrameSlotEditor imageSrc={frameDraft.src} bind:slots={frameDraft.slots} />
 					{/key}

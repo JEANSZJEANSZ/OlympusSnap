@@ -122,6 +122,10 @@
 		localRotation = rotation;
 	});
 
+	$effect(() => {
+		if (!selected && handlesActive) handlesActive = false;
+	});
+
 	/** @type {HTMLElement | undefined} */
 	let boxEl = $state();
 
@@ -168,26 +172,47 @@
 
 	/**
 	 * @param {PointerEvent} e
+	 * @param {HTMLElement} captureTarget
+	 * @param {() => void} removeListeners
+	 */
+	function finishHandleGesture(e, captureTarget, removeListeners) {
+		try {
+			if (captureTarget.hasPointerCapture?.(e.pointerId)) {
+				captureTarget.releasePointerCapture(e.pointerId);
+			}
+		} catch {
+			/* already released */
+		}
+		removeListeners();
+		emit();
+		handlesActive = false;
+	}
+
+	/**
+	 * @param {PointerEvent} e
 	 * @param {'nw' | 'ne' | 'sw' | 'se'} corner
 	 */
 	function startResize(e, corner) {
 		e.stopPropagation();
 		e.preventDefault();
 		onSelect?.();
-		handlesActive = true;
 
 		const startScale = localScale;
 		const rect = boxEl?.getBoundingClientRect();
-		if (!rect) {
-			handlesActive = false;
-			return;
-		}
+		if (!rect) return;
+
 		const cx = rect.left + rect.width / 2;
 		const cy = rect.top + rect.height / 2;
 		const startDist = Math.hypot(e.clientX - cx, e.clientY - cy) || 1;
+		const captureTarget = /** @type {HTMLElement} */ (e.currentTarget);
 
-		const target = /** @type {HTMLElement} */ (e.currentTarget);
-		target.setPointerCapture(e.pointerId);
+		handlesActive = true;
+		try {
+			captureTarget.setPointerCapture(e.pointerId);
+		} catch {
+			handlesActive = false;
+			return;
+		}
 
 		/** @param {PointerEvent} ev */
 		function onMove(ev) {
@@ -195,19 +220,22 @@
 			setScaleKeepingCenter(startScale * (dist / startDist));
 		}
 
-		/** @param {PointerEvent} ev */
-		function onUp(ev) {
-			target.releasePointerCapture(ev.pointerId);
-			target.removeEventListener('pointermove', onMove);
-			target.removeEventListener('pointerup', onUp);
-			target.removeEventListener('pointercancel', onUp);
-			handlesActive = false;
-			emit();
+		function removeListeners() {
+			window.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
+			window.removeEventListener('pointercancel', onUp);
+			window.removeEventListener('lostpointercapture', onUp);
 		}
 
-		target.addEventListener('pointermove', onMove);
-		target.addEventListener('pointerup', onUp);
-		target.addEventListener('pointercancel', onUp);
+		/** @param {PointerEvent} ev */
+		function onUp(ev) {
+			finishHandleGesture(ev, captureTarget, removeListeners);
+		}
+
+		window.addEventListener('pointermove', onMove);
+		window.addEventListener('pointerup', onUp);
+		window.addEventListener('pointercancel', onUp);
+		window.addEventListener('lostpointercapture', onUp);
 		void corner;
 	}
 
@@ -216,26 +244,28 @@
 		e.stopPropagation();
 		e.preventDefault();
 		onSelect?.();
-		handlesActive = true;
 
 		const rect = boxEl?.getBoundingClientRect();
-		if (!rect) {
-			handlesActive = false;
-			return;
-		}
+		if (!rect) return;
+
 		const cx = rect.left + rect.width / 2;
 		const cy = rect.top + rect.height / 2;
 		const startAngle = Math.atan2(e.clientY - cy, e.clientX - cx);
 		const startRotation = localRotation;
 		const lockedX = localX;
 		const lockedY = localY;
+		const captureTarget = /** @type {HTMLElement} */ (e.currentTarget);
 
-		const target = /** @type {HTMLElement} */ (e.currentTarget);
-		target.setPointerCapture(e.pointerId);
+		handlesActive = true;
+		try {
+			captureTarget.setPointerCapture(e.pointerId);
+		} catch {
+			handlesActive = false;
+			return;
+		}
 
 		/** @param {PointerEvent} ev */
 		function onMove(ev) {
-			// Position stays locked — only angle changes
 			localX = lockedX;
 			localY = lockedY;
 			const angle = Math.atan2(ev.clientY - cy, ev.clientX - cx);
@@ -243,21 +273,24 @@
 			localRotation = startRotation + delta;
 		}
 
-		/** @param {PointerEvent} ev */
-		function onUp(ev) {
-			target.releasePointerCapture(ev.pointerId);
-			target.removeEventListener('pointermove', onMove);
-			target.removeEventListener('pointerup', onUp);
-			target.removeEventListener('pointercancel', onUp);
-			localX = lockedX;
-			localY = lockedY;
-			handlesActive = false;
-			emit();
+		function removeListeners() {
+			window.removeEventListener('pointermove', onMove);
+			window.removeEventListener('pointerup', onUp);
+			window.removeEventListener('pointercancel', onUp);
+			window.removeEventListener('lostpointercapture', onUp);
 		}
 
-		target.addEventListener('pointermove', onMove);
-		target.addEventListener('pointerup', onUp);
-		target.addEventListener('pointercancel', onUp);
+		/** @param {PointerEvent} ev */
+		function onUp(ev) {
+			localX = lockedX;
+			localY = lockedY;
+			finishHandleGesture(ev, captureTarget, removeListeners);
+		}
+
+		window.addEventListener('pointermove', onMove);
+		window.addEventListener('pointerup', onUp);
+		window.addEventListener('pointercancel', onUp);
+		window.addEventListener('lostpointercapture', onUp);
 	}
 </script>
 

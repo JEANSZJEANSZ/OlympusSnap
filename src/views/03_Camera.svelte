@@ -396,12 +396,12 @@
 		object-fit: contain;
 		object-position: center;
 		pointer-events: none;
-		z-index: 2;
+		z-index: 1;
 	}
 
 	.content-layer {
 		position: absolute;
-		z-index: 1;
+		z-index: 2;
 	}
 
 	.hole {
@@ -416,7 +416,6 @@
 		box-shadow:
 			inset 0 0 0 2px var(--gold-bright),
 			0 0 0 1px rgba(255, 217, 120, 0.5);
-		z-index: 3;
 	}
 
 	.hole-live,
