@@ -73,18 +73,19 @@ function loadImage(src) {
 	});
 }
 
+/** Fixed screen-pixel chrome — Konva Transformer ignores parent stage scale by design. */
+const TRANSFORMER_ANCHOR_PX = 16;
+const TRANSFORMER_ROTATE_OFFSET_PX = 32;
+
 /**
- * Keep Transformer chrome ~constant in CSS/screen pixels when stage is scaled down.
  * @param {Konva.Transformer} transformer
- * @param {number} scale
  */
-function updateTransformerChrome(transformer, scale) {
-	if (!scale || scale <= 0) return;
-	const inv = 1 / scale;
-	transformer.anchorSize(Math.max(12, Math.min(72, Math.round(18 * inv))));
-	transformer.rotateAnchorOffset(Math.max(28, Math.min(140, Math.round(36 * inv))));
-	transformer.borderStrokeWidth(Math.max(1, Math.min(8, 2 * inv)));
-	transformer.anchorStrokeWidth(Math.max(1, Math.min(6, 1.5 * inv)));
+function applyTransformerChrome(transformer) {
+	transformer.anchorSize(TRANSFORMER_ANCHOR_PX);
+	transformer.rotateAnchorOffset(TRANSFORMER_ROTATE_OFFSET_PX);
+	transformer.borderStrokeWidth(2);
+	transformer.anchorStrokeWidth(1.5);
+	transformer.forceUpdate();
 }
 
 /**
@@ -134,8 +135,8 @@ export async function createStudioEditor(opts) {
 		anchorFill: '#c4b49a',
 		anchorStroke: '#1a1a1a',
 		anchorStrokeWidth: 1.5,
-		anchorSize: 18,
-		rotateAnchorOffset: 36,
+		anchorSize: TRANSFORMER_ANCHOR_PX,
+		rotateAnchorOffset: TRANSFORMER_ROTATE_OFFSET_PX,
 		anchorStyleFunc: (anchor) => {
 			if (anchor.hasName('rotater')) {
 				anchor.fill('#d4a017');
@@ -160,7 +161,7 @@ export async function createStudioEditor(opts) {
 		stage.width(frameW * scale);
 		stage.height(frameH * scale);
 		stage.scale({ x: scale, y: scale });
-		updateTransformerChrome(transformer, scale);
+		applyTransformerChrome(transformer);
 		uiLayer.moveToTop();
 		stage.batchDraw();
 	}
@@ -185,6 +186,7 @@ export async function createStudioEditor(opts) {
 	function selectNode(/** @type {Konva.Image | null} */ node) {
 		if (node) {
 			transformer.nodes([node]);
+			applyTransformerChrome(transformer);
 			selectedId = node.id();
 			uiLayer.moveToTop();
 			transformer.moveToTop();
@@ -248,6 +250,37 @@ export async function createStudioEditor(opts) {
 	function defaultSpawnScale() {
 		return Math.max(1, Math.min(3, Math.round((Math.min(frameW, frameH) / 420) * 10) / 10));
 	}
+
+	/**
+	 * @param {string} id
+	 * @returns {boolean}
+	 */
+	function removeSticker(id) {
+		const node = nodes.get(id);
+		if (!node) return false;
+		node.destroy();
+		nodes.delete(id);
+		if (selectedId === id) selectNode(null);
+		emitStickers();
+		return true;
+	}
+
+	/**
+	 * @param {KeyboardEvent} e
+	 */
+	function onKeyDown(e) {
+		if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+		const t = e.target;
+		if (t instanceof HTMLElement) {
+			const tag = t.tagName;
+			if (tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable) return;
+		}
+		if (!selectedId || !nodes.has(selectedId)) return;
+		e.preventDefault();
+		removeSticker(selectedId);
+	}
+
+	window.addEventListener('keydown', onKeyDown);
 
 	return {
 		stage,
@@ -316,6 +349,8 @@ export async function createStudioEditor(opts) {
 			emitStickers();
 		},
 
+		removeSticker,
+
 		/** @returns {string} */
 		exportDataUrl() {
 			transformer.nodes([]);
@@ -336,7 +371,7 @@ export async function createStudioEditor(opts) {
 			stage.scale({ x: prevScale, y: prevScale });
 			stage.width(prevW);
 			stage.height(prevH);
-			updateTransformerChrome(transformer, prevScale);
+			applyTransformerChrome(transformer);
 			uiLayer.moveToTop();
 			stickerLayer.batchDraw();
 			uiLayer.batchDraw();
@@ -345,6 +380,7 @@ export async function createStudioEditor(opts) {
 		},
 
 		destroy() {
+			window.removeEventListener('keydown', onKeyDown);
 			stage.destroy();
 		}
 	};

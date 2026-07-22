@@ -1,4 +1,4 @@
-<section class="studio-view">
+<section class="studio-view booth-view">
 	<div class="sky-wash" aria-hidden="true"></div>
 	<div class="stars" aria-hidden="true">
 		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
@@ -22,8 +22,8 @@
 							compositeUrl={$capturedImageData}
 							stickers={$activeStickers}
 							{selectedId}
-						onStickersChange={onStickersChange}
-						onSelect={onStickerSelect}
+							onStickersChange={onStickersChange}
+							onSelect={onStickerSelect}
 						/>
 					{/if}
 				</div>
@@ -31,15 +31,6 @@
 		</aside>
 
 		<aside class="sticker-rail" aria-label="Sticker tray">
-			<header class="head">
-				<p class="eyebrow">DECORATE THINE LIKENESS</p>
-				<h1>STICKER STUDIO</h1>
-				<p class="sub">{frameName}</p>
-			</header>
-
-			<p class="rail-title">STICKERS</p>
-			<p class="rail-hint">Tap to place · drag · scale corners · spin top handle</p>
-
 			<div class="gallery">
 				{#each $stickers as item (item.id)}
 					<button type="button" class="tile" onclick={() => addSticker(item)}>
@@ -50,21 +41,21 @@
 					</button>
 				{/each}
 			</div>
+
+			<DialogBox
+				speaker="DIONYSUS"
+				text="Tap a sticker, then drag, stretch corners, or spin the gold handle. REMOVE banishes one."
+				typewriter={false}
+			/>
+
+			<div class="actions">
+				<PixelButton label="REMOVE" variant="ghost" disabled={!selectedId} onclick={removeSelected} />
+				<PixelButton label="CLEAR" variant="ghost" onclick={clearStickers} />
+				<PixelButton label="RETAKE" variant="ghost" onclick={retake} />
+				<PixelButton label="HANG THE GIFT" variant="gold" onclick={goReveal} />
+			</div>
 		</aside>
 	</main>
-
-	<div class="footer">
-		<DialogBox
-			speaker="DIONYSUS"
-			text="Decorate thine likeness! Tap a sticker, then drag, stretch corners, or spin the gold handle."
-			typewriter={false}
-		/>
-		<div class="actions">
-			<PixelButton label="CLEAR" variant="ghost" onclick={clearStickers} />
-			<PixelButton label="RETAKE" variant="ghost" onclick={retake} />
-			<PixelButton label="HANG THE GIFT" variant="gold" onclick={goReveal} />
-		</div>
-	</div>
 </section>
 
 <script>
@@ -94,7 +85,6 @@
 	let measuredDims = $state({});
 
 	const frame = $derived(getLiveFrameById($selectedFrameId));
-	const frameName = $derived(frame?.name ?? 'Your relic');
 
 	const frameAspect = $derived.by(() => {
 		const f = frame;
@@ -156,6 +146,12 @@
 		selectedId = null;
 	}
 
+	function removeSelected() {
+		if (!selectedId) return;
+		const removed = editorRef?.removeSticker(selectedId) ?? false;
+		if (removed) selectedId = null;
+	}
+
 	function retake() {
 		go('camera');
 	}
@@ -183,8 +179,7 @@
 		color: #fff8df;
 		background: var(--sky-top);
 		display: grid;
-		grid-template-rows: 1fr auto;
-		gap: 0.75rem;
+		grid-template-rows: 1fr;
 	}
 
 	.sky-wash {
@@ -248,11 +243,9 @@
 		min-height: 0;
 		height: 100%;
 		display: grid;
-		/* Dock gets the majority — decorating needs a big canvas. */
-		grid-template-columns: minmax(0, 1.55fr) minmax(220px, 0.85fr);
+		grid-template-columns: minmax(0, 1.1fr) minmax(var(--booth-rail-width), 1fr);
 		gap: clamp(0.65rem, 1.5vw, 1.25rem);
-		align-items: stretch;
-		overflow: hidden;
+		align-items: center;
 	}
 
 	.dock-column {
@@ -262,9 +255,7 @@
 		min-height: 0;
 		height: 100%;
 		position: relative;
-		overflow: hidden;
 		padding: clamp(0.25rem, 1vh, 0.75rem) clamp(0.25rem, 1vw, 0.65rem);
-		/* Size the frame to this column (above footer), not the full viewport. */
 		container-type: size;
 		container-name: studio-dock;
 	}
@@ -306,11 +297,7 @@
 		--entry-rz: 0deg;
 		--entry-scale: 1;
 		position: relative;
-		/*
-		 * Fit inside the dock (stage row above footer), larger than Camera's 34vw/640 cap
-		 * but never taller than available column height — avoids footer overlap.
-		 */
-		width: min(100cqw, calc(100cqh * var(--frame-ar)), 480px);
+		width: min(100cqw, calc(100cqh * var(--frame-ar)), 520px);
 		max-height: 100cqh;
 		height: auto;
 		aspect-ratio: var(--frame-ar);
@@ -328,7 +315,7 @@
 
 	/* Tall strips: still fill dock height, allow a bit more width within the column. */
 	.editor-shell.is-narrow {
-		width: min(100cqw, calc(100cqh * var(--frame-ar)), 300px);
+		width: min(100cqw, calc(100cqh * var(--frame-ar)), 340px);
 	}
 
 	.editor-shell.entry-busy {
@@ -338,7 +325,7 @@
 	.sticker-rail {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 0.65rem;
 		min-height: 0;
 		height: 100%;
 		max-height: 100%;
@@ -346,48 +333,10 @@
 		overflow: hidden;
 	}
 
-	.head {
-		text-align: left;
-		width: 100%;
-		margin-bottom: 0.25rem;
-	}
-
-	.head .eyebrow {
-		font-size: 0.42rem;
-		color: var(--gold-bright);
-		letter-spacing: 0.08em;
-		margin-bottom: 0.35rem;
-	}
-
-	.head h1 {
-		font-size: clamp(0.85rem, 2.5vw, 1.1rem);
-		color: #fff8df;
-		text-shadow: 2px 2px 0 color-mix(in srgb, var(--gold) 40%, transparent);
-	}
-
-	.sub {
-		margin-top: 0.35rem;
-		font-size: 0.45rem;
-		color: color-mix(in srgb, #fff8df 72%, transparent);
-		line-height: 1.6;
-	}
-
-	.rail-title {
-		font-size: 0.42rem;
-		color: #fff8df;
-		letter-spacing: 0.08em;
-	}
-
-	.rail-hint {
-		font-size: 0.34rem;
-		color: color-mix(in srgb, #fff8df 65%, transparent);
-		line-height: 1.5;
-	}
-
 	.gallery {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
-		grid-auto-rows: max-content;
+		grid-template-columns: repeat(auto-fill, minmax(var(--booth-tile-min), 1fr));
+		grid-auto-rows: calc(var(--booth-swatch) + var(--booth-sticker-label-h) + 0.85rem);
 		align-content: start;
 		gap: 0.5rem;
 		overflow-y: auto;
@@ -401,15 +350,17 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		align-self: start;
-		height: auto;
+		justify-content: flex-start;
+		align-self: stretch;
+		height: 100%;
+		min-height: 0;
 		gap: 0.35rem;
 		padding: 0.45rem 0.35rem;
 		background: #102f56;
 		border: 2px solid color-mix(in srgb, var(--gold) 45%, transparent);
 		box-shadow: 2px 2px 0 #071936;
 		color: #fff8df;
-		font-size: 0.34rem;
+		font-size: var(--booth-text-xs);
 		text-align: center;
 	}
 
@@ -419,8 +370,9 @@
 	}
 
 	.swatch {
-		width: 2.75rem;
-		height: 2.75rem;
+		width: var(--booth-swatch);
+		height: var(--booth-swatch);
+		flex-shrink: 0;
 		display: grid;
 		place-items: center;
 		background: color-mix(in srgb, #fff 8%, transparent);
@@ -428,32 +380,50 @@
 	}
 
 	.swatch img {
-		width: 1.75rem;
-		height: 1.75rem;
+		width: calc(var(--booth-swatch) * 0.64);
+		height: calc(var(--booth-swatch) * 0.64);
 		object-fit: contain;
 	}
 
 	.label {
+		flex: 0 0 var(--booth-sticker-label-h);
+		height: var(--booth-sticker-label-h);
+		width: 100%;
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		overflow: hidden;
 		letter-spacing: 0.02em;
 		line-height: 1.35;
-	}
-
-	.footer {
-		position: relative;
-		z-index: 1;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		max-width: 720px;
-		width: 100%;
-		margin: 0 auto;
+		align-content: center;
 	}
 
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.65rem;
-		justify-content: center;
+		justify-content: flex-start;
+		flex-shrink: 0;
+	}
+
+	.sticker-rail :global(.dialog) {
+		flex-shrink: 0;
+	}
+
+	.booth-view :global(.pixel-btn) {
+		min-height: var(--booth-touch);
+		font-size: var(--booth-text-sm);
+		padding: 0.85rem 1.35rem;
+	}
+
+	.booth-view :global(.dialog) {
+		max-width: var(--booth-panel-max);
+	}
+
+	.booth-view :global(.dialog .speaker),
+	.booth-view :global(.dialog .body) {
+		font-size: var(--booth-text-sm);
+		line-height: 1.75;
 	}
 
 	@media (max-width: 980px) {
@@ -465,20 +435,16 @@
 
 		.dock-column {
 			justify-content: center;
-		}
-
-		.dock-column {
-			/* Stacked layout: give the frame a bounded band above the sticker rail. */
-			min-height: min(52dvh, 420px);
-			max-height: min(52dvh, 420px);
+			min-height: min(52dvh, 560px);
+			max-height: min(52dvh, 560px);
 		}
 
 		.editor-shell {
-			width: min(100cqw, calc(100cqh * var(--frame-ar)), 360px);
+			width: min(100cqw, calc(100cqh * var(--frame-ar)), 520px);
 		}
 
 		.editor-shell.is-narrow {
-			width: min(100cqw, calc(100cqh * var(--frame-ar)), 260px);
+			width: min(100cqw, calc(100cqh * var(--frame-ar)), 340px);
 		}
 
 		.sticker-rail {
@@ -488,13 +454,14 @@
 		}
 
 		.gallery {
-			grid-template-columns: repeat(auto-fill, minmax(4.75rem, 1fr));
-			max-height: none;
+			grid-template-columns: repeat(auto-fill, minmax(clamp(4.75rem, 14vw, var(--booth-tile-min)), 1fr));
+			max-height: min(28dvh, 220px);
 			overflow-x: auto;
-			overflow-y: hidden;
+			overflow-y: auto;
 			grid-auto-flow: column;
-			grid-auto-columns: minmax(4.75rem, 1fr);
+			grid-auto-columns: minmax(clamp(4.75rem, 14vw, var(--booth-tile-min)), 1fr);
 			padding-bottom: 0.25rem;
+			flex: 0 1 auto;
 		}
 	}
 </style>

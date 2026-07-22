@@ -1,5 +1,5 @@
 <section
-	class="camera-view"
+	class="camera-view booth-view"
 	class:handoff-pending={$frameHandoffBusy}
 	class:ritual-busy={ritualOpen}
 >
@@ -139,7 +139,6 @@
 	import { go } from '../router/index.js';
 	import { startCamera, stopCamera } from '../lib/utils/camera.js';
 	import { compositeFramePhotos } from '../lib/utils/canvasRenderer.js';
-	import { initFaceBeauty, disposeFaceBeauty } from '../lib/vision/faceBeauty.js';
 	import { startLivePreview, stopLivePreview } from '../lib/vision/livePreview.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
@@ -234,8 +233,6 @@
 		sessionPose = poses[Math.floor(Math.random() * poses.length)];
 		reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-		initFaceBeauty();
-
 		let cancelled = false;
 		const timeout = setTimeout(() => {
 			if (!cancelled && !cameraReady) cameraError = true;
@@ -258,7 +255,6 @@
 			clearTimeout(timeout);
 			stopLivePreview();
 			stopCamera();
-			disposeFaceBeauty();
 			stream = null;
 		};
 	});
@@ -396,7 +392,7 @@
 		z-index: 1;
 		height: 100%;
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(240px, 0.85fr) minmax(120px, 168px);
+		grid-template-columns: minmax(0, 1.1fr) minmax(240px, 1fr) var(--booth-filter-rail-width);
 		gap: clamp(0.65rem, 1.5vw, 1.25rem);
 		align-items: center;
 	}
@@ -408,12 +404,14 @@
 		min-height: 0;
 		height: 100%;
 		position: relative;
+		container-type: size;
+		container-name: camera-dock;
 	}
 
 	.frame-dock {
 		position: relative;
-		width: min(34vw, calc(min(72dvh, 640px) * var(--frame-ar)));
-		max-height: min(72dvh, 640px);
+		width: min(100cqw, calc(100cqh * var(--frame-ar)), 520px);
+		max-height: 100cqh;
 		aspect-ratio: var(--frame-ar);
 		background: transparent;
 		filter: drop-shadow(6px 8px 0 color-mix(in srgb, var(--primary) 35%, transparent));
@@ -421,13 +419,14 @@
 
 	.frame-dock.offline {
 		aspect-ratio: 3 / 4;
-		width: min(32vw, 280px);
+		width: min(100cqw, 320px);
+		max-height: 100cqh;
 		display: grid;
 		place-content: center;
 		gap: 0.65rem;
 		padding: 1rem;
 		text-align: center;
-		font-size: 0.55rem;
+		font-size: var(--booth-text-sm);
 		color: var(--ink-soft);
 		background: var(--surface);
 		box-shadow: var(--shadow-panel);
@@ -489,13 +488,13 @@
 		display: grid;
 		place-items: center;
 		height: 100%;
-		font-size: 0.7rem;
+		font-size: var(--booth-text-md);
 		color: var(--gold-bright);
 		opacity: 0.55;
 	}
 
 	.hint {
-		font-size: 0.42rem;
+		font-size: var(--booth-text-xs);
 		line-height: 1.7;
 		opacity: 0.85;
 	}
@@ -504,33 +503,33 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.85rem;
-		max-width: 420px;
+		max-width: var(--booth-panel-max);
 		width: 100%;
 		justify-self: center;
 	}
 
 	.head .eyebrow {
-		font-size: 0.42rem;
+		font-size: var(--booth-text-xs);
 		color: var(--gold-bright);
 		letter-spacing: 0.08em;
 		margin-bottom: 0.35rem;
 	}
 
 	.head h1 {
-		font-size: clamp(0.85rem, 2.5vw, 1.1rem);
+		font-size: var(--booth-text-md);
 		color: #fff8df;
 		text-shadow: 2px 2px 0 color-mix(in srgb, var(--gold) 40%, transparent);
 	}
 
 	.sub {
 		margin-top: 0.35rem;
-		font-size: 0.45rem;
+		font-size: var(--booth-text-sm);
 		color: color-mix(in srgb, #fff8df 72%, transparent);
 		line-height: 1.6;
 	}
 
 	.progress {
-		font-size: 0.48rem;
+		font-size: var(--booth-text-sm);
 		background: #102f56;
 		color: #fff8df;
 		display: inline-block;
@@ -557,6 +556,12 @@
 		transition: opacity 220ms steps(3);
 	}
 
+	.booth-view :global(.pixel-btn) {
+		min-height: var(--booth-touch);
+		font-size: var(--booth-text-sm);
+		padding: 0.85rem 1.35rem;
+	}
+
 	@media (max-width: 980px) {
 		.stage {
 			grid-template-columns: 1fr;
@@ -565,7 +570,8 @@
 		}
 
 		.frame-dock {
-			width: min(72vw, calc(min(42dvh, 480px) * var(--frame-ar)));
+			width: min(78vw, calc(min(52dvh, 560px) * var(--frame-ar)));
+			max-height: min(52dvh, 560px);
 			margin: 0 auto;
 		}
 

@@ -88,6 +88,14 @@
 		editor?.clearStickers();
 	}
 
+	/**
+	 * @param {string} id
+	 * @returns {boolean}
+	 */
+	export function removeSticker(id) {
+		return editor?.removeSticker(id) ?? false;
+	}
+
 	/** @returns {string | null} */
 	export function exportDataUrl() {
 		return editor?.exportDataUrl() ?? null;

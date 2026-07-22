@@ -1,12 +1,11 @@
 /**
- * Live camera preview — mirror + CSS color grade only (no live MediaPipe).
+ * Live camera preview — mirror + CSS color grade only.
  */
 import {
 	drawMirroredVideo,
 	blitWithCssFilter,
 	applyPhotoFilter
 } from '../canvas/photoKonva.js';
-import { applySoftBeautyToCapture } from './faceBeauty.js';
 import { captureFrame } from '../utils/camera.js';
 
 /** @type {number | null} */
@@ -83,7 +82,7 @@ export function stopLivePreview() {
 }
 
 /**
- * Capture pipeline: raw → always-on soft beauty → color grade.
+ * Capture pipeline: raw still → color grade.
  * @param {HTMLVideoElement} videoEl
  * @param {import('../canvas/photoKonva.js').FilterPresetId} presetId
  * @returns {Promise<string | null>}
@@ -93,9 +92,8 @@ export async function processCaptureFrame(videoEl, presetId) {
 
 	stopLivePreview();
 
-	let raw = captureFrame(videoEl);
+	const raw = captureFrame(videoEl);
 	if (!raw) return null;
 
-	raw = await applySoftBeautyToCapture(raw);
 	return applyPhotoFilter(raw, presetId);
 }

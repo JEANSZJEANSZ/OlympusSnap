@@ -22,6 +22,7 @@
 		{/key}
 		<FrameHandoffOverlay />
 	</main>
+	<BoothCursor />
 </div>
 
 <script>
@@ -29,6 +30,7 @@
 	import { currentRoute, go } from './router/index.js';
 	import { initAssets } from './lib/assets/assetStore.js';
 	import FrameHandoffOverlay from './lib/components/FrameHandoffOverlay.svelte';
+	import BoothCursor from './lib/components/BoothCursor.svelte';
 
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let pressTimer = null;

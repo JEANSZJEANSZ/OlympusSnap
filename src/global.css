@@ -46,8 +46,8 @@
 		0 0 0 3px var(--text),
 		1px 1px 0 var(--text);
 
-	/* Ancient hand cursor — hotspot ≈ index fingertip (128×128 art) */
-	/* --cursor-ancient: url('./assets/Ancienthand.png') 14 10, auto; */
+	/* Ancient hand — rendered via BoothCursor (DOM) so edges don’t swallow it */
+	--cursor-ancient: url('./assets/Pixelate_cursor.png') 32 4, auto;
 }
 
 html,
@@ -63,10 +63,18 @@ body {
 	color: var(--text);
 	line-height: 1.6;
 	overflow: hidden;
-	/* cursor: var(--cursor-ancient); */
+	cursor: var(--cursor-ancient);
 	-webkit-font-smoothing: none;
 	-moz-osx-font-smoothing: unset;
 	image-rendering: pixelated;
+}
+
+/* Hide native cursor when the DOM hand is active (fine pointer only). */
+html.booth-cursor-on,
+html.booth-cursor-on body,
+html.booth-cursor-on #app,
+html.booth-cursor-on body * {
+	cursor: none !important;
 }
 
 /* Mandatory pixel-art rendering */
@@ -238,21 +246,47 @@ a {
 	}
 }
 
-/*
- * Sitewide hand — overrides grab/resize/crosshair on tool screens
- * Uncomment :root --cursor-ancient above when ready.
- *
- * html {
- * 	cursor: var(--cursor-ancient);
- * }
- *
- * #app,
- * body *:not(:disabled):not([disabled]) {
- * 	cursor: var(--cursor-ancient) !important;
- * }
- *
- * button:disabled,
- * [disabled] {
- * 	cursor: not-allowed !important;
- * }
- */
+/* Booth views (Camera, Studio) — readable at arm's length on laptop / 24" displays */
+.booth-view {
+	--booth-text-xs: clamp(0.55rem, 0.42rem + 0.35vw, 0.82rem);
+	--booth-text-sm: clamp(0.62rem, 0.48rem + 0.4vw, 0.95rem);
+	--booth-text-md: clamp(0.85rem, 0.65rem + 0.55vw, 1.35rem);
+	--booth-rail-width: clamp(11rem, 9rem + 5vw, 17rem);
+	--booth-swatch: clamp(3.25rem, 2.75rem + 1.5vh, 4.75rem);
+	--booth-tile-min: clamp(5.5rem, 4.5rem + 2vw, 8rem);
+	--booth-panel-max: clamp(26rem, 22rem + 12vw, 36rem);
+	--booth-touch: clamp(2.75rem, 2.25rem + 1vh, 3.5rem);
+	--booth-frame-max-h: min(78dvh, 760px);
+	/* Filter rail needs wider tiles + larger labels than sticker grid */
+	--booth-filter-rail-width: clamp(16rem, 14rem + 5vw, 24rem);
+	--booth-filter-swatch: clamp(4.75rem, 4rem + 2vh, 6.25rem);
+	--booth-filter-tile-h: calc(var(--booth-filter-swatch) + 1.1rem);
+	--booth-filter-text: clamp(0.68rem, 0.55rem + 0.45vw, 1rem);
+	--booth-sticker-label-h: clamp(2.25rem, 2rem + 0.5vh, 2.75rem);
+}
+
+@media (min-width: 1400px) {
+	.booth-view {
+		--booth-rail-width: clamp(13rem, 10rem + 4vw, 18rem);
+		--booth-swatch: clamp(3.75rem, 3rem + 1.5vh, 5.25rem);
+		--booth-frame-max-h: min(82dvh, 860px);
+		--booth-filter-rail-width: clamp(18rem, 15rem + 4vw, 26rem);
+		--booth-filter-swatch: clamp(5.25rem, 4.5rem + 1.5vh, 6.75rem);
+		--booth-filter-tile-h: calc(var(--booth-filter-swatch) + 1.1rem);
+	}
+}
+
+/* Fallback when BoothCursor is off (touch / coarse pointer) */
+html:not(.booth-cursor-on) {
+	cursor: var(--cursor-ancient);
+}
+
+html:not(.booth-cursor-on) #app,
+html:not(.booth-cursor-on) body *:not(:disabled):not([disabled]) {
+	cursor: var(--cursor-ancient) !important;
+}
+
+html:not(.booth-cursor-on) button:disabled,
+html:not(.booth-cursor-on) [disabled] {
+	cursor: not-allowed !important;
+}

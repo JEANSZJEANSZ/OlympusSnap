@@ -2,7 +2,7 @@
  * Canvas compositing for final export.
  *
  * Slotted frames:
- * 1. Canvas = frame natural size
+ * 1. Canvas = frame natural size × export scale (photo-aware, capped)
  * 2. Draw frame art (opaque custom frames OK)
  * 3. Cover-fit each photo into its normalized slot rect on top
  * 4. Stickers
@@ -14,6 +14,11 @@
  */
 
 import { getLiveFrameById } from '../assets/assetStore.js';
+
+/** Minimum long edge for composite exports (sharp frame strokes). */
+const EXPORT_MIN_LONG_EDGE = 2400;
+/** Maximum long edge to stay within browser canvas limits. */
+const EXPORT_MAX_LONG_EDGE = 4096;
 
 /**
  * @param {string} src
@@ -52,6 +57,50 @@ export function drawCoverFit(ctx, img, dx, dy, dw, dh, iw, ih) {
 	ctx.clip();
 	ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
 	ctx.restore();
+}
+
+/**
+ * Scale factor from frame SVG natural size to export canvas.
+ * Ensures cover-fit slots do not downsample photos more than necessary,
+ * with a minimum long edge and a browser-safe maximum.
+ *
+ * @param {number} natW frame natural width
+ * @param {number} natH frame natural height
+ * @param {Array<{ x: number; y: number; w: number; h: number }>} slots
+ * @param {(HTMLImageElement | null | undefined)[]} photoImgs aligned with slots
+ * @returns {number} multiplier >= 1
+ */
+export function computeExportScale(natW, natH, slots, photoImgs) {
+	if (natW <= 0 || natH <= 0) return 1;
+
+	let scale = EXPORT_MIN_LONG_EDGE / Math.max(natW, natH);
+
+	for (let i = 0; i < slots.length; i++) {
+		const slot = slots[i];
+		const photo = photoImgs[i];
+		if (!photo) continue;
+
+		const iw = photo.naturalWidth || photo.width;
+		const ih = photo.naturalHeight || photo.height;
+		if (!iw || !ih) continue;
+
+		const slotW = slot.w * natW;
+		const slotH = slot.h * natH;
+		if (slotW <= 0 || slotH <= 0) continue;
+
+		// cover-fit downsamples when max(dw/iw, dh/ih) < 1; require >= 1
+		const photoScale = Math.max(iw / slotW, ih / slotH);
+		scale = Math.max(scale, photoScale);
+	}
+
+	scale = Math.max(1, scale);
+
+	const longEdge = Math.max(natW, natH) * scale;
+	if (longEdge > EXPORT_MAX_LONG_EDGE) {
+		scale = EXPORT_MAX_LONG_EDGE / Math.max(natW, natH);
+	}
+
+	return scale;
 }
 
 /**
@@ -149,9 +198,21 @@ export async function compositeFramePhotos(photos, frameId, stickers, opts = {})
 		return photos[0] || '';
 	}
 
+	const natW = frameImg.naturalWidth || frameImg.width || 600;
+	const natH = frameImg.naturalHeight || frameImg.height || 800;
+
+	const photoImgs = await Promise.all(
+		slots.map((_, i) => {
+			const src = photos[i];
+			return src ? loadImage(src).catch(() => null) : Promise.resolve(null);
+		})
+	);
+
+	const exportScale = computeExportScale(natW, natH, slots, photoImgs);
+
 	const canvas = document.createElement('canvas');
-	canvas.width = frameImg.naturalWidth || frameImg.width || 600;
-	canvas.height = frameImg.naturalHeight || frameImg.height || 800;
+	canvas.width = Math.round(natW * exportScale);
+	canvas.height = Math.round(natH * exportScale);
 	const ctx = canvas.getContext('2d');
 	if (!ctx) return photos[0] || '';
 
@@ -161,9 +222,7 @@ export async function compositeFramePhotos(photos, frameId, stickers, opts = {})
 
 	for (let i = 0; i < slots.length; i++) {
 		const slot = slots[i];
-		const src = photos[i];
-		if (!src) continue;
-		const photo = await loadImage(src).catch(() => null);
+		const photo = photoImgs[i];
 		if (!photo) continue;
 		const dx = slot.x * canvas.width;
 		const dy = slot.y * canvas.height;
