@@ -330,7 +330,11 @@
 		height: 100%;
 		max-height: 100%;
 		width: 100%;
-		overflow: hidden;
+		/* Keep gallery scrollable; don't clip DialogBox/button box-shadow borders. */
+		overflow: visible;
+		/* Dialog outline is 8px; buttons need ~4px — inset so left/bottom edges paint. */
+		padding: 0.5rem 0.35rem 0.65rem 0.65rem;
+		box-sizing: border-box;
 	}
 
 	.gallery {
@@ -404,10 +408,14 @@
 		gap: 0.65rem;
 		justify-content: flex-start;
 		flex-shrink: 0;
+		/* Room for pixel-btn hard shadows (3px ring + 4px offset). */
+		padding: 0.15rem 0.35rem 0.35rem 0.15rem;
 	}
 
 	.sticker-rail :global(.dialog) {
 		flex-shrink: 0;
+		/* Dialog uses 8px outer gold ring — keep it inside the rail padding box. */
+		max-width: calc(100% - 0.25rem);
 	}
 
 	.booth-view :global(.pixel-btn) {

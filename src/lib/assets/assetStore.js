@@ -165,6 +165,25 @@ export function getLiveFrameById(id) {
 
 /**
  * @param {File} file
+ * @returns {boolean}
+ */
+export function isPngFile(file) {
+	if (file.type === 'image/png') return true;
+	if (!file.type && /\.png$/i.test(file.name)) return true;
+	return false;
+}
+
+/**
+ * @param {File} file
+ */
+function assertPngFile(file) {
+	if (!isPngFile(file)) {
+		throw new Error('Frames and stickers must be PNG with transparency.');
+	}
+}
+
+/**
+ * @param {File} file
  * @returns {Promise<string>} data URL
  */
 export function fileToDataUrl(file) {
@@ -189,6 +208,7 @@ export async function addFrame({ name, motif, file, src: srcIn, slots, w, h }) {
 	let src = srcIn;
 	if (!src) {
 		if (!file) throw new Error('Frame image required');
+		assertPngFile(file);
 		src = await fileToDataUrl(file);
 	}
 	let frameW = w;
@@ -220,6 +240,7 @@ export async function addFrame({ name, motif, file, src: srcIn, slots, w, h }) {
  * @param {{ name: string; file: File }} opts
  */
 export async function addSticker({ name, file }) {
+	assertPngFile(file);
 	const src = await fileToDataUrl(file);
 	/** @type {import('./idb.js').CustomAsset} */
 	const record = {

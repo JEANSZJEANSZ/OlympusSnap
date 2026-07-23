@@ -12,14 +12,21 @@
 
 	<main class="stage">
 		<aside class="dock-column">
-			{#if cameraError}
+			{#if frameLoading}
+				<div class="frame-dock loading">
+					<p>LOADING FRAME…</p>
+					<p class="hint">Restoring your chosen relic from the vault.</p>
+				</div>
+			{:else if cameraStatus === 'offline'}
 				<div class="frame-dock offline">
 					<p>CAMERA OFFLINE</p>
-					<p class="hint">Grant webcam access to begin the ritual.</p>
+					<p class="hint">Grant webcam access or check your external camera connection.</p>
+					<PixelButton label="RETRY" variant="gold" onclick={retryCamera} />
 				</div>
 			{:else if frameSrc || !useSlots}
 				<div
 					class="frame-dock"
+					class:connecting={cameraStatus === 'connecting'}
 					bind:this={dockEl}
 					style:--frame-ar={frameAspect}
 					data-frame-handoff-target
@@ -40,8 +47,10 @@
 								>
 									{#if photos[i] && (i !== slotIndex || ritualOpen)}
 										<img class="hole-shot" src={photos[i]} alt="" />
-									{:else if i === slotIndex && !cameraError && !ritualOpen}
+									{:else if i === slotIndex && cameraReady && !ritualOpen}
 										<canvas class="hole-live-canvas" bind:this={previewCanvas}></canvas>
+									{:else if cameraStatus === 'connecting'}
+										<span class="hole-num connecting">…</span>
 									{:else}
 										<span class="hole-num">{i + 1}</span>
 									{/if}
@@ -56,8 +65,10 @@
 							<div class="hole active full-bleed" data-slot-index="0">
 								{#if photos[0]}
 									<img class="hole-shot" src={photos[0]} alt="" />
-								{:else if !ritualOpen}
+								{:else if cameraReady && !ritualOpen}
 									<canvas class="hole-live-canvas" bind:this={previewCanvas}></canvas>
+								{:else if cameraStatus === 'connecting'}
+									<span class="hole-num connecting">…</span>
 								{/if}
 							</div>
 						</div>
@@ -87,9 +98,8 @@
 
 			<div class="actions">
 				<PixelButton label="BACK" variant="ghost" disabled={ritualOpen} onclick={goBack} />
-				<PixelButton
-					label={ritualOpen ? 'RITUAL…' : 'BEGIN RITUAL'}
-					variant="accent"
+				<RitualShutterButton
+					busy={ritualOpen}
 					disabled={ritualOpen || !cameraReady || $frameHandoffBusy}
 					onclick={beginRitual}
 				/>
@@ -124,7 +134,7 @@
 </section>
 
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import {
 		appendCapture,
@@ -133,9 +143,12 @@
 		clearCaptures,
 		selectedFrameId
 	} from '../lib/stores/stores.js';
-	import { getLiveFrameById } from '../lib/assets/assetStore.js';
+	import { getLiveFrameById, assetsReady } from '../lib/assets/assetStore.js';
 	import { frameHandoffBusy } from '../lib/fx/frameHandoff.js';
-	import { getActiveHoleRect } from '../lib/fx/cameraLayout.js';
+	import {
+		getActiveHoleRect,
+		getFrameDockRect
+	} from '../lib/fx/cameraLayout.js';
 	import { go } from '../router/index.js';
 	import { startCamera, stopCamera } from '../lib/utils/camera.js';
 	import { compositeFramePhotos } from '../lib/utils/canvasRenderer.js';
@@ -144,6 +157,7 @@
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import FilterGallery from '../lib/components/FilterGallery.svelte';
 	import CameraSnapOverlay from '../lib/components/CameraSnapOverlay.svelte';
+	import RitualShutterButton from '../lib/components/RitualShutterButton.svelte';
 
 	/** @type {HTMLVideoElement | undefined} */
 	let videoEl = $state();
@@ -153,7 +167,8 @@
 	let dockEl = $state();
 
 	let cameraReady = $state(false);
-	let cameraError = $state(false);
+	/** @type {'connecting' | 'ready' | 'offline'} */
+	let cameraStatus = $state('connecting');
 	let reduced = $state(false);
 	let slotIndex = $state(0);
 	/** @type {string[]} */
@@ -180,6 +195,10 @@
 	let sessionPose = $state(poses[0]);
 
 	const frame = $derived(getLiveFrameById($selectedFrameId));
+	const frameLoading = $derived(!!$selectedFrameId && !$assetsReady);
+	const frameMissing = $derived(
+		$assetsReady && !!$selectedFrameId && !frame
+	);
 	const slots = $derived(frame?.slots?.length ? frame.slots : []);
 	const useSlots = $derived(slots.length > 0);
 	const snapTotal = $derived(useSlots ? slots.length : 1);
@@ -212,6 +231,46 @@
 	});
 
 	$effect(() => {
+		if (!$selectedFrameId) {
+			go('frame');
+			return;
+		}
+		if (frameMissing) {
+			console.warn('[camera] selected frame missing after assets load', $selectedFrameId);
+			go('frame');
+		}
+	});
+
+	/** @type {(() => void) | undefined} */
+	let stopCameraInit = $state();
+
+	async function initCamera() {
+		stopCameraInit?.();
+		let cancelled = false;
+		stopCameraInit = () => {
+			cancelled = true;
+		};
+
+		cameraStatus = 'connecting';
+		cameraReady = false;
+
+		if (!videoEl) return;
+		const s = await startCamera(videoEl);
+		if (cancelled) {
+			stopCamera();
+			return;
+		}
+
+		stream = s;
+		cameraReady = !!s;
+		cameraStatus = s ? 'ready' : 'offline';
+	}
+
+	function retryCamera() {
+		initCamera();
+	}
+
+	$effect(() => {
 		if (ritualOpen || !cameraReady || !videoEl || !previewCanvas) {
 			stopLivePreview();
 			return;
@@ -227,32 +286,24 @@
 	});
 
 	onMount(() => {
+		if (!$selectedFrameId) {
+			go('frame');
+			return;
+		}
+
 		clearCaptures();
 		photos = [];
 		slotIndex = 0;
 		sessionPose = poses[Math.floor(Math.random() * poses.length)];
 		reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-		let cancelled = false;
-		const timeout = setTimeout(() => {
-			if (!cancelled && !cameraReady) cameraError = true;
-		}, 2500);
-
 		(async () => {
-			if (!videoEl) return;
-			const s = await startCamera(videoEl);
-			if (cancelled) {
-				stopCamera();
-				return;
-			}
-			stream = s;
-			cameraReady = !!s;
-			cameraError = !s;
+			await tick();
+			initCamera();
 		})();
 
 		return () => {
-			cancelled = true;
-			clearTimeout(timeout);
+			stopCameraInit?.();
 			stopLivePreview();
 			stopCamera();
 			stream = null;
@@ -289,7 +340,7 @@
 
 	function beginRitual() {
 		if (ritualOpen || !cameraReady || $frameHandoffBusy) return;
-		const rect = getActiveHoleRect(dockEl, slotIndex);
+		const rect = getActiveHoleRect(dockEl, slotIndex) ?? getFrameDockRect(dockEl);
 		if (!rect) return;
 		stopLivePreview();
 		snapFromRect = rect;
@@ -417,7 +468,8 @@
 		filter: drop-shadow(6px 8px 0 color-mix(in srgb, var(--primary) 35%, transparent));
 	}
 
-	.frame-dock.offline {
+	.frame-dock.offline,
+	.frame-dock.loading {
 		aspect-ratio: 3 / 4;
 		width: min(100cqw, 320px);
 		max-height: 100cqh;
@@ -430,6 +482,10 @@
 		color: var(--ink-soft);
 		background: var(--surface);
 		box-shadow: var(--shadow-panel);
+	}
+
+	.frame-dock.connecting {
+		opacity: 0.92;
 	}
 
 	.capture-source {
@@ -448,13 +504,13 @@
 		height: 100%;
 		object-fit: fill;
 		pointer-events: none;
-		z-index: 1;
+		z-index: 3;
 	}
 
 	.content-layer {
 		position: absolute;
 		inset: 0;
-		z-index: 2;
+		z-index: 1;
 	}
 
 	.hole {
@@ -491,6 +547,21 @@
 		font-size: var(--booth-text-md);
 		color: var(--gold-bright);
 		opacity: 0.55;
+	}
+
+	.hole-num.connecting {
+		animation: cam-pulse 1s steps(3) infinite;
+		opacity: 0.75;
+	}
+
+	@keyframes cam-pulse {
+		0%,
+		100% {
+			opacity: 0.35;
+		}
+		50% {
+			opacity: 0.9;
+		}
 	}
 
 	.hint {
@@ -541,11 +612,17 @@
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
+		align-items: center;
 		gap: 0.65rem;
 	}
 
 	.camera-view.handoff-pending .frame-art {
 		opacity: 0;
+	}
+
+	.camera-view.ritual-busy .frame-dock {
+		opacity: 0;
+		visibility: hidden;
 	}
 
 	.camera-view.handoff-pending .ritual-panel,

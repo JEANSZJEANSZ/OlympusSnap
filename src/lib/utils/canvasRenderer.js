@@ -218,7 +218,6 @@ export async function compositeFramePhotos(photos, frameId, stickers, opts = {})
 
 	ctx.fillStyle = '#111';
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
-	ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
 
 	for (let i = 0; i < slots.length; i++) {
 		const slot = slots[i];
@@ -232,6 +231,9 @@ export async function compositeFramePhotos(photos, frameId, stickers, opts = {})
 		const ih = photo.naturalHeight || photo.height;
 		drawCoverFit(ctx, photo, dx, dy, dw, dh, iw, ih);
 	}
+
+	/* Frame PNG on top so slot overhang decorations sit in front of photos. */
+	ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
 
 	if (!opts.skipStickers) {
 		await drawStickers(

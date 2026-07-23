@@ -149,7 +149,7 @@
 					<input
 						bind:this={fileInput}
 						type="file"
-						accept="image/png,image/svg+xml,image/webp,image/jpeg"
+						accept="image/png,.png"
 						hidden
 						onchange={onFileChosen}
 					/>
@@ -320,7 +320,8 @@
 		verifyAdminPin,
 		getAdminPin,
 		setAdminPin,
-		fileToDataUrl
+		fileToDataUrl,
+		isPngFile
 	} from '../lib/assets/assetStore.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
@@ -484,6 +485,11 @@
 		const file = input.files?.[0];
 		input.value = '';
 		if (!file) return;
+
+		if (!isPngFile(file)) {
+			status = 'Frames and stickers must be PNG with transparency.';
+			return;
+		}
 
 		busy = true;
 		status = tab === 'frames' ? 'Loading frame…' : 'Uploading…';

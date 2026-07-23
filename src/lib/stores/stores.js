@@ -1,7 +1,29 @@
 import { get, writable } from 'svelte/store';
 
+const FRAME_ID_KEY = 'olympus-snap-selected-frame';
+
+/**
+ * @returns {string | null}
+ */
+function readPersistedFrameId() {
+	try {
+		return sessionStorage.getItem(FRAME_ID_KEY);
+	} catch {
+		return null;
+	}
+}
+
 /** @type {import('svelte/store').Writable<string | null>} */
-export const selectedFrameId = writable(null);
+export const selectedFrameId = writable(readPersistedFrameId());
+
+selectedFrameId.subscribe((id) => {
+	try {
+		if (id) sessionStorage.setItem(FRAME_ID_KEY, id);
+		else sessionStorage.removeItem(FRAME_ID_KEY);
+	} catch {
+		/* ignore private mode / quota */
+	}
+});
 
 /**
  * Captures in slot order (data URLs). Empty until camera session fills them.

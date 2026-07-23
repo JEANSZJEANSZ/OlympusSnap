@@ -5,6 +5,7 @@
 	{type}
 	{disabled}
 	{onclick}
+	aria-label={ariaLabel}
 >
 	{#if children}
 		{@render children()}
@@ -26,6 +27,7 @@
 	 *   type?: 'button' | 'submit';
 	 *   onclick?: (e: MouseEvent) => void;
 	 *   children?: import('svelte').Snippet;
+	 *   ariaLabel?: string;
 	 * }} */
 	let {
 		label = '',
@@ -34,7 +36,8 @@
 		fullWidth = false,
 		type = 'button',
 		onclick,
-		children
+		children,
+		ariaLabel = undefined
 	} = $props();
 </script>
 
