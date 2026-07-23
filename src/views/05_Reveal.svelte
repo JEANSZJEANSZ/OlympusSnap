@@ -28,28 +28,29 @@
 	{/if}
 
 	<main class="stage" class:revealed={phase === 'revealed'} {@attach attachStage}>
-		<header class="head">
-			<p class="eyebrow">OLYMPUS SNAP!</p>
-			<h1>THE CRACKED RELIC</h1>
-			<p class="sub">Strike · Scan · Ascend — your mythic portrait awaits.</p>
-		</header>
-
-		<div class="gift-layout">
-			<div class="photo-frame pixel-panel">
+		<aside class="dock-column">
+			<div class="frame-dock" style:--frame-ar={frameAspect}>
 				{#if forging}
 					<div class="forge">
 						<p>FORGING RELIC…</p>
 					</div>
 				{:else if giftImage}
-					<img src={giftImage} alt="Your Olympus Snap portrait" />
+					<img class="frame-art" src={giftImage} alt="Your Olympus Snap portrait" />
 				{:else}
 					<div class="empty">
 						<p>NO IMAGE YET</p>
 						<p class="empty-sub">Walk the ritual — capture will appear here.</p>
 					</div>
 				{/if}
-				<div class="plaque">RELIC CERTIFIED</div>
 			</div>
+		</aside>
+
+		<div class="detail-panel">
+			<header class="head">
+				<p class="eyebrow">OLYMPUS SNAP!</p>
+				<h1>THE CRACKED RELIC</h1>
+				<p class="sub">Strike · Scan · Ascend — your mythic portrait awaits.</p>
+			</header>
 
 			<aside class="qr-side">
 				<div class="qr-box pixel-panel" aria-label="QR code placeholder">
@@ -66,14 +67,13 @@
 				<p class="qr-caption">QR · DOWNLOAD LINK</p>
 				<p class="qr-note">(generator hooks in next pass)</p>
 			</aside>
-		</div>
 
-		<footer class="footer">
 			<DialogBox
 				speaker="MUSES"
 				text="Behold your mythic portrait! Scan the tablet glyph to claim your Olympus Snap."
 				typewriter={false}
 			/>
+
 			<div class="actions">
 				<PixelButton label="NEW RITUAL" variant="gold" onclick={restart} />
 				<a
@@ -85,7 +85,7 @@
 					SAVE PNG
 				</a>
 			</div>
-		</footer>
+		</div>
 	</main>
 </section>
 
@@ -122,6 +122,25 @@
 	/** @type {(() => void) | null} */
 	let stopGiftMotion = null;
 	let giftMotionPlayed = false;
+
+	let frameNatW = $state(300);
+	let frameNatH = $state(400);
+	const frameAspect = $derived(`${frameNatW} / ${frameNatH}`);
+
+	/** @param {string | null} src */
+	function loadGiftMetrics(src) {
+		if (!src) return;
+		const img = new Image();
+		img.onload = () => {
+			frameNatW = img.naturalWidth || 300;
+			frameNatH = img.naturalHeight || 400;
+		};
+		img.src = src;
+	}
+
+	$effect(() => {
+		if (giftImage) loadGiftMetrics(giftImage);
+	});
 
 	/** @type {import('svelte/attachments').Attachment<HTMLElement>} */
 	const attachStage = (element) => {
@@ -287,13 +306,11 @@
 	.stage {
 		position: relative;
 		z-index: 1;
-		min-height: 100%;
+		height: 100%;
 		display: grid;
-		grid-template-rows: auto 1fr auto;
-		gap: clamp(0.85rem, 2vh, 1.25rem);
-		align-content: center;
-		max-width: 920px;
-		margin: 0 auto;
+		grid-template-columns: minmax(0, 1.15fr) minmax(240px, 1fr);
+		gap: clamp(0.65rem, 1.5vw, 1.25rem);
+		align-items: center;
 		opacity: 0;
 		pointer-events: none;
 		transition: opacity 0.55s ease;
@@ -304,11 +321,64 @@
 		pointer-events: auto;
 	}
 
-	.head {
-		text-align: center;
+	.dock-column {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 0;
+		height: 100%;
+		position: relative;
+		container-type: size;
+		container-name: gift-dock;
 	}
 
-	.eyebrow {
+	.frame-dock {
+		position: relative;
+		/* Height-first like Studio/Camera — tall strips fill the dock */
+		width: min(100cqw, calc(100cqh * var(--frame-ar)), 560px);
+		max-height: 100cqh;
+		aspect-ratio: var(--frame-ar);
+		background: transparent;
+		filter: drop-shadow(6px 8px 0 color-mix(in srgb, var(--primary) 35%, transparent));
+	}
+
+	.frame-art {
+		width: 100%;
+		height: 100%;
+		object-fit: fill;
+		display: block;
+		image-rendering: auto;
+	}
+
+	.forge,
+	.empty {
+		width: 100%;
+		height: 100%;
+		display: grid;
+		place-content: center;
+		gap: 0.5rem;
+		text-align: center;
+		font-size: var(--booth-text-sm);
+		color: var(--gold-bright);
+		background: #111;
+	}
+
+	.empty-sub {
+		font-size: var(--booth-text-xs);
+		opacity: 0.75;
+		line-height: 1.7;
+	}
+
+	.detail-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 0.85rem;
+		max-width: var(--booth-panel-max);
+		width: 100%;
+		justify-self: center;
+	}
+
+	.head .eyebrow {
 		font-size: var(--booth-text-xs);
 		color: var(--gold-bright);
 		letter-spacing: 0.08em;
@@ -327,62 +397,6 @@
 		font-size: var(--booth-text-sm);
 		color: color-mix(in srgb, #fff8df 72%, transparent);
 		line-height: 1.6;
-	}
-
-	.gift-layout {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
-		align-items: center;
-		gap: clamp(1rem, 3vw, 2rem);
-		width: 100%;
-	}
-
-	.photo-frame {
-		position: relative;
-		width: min(100%, 340px);
-		aspect-ratio: 3 / 4;
-		padding: 0.65rem;
-		background: color-mix(in srgb, var(--surface) 88%, #102f56);
-		display: flex;
-		flex-direction: column;
-		gap: 0.45rem;
-	}
-
-	.photo-frame img,
-	.empty,
-	.forge {
-		flex: 1;
-		width: 100%;
-		min-height: 0;
-		object-fit: cover;
-		background: #111;
-		box-shadow: inset 0 0 0 3px var(--primary);
-	}
-
-	.forge,
-	.empty {
-		display: grid;
-		place-content: center;
-		gap: 0.5rem;
-		text-align: center;
-		font-size: var(--booth-text-sm);
-		color: var(--gold-bright);
-	}
-
-	.empty-sub {
-		font-size: var(--booth-text-xs);
-		opacity: 0.75;
-		line-height: 1.7;
-	}
-
-	.plaque {
-		text-align: center;
-		font-size: var(--booth-text-xs);
-		padding: 0.4rem;
-		background: var(--primary);
-		color: var(--gold-bright);
-		box-shadow: 2px 2px 0 #071936;
 	}
 
 	.qr-side {
@@ -419,13 +433,6 @@
 	.qr-note {
 		font-size: var(--booth-text-xs);
 		color: color-mix(in srgb, #fff8df 55%, transparent);
-	}
-
-	.footer {
-		display: flex;
-		flex-direction: column;
-		gap: 0.85rem;
-		width: 100%;
 	}
 
 	.actions {
@@ -473,24 +480,36 @@
 		padding: 0.85rem 1.35rem;
 	}
 
-	.booth-view :global(.dialog) {
-		max-width: var(--booth-panel-max);
-		margin: 0 auto;
+	.detail-panel :global(.dialog) {
+		max-width: 100%;
+		margin: 0;
 	}
 
-	.booth-view :global(.dialog .speaker),
-	.booth-view :global(.dialog .body) {
+	.detail-panel :global(.dialog .speaker),
+	.detail-panel :global(.dialog .body) {
 		font-size: var(--booth-text-sm);
 		line-height: 1.75;
 	}
 
-	@media (max-width: 640px) {
-		.gift-layout {
-			flex-direction: column;
+	@media (max-width: 980px) {
+		.stage {
+			grid-template-columns: 1fr;
+			grid-template-rows: auto auto;
+			align-items: start;
 		}
 
-		.photo-frame {
-			width: min(88vw, 340px);
+		.frame-dock {
+			width: min(78vw, calc(min(52dvh, 560px) * var(--frame-ar)));
+			max-height: min(52dvh, 560px);
+			margin: 0 auto;
+		}
+
+		.dock-column {
+			justify-content: center;
+		}
+
+		.detail-panel {
+			max-width: none;
 		}
 	}
 </style>
