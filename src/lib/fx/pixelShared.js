@@ -39,19 +39,22 @@ export function box(parent, x, y, z, w, h, d, mat) {
  * @param {HTMLCanvasElement} canvas
  * @param {number} pxW
  * @param {boolean} alpha
+ * @param {{ powerPreference?: 'low-power' | 'high-performance' | 'default', pixelRatio?: number, imageRendering?: string }} [opts]
  */
-export function makeRenderer(canvas, pxW, alpha) {
+export function makeRenderer(canvas, pxW, alpha, opts = {}) {
 	const renderer = new WebGLRenderer({
 		canvas,
 		antialias: false,
 		alpha,
-		powerPreference: 'low-power'
+		powerPreference: opts.powerPreference || 'low-power'
 	});
-	renderer.setPixelRatio(1);
+	const pr = opts.pixelRatio ?? 1;
+	renderer.setPixelRatio(pr);
 	if (alpha) renderer.setClearColor(0x000000, 0);
 
 	const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
 	camera.position.z = 10;
+	const imageRendering = opts.imageRendering ?? 'pixelated';
 
 	/**
 	 * @param {number} viewH
@@ -66,7 +69,7 @@ export function makeRenderer(canvas, pxW, alpha) {
 		renderer.setSize(w, h, false);
 		canvas.style.width = '100%';
 		canvas.style.height = '100%';
-		canvas.style.imageRendering = 'pixelated';
+		canvas.style.imageRendering = imageRendering;
 
 		const viewW = viewH * (w / h);
 		camera.left = -viewW / 2;

@@ -1,6 +1,6 @@
 /**
  * Tiny history router (Vue Router–style), no library.
- * URLs (app-relative): / | /frame | /camera | /studio | /reveal | /export | /admin
+ * URLs (app-relative): / | /frame | /camera | /studio | /reveal | /admin
  *
  * IIS base = same role as Vue's:
  *   createWebHistory("/Debug/Vue3Template")
@@ -87,7 +87,14 @@ export function matchLocation() {
 		return matched;
 	}
 
-	return resolve(toAppPath(location.pathname));
+	const appPath = toAppPath(location.pathname);
+	if (appPath === '/export') {
+		const matched = routesByName.get('reveal') ?? FALLBACK;
+		history.replaceState(null, '', toFullPath('/reveal'));
+		return matched;
+	}
+
+	return resolve(appPath);
 }
 
 /** @type {import('svelte/store').Writable<AppRoute>} */

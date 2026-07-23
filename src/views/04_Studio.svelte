@@ -52,7 +52,7 @@
 				<PixelButton label="REMOVE" variant="ghost" disabled={!selectedId} onclick={removeSelected} />
 				<PixelButton label="CLEAR" variant="ghost" onclick={clearStickers} />
 				<PixelButton label="RETAKE" variant="ghost" onclick={retake} />
-				<PixelButton label="HANG THE GIFT" variant="gold" onclick={goReveal} />
+				<PixelButton label="CRACK THE MARBLE" variant="gold" onclick={goReveal} />
 			</div>
 		</aside>
 	</main>
