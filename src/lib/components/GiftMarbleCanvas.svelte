@@ -1,6 +1,6 @@
 <script>
 	/**
-	 * Full-bleed Three.js marble reveal canvas — Zeus crack → gift handoff.
+	 * Full-bleed Three.js marble reveal canvas — god crack → gift handoff.
 	 */
 	import { onMount } from 'svelte';
 	import { createGiftMarbleReveal } from '../fx/giftMarbleReveal.js';
