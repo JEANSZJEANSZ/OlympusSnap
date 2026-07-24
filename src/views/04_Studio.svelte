@@ -217,6 +217,10 @@
 			return;
 		}
 
+		/* Fresh edit session — never carry stickers from a prior strip. */
+		activeStickers.set([]);
+		selectedId = null;
+
 		reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 		const url = $capturedImageData;
