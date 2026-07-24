@@ -1,7 +1,10 @@
 <section
+	bind:this={rootEl}
 	class="camera-view booth-view"
-	class:handoff-pending={$frameHandoffBusy}
+	class:handoff-pending={$frameHandoffBusy || $imageHandoffBusy}
 	class:ritual-busy={ritualOpen}
+	class:review-open={reviewOpen}
+	class:exiting
 >
 	<div class="sky-wash" aria-hidden="true"></div>
 	<div class="stars" aria-hidden="true">
@@ -30,6 +33,7 @@
 					bind:this={dockEl}
 					style:--frame-ar={frameAspect}
 					data-frame-handoff-target
+					data-camera-handoff-target
 				>
 					{#if useSlots && frameSrc}
 						<img class="frame-art" src={frameSrc} alt="" draggable="false" />
@@ -37,18 +41,18 @@
 							{#each slots as slot, i (slot.id)}
 								<div
 									class="hole"
-									class:active={i === slotIndex && !ritualOpen}
-									class:done={!!photos[i] && i !== slotIndex}
+									class:active={liveSlot >= 0 ? i === liveSlot : i === slotIndex}
+									class:done={!!photos[i] && i !== slotIndex && i !== liveSlot}
 									data-slot-index={i}
 									style:left="{slot.x * 100}%"
 									style:top="{slot.y * 100}%"
 									style:width="{slot.w * 100}%"
 									style:height="{slot.h * 100}%"
 								>
-									{#if photos[i] && (i !== slotIndex || ritualOpen)}
-										<img class="hole-shot" src={photos[i]} alt="" />
-									{:else if i === slotIndex && cameraReady && !ritualOpen}
+									{#if i === liveSlot && cameraReady && !ritualOpen}
 										<canvas class="hole-live-canvas" bind:this={previewCanvas}></canvas>
+									{:else if photos[i]}
+										<img class="hole-shot" src={photos[i]} alt="" />
 									{:else if cameraStatus === 'connecting'}
 										<span class="hole-num connecting">…</span>
 									{:else}
@@ -62,11 +66,14 @@
 							<img class="frame-art" src={frameSrc} alt="" draggable="false" />
 						{/if}
 						<div class="content-layer">
-							<div class="hole active full-bleed" data-slot-index="0">
-								{#if photos[0]}
-									<img class="hole-shot" src={photos[0]} alt="" />
-								{:else if cameraReady && !ritualOpen}
+							<div
+								class="hole active full-bleed"
+								data-slot-index="0"
+							>
+								{#if liveSlot === 0 && cameraReady && !ritualOpen}
 									<canvas class="hole-live-canvas" bind:this={previewCanvas}></canvas>
+								{:else if photos[0]}
+									<img class="hole-shot" src={photos[0]} alt="" />
 								{:else if cameraStatus === 'connecting'}
 									<span class="hole-num connecting">…</span>
 								{/if}
@@ -94,29 +101,56 @@
 				{/if}
 			</p>
 
-			<DialogBox speaker="POSE CHALLENGE" text={poseText} typewriter={false} />
+			<DialogBox
+				speaker={reviewOpen ? 'REVIEW' : 'POSE CHALLENGE'}
+				text={reviewOpen ? reviewText : poseText}
+				typewriter={false}
+			/>
 
 			<div class="actions">
-				<PixelButton label="BACK" variant="ghost" disabled={ritualOpen} onclick={goBack} />
-				<RitualShutterButton
-					busy={ritualOpen}
-					disabled={ritualOpen || !cameraReady || $frameHandoffBusy}
-					onclick={beginRitual}
-				/>
-				{#if !useSlots}
+				{#if reviewOpen}
+					<PixelButton label="RETAKE" variant="ghost" disabled={exiting || ritualOpen} onclick={retakeShot} />
+					{#if isLastCanvas}
+						<PixelButton
+							label="STUDIO"
+							variant="gold"
+							disabled={exiting || ritualOpen}
+							onclick={goStudioFromReview}
+						/>
+					{:else}
+						<RitualShutterButton
+							busy={ritualOpen}
+							disabled={ritualOpen || !cameraReady || $frameHandoffBusy || $imageHandoffBusy || exiting}
+							onclick={snapNextFromReview}
+						/>
+					{/if}
+				{:else}
 					<PixelButton
-						label="SKIP → STUDIO"
-						variant="gold"
-						disabled={ritualOpen}
-						onclick={skipToStudio}
+						label="BACK"
+						variant="ghost"
+						disabled={ritualOpen || exiting}
+						onclick={goBack}
 					/>
+					<RitualShutterButton
+						busy={ritualOpen}
+						disabled={ritualOpen || !cameraReady || $frameHandoffBusy || $imageHandoffBusy || exiting}
+						onclick={beginRitual}
+					/>
+					{#if !useSlots}
+						<PixelButton
+							label="SKIP → STUDIO"
+							variant="gold"
+							disabled={ritualOpen || exiting}
+							onclick={skipToStudio}
+						/>
+					{/if}
 				{/if}
 			</div>
 		</div>
 
 		<FilterGallery
 			selectedId={filterPreset}
-			disabled={ritualOpen || !cameraReady}
+			disabled={ritualOpen || reviewOpen || !cameraReady || exiting}
 			onSelect={(id) => (filterPreset = id)}
 		/>
 	</main>
@@ -137,14 +171,15 @@
 	import { onMount, tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import {
-		appendCapture,
+		setCaptureAt,
 		capturedImageData,
 		capturedPhotos,
 		clearCaptures,
 		selectedFrameId
 	} from '../lib/stores/stores.js';
 	import { getLiveFrameById, assetsReady } from '../lib/assets/assetStore.js';
-	import { frameHandoffBusy } from '../lib/fx/frameHandoff.js';
+	import { beginImageHandoff, imageHandoffBusy } from '../lib/fx/imageHandoff.js';
+	import { playViewExit } from '../lib/fx/viewExitMotion.js';
 	import {
 		getActiveHoleRect,
 		getFrameDockRect
@@ -158,7 +193,10 @@
 	import FilterGallery from '../lib/components/FilterGallery.svelte';
 	import CameraSnapOverlay from '../lib/components/CameraSnapOverlay.svelte';
 	import RitualShutterButton from '../lib/components/RitualShutterButton.svelte';
+	import { frameHandoffBusy } from '../lib/fx/frameHandoff.js';
 
+	/** @type {HTMLElement | undefined} */
+	let rootEl = $state();
 	/** @type {HTMLVideoElement | undefined} */
 	let videoEl = $state();
 	/** @type {HTMLCanvasElement | undefined} */
@@ -170,6 +208,8 @@
 	/** @type {'connecting' | 'ready' | 'offline'} */
 	let cameraStatus = $state('connecting');
 	let reduced = $state(false);
+	let exiting = $state(false);
+	let reviewOpen = $state(false);
 	let slotIndex = $state(0);
 	/** @type {string[]} */
 	let photos = $state([]);
@@ -210,6 +250,21 @@
 		useSlots
 			? `Canvas ${slotIndex + 1} of ${snapTotal}. ${poses[slotIndex % poses.length]}`
 			: sessionPose
+	);
+
+	const isLastCanvas = $derived(slotIndex + 1 >= snapTotal);
+
+	/** Hole that should show the live camera — current slot, or the next one while reviewing. */
+	const liveSlot = $derived.by(() => {
+		if (ritualOpen) return -1;
+		if (reviewOpen) return isLastCanvas ? -1 : slotIndex + 1;
+		return slotIndex;
+	});
+
+	const reviewText = $derived(
+		isLastCanvas
+			? 'Last canvas locked. RETAKE for another shot, or head to STUDIO.'
+			: `Canvas ${slotIndex + 1} of ${snapTotal} locked. SNAP starts the next canvas ritual, or RETAKE this one.`
 	);
 
 	function loadFrameMetrics(src) {
@@ -271,7 +326,7 @@
 	}
 
 	$effect(() => {
-		if (ritualOpen || !cameraReady || !videoEl || !previewCanvas) {
+		if (ritualOpen || liveSlot < 0 || !cameraReady || !videoEl || !previewCanvas) {
 			stopLivePreview();
 			return;
 		}
@@ -294,6 +349,7 @@
 		clearCaptures();
 		photos = [];
 		slotIndex = 0;
+		reviewOpen = false;
 		sessionPose = poses[Math.floor(Math.random() * poses.length)];
 		reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -310,36 +366,70 @@
 		};
 	});
 
-	function goBack() {
+	async function goBack() {
+		if (exiting || ritualOpen || reviewOpen) return;
+		exiting = true;
 		stopLivePreview();
 		stopCamera();
 		clearCaptures();
+
+		const fromEl = dockEl;
+		if (fromEl && frameSrc) {
+			beginImageHandoff({
+				src: frameSrc,
+				fromEl,
+				targetSel: '[data-frame-select-handoff-target]',
+				reduced
+			});
+			go('frame');
+			return;
+		}
+
+		await playViewExit(rootEl, { reduced, direction: 'right' });
 		go('frame');
 	}
 
-	function skipToStudio() {
+	async function skipToStudio() {
+		if (exiting || ritualOpen || reviewOpen) return;
 		stopLivePreview();
 		stopCamera();
 		clearCaptures();
+		await playViewExit(rootEl, { reduced, direction: 'left' });
 		go('studio');
 	}
 
 	async function finishSession() {
+		if (exiting) return;
+		exiting = true;
+		reviewOpen = false;
 		stopLivePreview();
 		stopCamera();
 		const list = get(capturedPhotos);
 		const frameId = get(selectedFrameId);
+		let preview = list[0] || null;
 		if (useSlots && list.length) {
-			const preview = await compositeFramePhotos(list, frameId, [], { skipStickers: true });
-			capturedImageData.set(preview || list[0] || null);
-		} else if (list[0]) {
-			capturedImageData.set(list[0]);
+			preview =
+				(await compositeFramePhotos(list, frameId, [], { skipStickers: true })) ||
+				list[0] ||
+				null;
+		}
+		if (preview) capturedImageData.set(preview);
+
+		const fromEl = dockEl;
+		if (fromEl && preview) {
+			beginImageHandoff({
+				src: preview,
+				fromEl,
+				targetSel: '[data-studio-handoff-target]',
+				reduced
+			});
 		}
 		go('studio');
 	}
 
 	function beginRitual() {
-		if (ritualOpen || !cameraReady || $frameHandoffBusy) return;
+		if (ritualOpen || reviewOpen || exiting || !cameraReady || $frameHandoffBusy || $imageHandoffBusy)
+			return;
 		const rect = getActiveHoleRect(dockEl, slotIndex) ?? getFrameDockRect(dockEl);
 		if (!rect) return;
 		stopLivePreview();
@@ -350,21 +440,38 @@
 
 	/** @param {string} dataUrl */
 	function onSnapCaptured(dataUrl) {
-		appendCapture(dataUrl);
+		setCaptureAt(slotIndex, dataUrl);
 		const next = [...photos];
 		next[slotIndex] = dataUrl;
 		photos = next;
 	}
 
-	async function onSnapSettled() {
+	function onSnapSettled() {
 		ritualOpen = false;
 		snapFromRect = null;
+		reviewOpen = true;
+	}
 
-		if (slotIndex + 1 >= snapTotal) {
-			await finishSession();
-			return;
-		}
+	function retakeShot() {
+		if (!reviewOpen || exiting || ritualOpen) return;
+		setCaptureAt(slotIndex, null);
+		photos = photos.slice(0, slotIndex);
+		reviewOpen = false;
+	}
+
+	/** Same SNAP shutter as first shot — advance slot, then run the full countdown ritual. */
+	async function snapNextFromReview() {
+		if (!reviewOpen || exiting || ritualOpen || isLastCanvas) return;
+		if (!cameraReady || $frameHandoffBusy || $imageHandoffBusy) return;
+		reviewOpen = false;
 		slotIndex += 1;
+		await tick();
+		beginRitual();
+	}
+
+	async function goStudioFromReview() {
+		if (!reviewOpen || exiting || ritualOpen || !isLastCanvas) return;
+		await finishSession();
 	}
 </script>
 
@@ -620,7 +727,8 @@
 		opacity: 0;
 	}
 
-	.camera-view.ritual-busy .frame-dock {
+	.camera-view.ritual-busy .frame-dock,
+	.camera-view.handoff-pending .frame-dock {
 		opacity: 0;
 		visibility: hidden;
 	}
@@ -628,9 +736,17 @@
 	.camera-view.handoff-pending .ritual-panel,
 	.camera-view.handoff-pending :global(.filter-rail),
 	.camera-view.ritual-busy .ritual-panel,
-	.camera-view.ritual-busy :global(.filter-rail) {
+	.camera-view.ritual-busy :global(.filter-rail),
+	.camera-view.exiting .ritual-panel,
+	.camera-view.exiting :global(.filter-rail) {
 		opacity: 0.4;
 		transition: opacity 220ms steps(3);
+	}
+
+	.camera-view.review-open .hole.active {
+		box-shadow:
+			inset 0 0 0 2px #fff8df,
+			0 0 0 2px rgba(46, 196, 255, 0.55);
 	}
 
 	.booth-view :global(.pixel-btn) {

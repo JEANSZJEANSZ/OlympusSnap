@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import { selectedFrameId } from '../lib/stores/stores.js';
 	import { go } from '../router/index.js';
 	import { frames } from '../lib/assets/assetStore.js';
@@ -18,6 +19,23 @@
 	let motion;
 	const list = $derived($frames);
 	const frame = $derived(list[Math.min(index, Math.max(0, list.length - 1))]);
+
+	/**
+	 * Restore carousel to the frame already chosen (e.g. Camera → Back).
+	 * @param {typeof list} items
+	 * @param {string | null} id
+	 */
+	function syncIndexToSelected(items, id) {
+		if (!items.length) return;
+		if (id) {
+			const i = items.findIndex((f) => f.id === id);
+			if (i >= 0) {
+				index = i;
+				return;
+			}
+		}
+		if (index >= items.length) index = items.length - 1;
+	}
 
 	$effect(() => {
 		const f = frame;
@@ -53,9 +71,19 @@
 	}
 
 	onMount(() => {
-		const unsubscribeFrames = frames.subscribe((items) => {
-			if (index >= items.length && items.length > 0) index = items.length - 1;
-		});
+		let restored = false;
+		const tryRestore = (/** @type {typeof list} */ items) => {
+			if (!items.length) return;
+			if (!restored) {
+				syncIndexToSelected(items, get(selectedFrameId));
+				restored = true;
+				return;
+			}
+			if (index >= items.length) index = items.length - 1;
+		};
+
+		tryRestore(get(frames));
+		const unsubscribeFrames = frames.subscribe(tryRestore);
 
 		reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		if (rootEl) motion = createFrameSelectMotion(rootEl, { reduced });
@@ -114,7 +142,14 @@
 	}
 
 	function back() {
-		if (!exiting) go('landing');
+		if (exiting) return;
+		exiting = true;
+		const finish = () => go('landing');
+		if (motion) {
+			motion.playBackToLanding(finish);
+		} else {
+			finish();
+		}
 	}
 
 	/** Reduced-motion fallback: click confirms without pull. */
@@ -148,6 +183,7 @@
 	</div>
 	<div class="mountains mountains-far" aria-hidden="true"></div>
 	<div class="mountains mountains-near" aria-hidden="true"></div>
+	<div class="back-veil" aria-hidden="true"></div>
 
 	<header class="head">
 		<p class="eyebrow">THE OLYMPIAN COURIER AWAITS</p>
@@ -205,6 +241,7 @@
 					class="frame-body"
 					style:--frame-ar={frameAr}
 					data-motif={frame?.id ?? 'none'}
+					data-frame-select-handoff-target
 					aria-label={frame
 						? reduced
 							? `Select ${frame.name}`
@@ -287,17 +324,28 @@
 		pointer-events: none;
 	}
 
-	.frame-view.exiting .head,
-	.frame-view.exiting .pager,
-	.frame-view.exiting .footer,
-	.frame-view.exiting .nav {
+	.frame-view.exiting:not(.backing) .head,
+	.frame-view.exiting:not(.backing) .pager,
+	.frame-view.exiting:not(.backing) .footer,
+	.frame-view.exiting:not(.backing) .nav {
 		opacity: 0;
 		transition: opacity 280ms steps(4);
 	}
 
-	.frame-view.exiting .sky-wash {
+	.frame-view.exiting:not(.backing) .sky-wash {
 		filter: brightness(0.72);
 		transition: filter 320ms steps(4);
+	}
+
+	.back-veil {
+		position: absolute;
+		inset: 0;
+		z-index: 30;
+		pointer-events: none;
+		opacity: 0;
+		background:
+			radial-gradient(ellipse at 50% 28%, rgba(255, 248, 223, 0.55), transparent 55%),
+			linear-gradient(180deg, #071936 0%, #0d2748 55%, #1a3a5c 100%);
 	}
 
 	.sky-wash {

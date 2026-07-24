@@ -21,6 +21,7 @@
 			<View />
 		{/key}
 		<FrameHandoffOverlay />
+		<ImageHandoffOverlay />
 	</main>
 	<BoothCursor />
 </div>
@@ -30,6 +31,7 @@
 	import { currentRoute, go } from './router/index.js';
 	import { initAssets } from './lib/assets/assetStore.js';
 	import FrameHandoffOverlay from './lib/components/FrameHandoffOverlay.svelte';
+	import ImageHandoffOverlay from './lib/components/ImageHandoffOverlay.svelte';
 	import BoothCursor from './lib/components/BoothCursor.svelte';
 
 	/** @type {ReturnType<typeof setTimeout> | null} */

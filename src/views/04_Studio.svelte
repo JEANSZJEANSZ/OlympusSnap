@@ -1,4 +1,10 @@
-<section class="studio-view booth-view">
+<section
+	class="studio-view booth-view"
+	class:handoff-pending={$imageHandoffBusy}
+	class:timer-warn={secsLeft <= 30 && secsLeft > 0 && timerArmed}
+	class:timer-up={timeUp}
+	class:exiting
+>
 	<div class="sky-wash" aria-hidden="true"></div>
 	<div class="stars" aria-hidden="true">
 		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
@@ -6,15 +12,20 @@
 	<div class="mountains mountains-far" aria-hidden="true"></div>
 	<div class="mountains mountains-near" aria-hidden="true"></div>
 
+	{#if timeUp}
+		<div class="time-up-flash" aria-live="assertive">TIME'S UP</div>
+	{/if}
+
 	<main class="stage">
 		<aside class="dock-column">
 			<div class="frame-pedestal">
 				<div
 					bind:this={shellEl}
 					class="editor-shell pixel-panel"
-					class:entry-busy={entryBusy}
+					class:entry-busy={entryBusy || timeUp || $imageHandoffBusy}
 					class:is-narrow={frameAspect < 0.42}
 					style:--frame-ar={frameAspect}
+					data-studio-handoff-target
 				>
 					{#if $capturedImageData}
 						<StudioKonvaEditor
@@ -31,9 +42,19 @@
 		</aside>
 
 		<aside class="sticker-rail" aria-label="Sticker tray">
+			<div class="timer-row" aria-live="polite">
+				<span class="timer-label">EDIT WINDOW</span>
+				<span class="timer-chip" class:warn={secsLeft <= 30 && timerArmed}>{timerLabel}</span>
+			</div>
+
 			<div class="gallery">
 				{#each $stickers as item (item.id)}
-					<button type="button" class="tile" onclick={() => addSticker(item)}>
+					<button
+						type="button"
+						class="tile"
+						disabled={entryBusy || timeUp || exiting}
+						onclick={() => addSticker(item)}
+					>
 						<span class="swatch">
 							<img src={item.src} alt="" draggable="false" />
 						</span>
@@ -42,17 +63,27 @@
 				{/each}
 			</div>
 
-			<DialogBox
-				speaker="DIONYSUS"
-				text="Tap a sticker, then drag, stretch corners, or spin the gold handle. REMOVE banishes one."
-				typewriter={false}
-			/>
+			<DialogBox speaker="DIONYSUS" text={dialogText} typewriter={false} />
 
 			<div class="actions">
-				<PixelButton label="REMOVE" variant="ghost" disabled={!selectedId} onclick={removeSelected} />
-				<PixelButton label="CLEAR" variant="ghost" onclick={clearStickers} />
-				<PixelButton label="RETAKE" variant="ghost" onclick={retake} />
-				<PixelButton label="CRACK THE MARBLE" variant="gold" onclick={goReveal} />
+				<PixelButton
+					label="REMOVE"
+					variant="ghost"
+					disabled={!selectedId || entryBusy || timeUp || exiting}
+					onclick={removeSelected}
+				/>
+				<PixelButton
+					label="CLEAR"
+					variant="ghost"
+					disabled={entryBusy || timeUp || exiting}
+					onclick={clearStickers}
+				/>
+				<PixelButton
+					label="CRACK THE MARBLE"
+					variant="gold"
+					disabled={entryBusy || timeUp || exiting}
+					onclick={goReveal}
+				/>
 			</div>
 		</aside>
 	</main>
@@ -60,6 +91,7 @@
 
 <script>
 	import { onMount, tick } from 'svelte';
+	import { get } from 'svelte/store';
 	import {
 		activeStickers,
 		capturedImageData,
@@ -68,10 +100,14 @@
 	import { getLiveFrameById } from '../lib/assets/assetStore.js';
 	import { stickers } from '../lib/assets/assetStore.js';
 	import { go } from '../router/index.js';
-	import { playStudioEntry } from '../lib/fx/studioEntryMotion.js';
+	import { playStudioEntry, playStudioSettle } from '../lib/fx/studioEntryMotion.js';
+	import { imageHandoffBusy } from '../lib/fx/imageHandoff.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import StudioKonvaEditor from '../lib/components/StudioKonvaEditor.svelte';
+
+	const STUDIO_EDIT_SECS = 180;
+	const WARN_SECS = 30;
 
 	/** @type {StudioKonvaEditor | undefined} */
 	let editorRef = $state();
@@ -81,6 +117,14 @@
 	let selectedId = $state(/** @type {string | null} */ (null));
 	let entryBusy = $state(true);
 	let reduced = $state(false);
+	let exiting = $state(false);
+	let timerArmed = $state(false);
+	let secsLeft = $state(STUDIO_EDIT_SECS);
+	let timeUp = $state(false);
+	/** @type {ReturnType<typeof setInterval> | null} */
+	let tickTimer = null;
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	let timeUpNav = null;
 	/** @type {Record<string, { w: number; h: number }>} */
 	let measuredDims = $state({});
 
@@ -93,6 +137,79 @@
 		if (m?.w && m?.h) return m.w / m.h;
 		return 3 / 4;
 	});
+
+	const timerLabel = $derived.by(() => {
+		const s = Math.max(0, secsLeft);
+		const m = Math.floor(s / 60);
+		const r = s % 60;
+		return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+	});
+
+	const dialogText = $derived(
+		timeUp
+			? 'The marble calls — seals are set!'
+			: secsLeft <= WARN_SECS && timerArmed
+				? 'Hurry, mortal — marble awaits!'
+				: 'Tap a sticker, then drag, stretch corners, or spin the gold handle. REMOVE banishes one.'
+	);
+
+	function clearTimers() {
+		if (tickTimer != null) {
+			clearInterval(tickTimer);
+			tickTimer = null;
+		}
+		if (timeUpNav != null) {
+			clearTimeout(timeUpNav);
+			timeUpNav = null;
+		}
+	}
+
+	function startEditTimer() {
+		clearTimers();
+		timerArmed = true;
+		secsLeft = STUDIO_EDIT_SECS;
+		timeUp = false;
+		tickTimer = setInterval(() => {
+			secsLeft = Math.max(0, secsLeft - 1);
+			if (secsLeft <= 0) {
+				clearTimers();
+				onTimerExpired();
+			}
+		}, 1000);
+	}
+
+	function onTimerExpired() {
+		if (exiting || timeUp) return;
+		timeUp = true;
+		selectedId = null;
+		const delay = reduced ? 400 : 1000;
+		timeUpNav = setTimeout(() => {
+			goReveal();
+		}, delay);
+	}
+
+	/**
+	 * Wait until image handoff finishes (or skip if none).
+	 * @returns {Promise<boolean>} true if a handoff was active
+	 */
+	function waitForHandoffClear() {
+		return new Promise((resolve) => {
+			if (!get(imageHandoffBusy)) {
+				resolve(false);
+				return;
+			}
+			const unsub = imageHandoffBusy.subscribe((busy) => {
+				if (!busy) {
+					unsub();
+					resolve(true);
+				}
+			});
+			window.setTimeout(() => {
+				unsub();
+				resolve(true);
+			}, 2800);
+		});
+	}
 
 	onMount(() => {
 		if (!$capturedImageData) {
@@ -118,11 +235,21 @@
 			await tick();
 			entryBusy = true;
 			try {
-				await playStudioEntry(shellEl, { reduced });
+				const hadHandoff = await waitForHandoffClear();
+				if (hadHandoff) {
+					await playStudioSettle(shellEl, { reduced });
+				} else {
+					await playStudioEntry(shellEl, { reduced });
+				}
 			} finally {
 				entryBusy = false;
+				startEditTimer();
 			}
 		})();
+
+		return () => {
+			clearTimers();
+		};
 	});
 
 	/** @param {import('../lib/stores/stores.js').ActiveSticker[]} list */
@@ -137,26 +264,27 @@
 
 	/** @param {{ id: string; name: string; src: string }} item */
 	async function addSticker(item) {
+		if (entryBusy || timeUp || exiting) return;
 		const id = `${item.id}-${Date.now()}`;
 		await editorRef?.spawnSticker({ id, src: item.src });
 	}
 
 	function clearStickers() {
+		if (entryBusy || timeUp || exiting) return;
 		editorRef?.clearStickers();
 		selectedId = null;
 	}
 
 	function removeSelected() {
-		if (!selectedId) return;
+		if (!selectedId || entryBusy || timeUp || exiting) return;
 		const removed = editorRef?.removeSticker(selectedId) ?? false;
 		if (removed) selectedId = null;
 	}
 
-	function retake() {
-		go('camera');
-	}
-
 	function goReveal() {
+		if (exiting) return;
+		exiting = true;
+		clearTimers();
 		selectedId = null;
 		go('reveal');
 	}
@@ -235,6 +363,31 @@
 		height: 38%;
 		background: #31577a;
 		clip-path: polygon(0 100%, 0 68%, 12% 52%, 22% 72%, 34% 40%, 48% 64%, 60% 34%, 72% 58%, 84% 28%, 100% 55%, 100% 100%);
+	}
+
+	.time-up-flash {
+		position: absolute;
+		inset: 0;
+		z-index: 20;
+		display: grid;
+		place-items: center;
+		pointer-events: none;
+		font-size: clamp(1.4rem, 4vw, 2.4rem);
+		color: #fff8df;
+		text-shadow: 3px 3px 0 #071936, 0 0 24px rgba(255, 90, 31, 0.55);
+		background: radial-gradient(ellipse at center, rgba(7, 21, 45, 0.35), rgba(7, 21, 45, 0.78));
+		animation: time-up-in 280ms steps(4) forwards;
+	}
+
+	@keyframes time-up-in {
+		from {
+			opacity: 0;
+			transform: scale(1.08);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
 	}
 
 	.stage {
@@ -322,6 +475,52 @@
 		pointer-events: none;
 	}
 
+	.studio-view.handoff-pending .editor-shell {
+		opacity: 0;
+	}
+
+	.timer-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.65rem;
+		flex-shrink: 0;
+	}
+
+	.timer-label {
+		font-size: var(--booth-text-xs);
+		letter-spacing: 0.08em;
+		color: color-mix(in srgb, #fff8df 70%, transparent);
+	}
+
+	.timer-chip {
+		font-size: var(--booth-text-sm);
+		padding: 0.35rem 0.55rem;
+		background: #102f56;
+		color: var(--gold-bright);
+		box-shadow: 2px 2px 0 #071936;
+		border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+		min-width: 4.5rem;
+		text-align: center;
+	}
+
+	.timer-chip.warn {
+		color: #fff8df;
+		background: #7a2a18;
+		border-color: #ff9a3c;
+		animation: timer-pulse 900ms steps(2) infinite;
+	}
+
+	@keyframes timer-pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.72;
+		}
+	}
+
 	.sticker-rail {
 		display: flex;
 		flex-direction: column;
@@ -368,7 +567,12 @@
 		text-align: center;
 	}
 
-	.tile:active {
+	.tile:disabled {
+		opacity: 0.45;
+		pointer-events: none;
+	}
+
+	.tile:active:not(:disabled) {
 		transform: translate(2px, 2px);
 		box-shadow: 1px 1px 0 #071936;
 	}

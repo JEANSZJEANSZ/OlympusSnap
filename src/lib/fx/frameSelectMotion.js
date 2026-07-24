@@ -6,7 +6,7 @@
  * Source of truth: /Ropesimulator.html
  */
 import Matter from 'matter-js';
-import { animate } from 'animejs';
+import { animate, createTimeline, stagger } from 'animejs';
 
 const { Engine, Bodies, Body, Constraint, Composite, Composites, Vector, World } = Matter;
 
@@ -55,6 +55,10 @@ export function createFrameSelectMotion(root, opts = {}) {
 			playSwap() {},
 			/** @param {() => void} onDone */
 			playConfirm(onDone) {
+				onDone();
+			},
+			/** @param {() => void} onDone */
+			playBackToLanding(onDone) {
 				onDone();
 			},
 			setSelectHandlers() {},
@@ -813,6 +817,90 @@ export function createFrameSelectMotion(root, opts = {}) {
 		beginFall(anchorJoint);
 	}
 
+	/**
+	 * Retreat from the courier hall — relic rises back toward Olympus, then hand off to Landing.
+	 * @param {() => void} onDone
+	 */
+	function playBackToLanding(onDone) {
+		if (disposed || confirming) {
+			onDone();
+			return;
+		}
+		confirming = true;
+		unbindPull();
+		wingLoop?.pause();
+		birdFly?.pause();
+		flyAnim?.pause();
+		root.classList.add('exiting', 'backing');
+		root.classList.remove('pulling');
+
+		const chrome = root.querySelectorAll('.head, .pager, .footer, .nav');
+		const mountains = root.querySelectorAll('.mountains');
+		const veil = root.querySelector('.back-veil');
+
+		if (reduced) {
+			const tl = createTimeline({
+				defaults: { ease: 'linear' },
+				onComplete: onDone
+			});
+			if (veil) tl.add(veil, { opacity: [0, 1], duration: 180 }, 0);
+			else tl.add(root, { opacity: [1, 0], duration: 180 }, 0);
+			return;
+		}
+
+		const tl = createTimeline({
+			defaults: { ease: 'inCubic' },
+			onComplete: onDone
+		});
+
+		if (chrome.length) {
+			tl.add(
+				chrome,
+				{ opacity: [1, 0], y: ['0rem', '0.55rem'], duration: 320, delay: stagger(28) },
+				0
+			);
+		}
+		if (mountains.length) {
+			tl.add(
+				mountains,
+				{ opacity: [1, 0.35], y: ['0%', '6%'], duration: 520, ease: 'inQuad' },
+				40
+			);
+		}
+		if (birdRig) {
+			tl.add(
+				birdRig,
+				{
+					opacity: [1, 0],
+					y: ['0px', '-140px'],
+					x: ['0px', '36px'],
+					scale: [1, 0.72],
+					duration: 620,
+					ease: 'inExpo'
+				},
+				60
+			);
+		}
+		tl.add(
+			hangEl,
+			{
+				opacity: [1, 0],
+				y: ['0px', '-180px'],
+				scale: [1, 0.78],
+				rotate: [0, -6],
+				duration: 680,
+				ease: 'inExpo'
+			},
+			80
+		);
+		tl.add(ropeEl, { opacity: [1, 0], duration: 280, ease: 'outQuad' }, 40);
+		if (veil) {
+			tl.add(veil, { opacity: [0, 1], duration: 360, ease: 'inQuad' }, 380);
+		} else {
+			tl.add(root, { opacity: [1, 0], duration: 320, ease: 'inQuad' }, 420);
+		}
+	}
+
 	/** @param {{ onBroken?: () => void, onGone?: () => void }} handlers */
 	function setSelectHandlers(handlers) {
 		selectHandlers = handlers || {};
@@ -838,8 +926,8 @@ export function createFrameSelectMotion(root, opts = {}) {
 			birdRig.style.removeProperty('opacity');
 		}
 		ropeEl.style.removeProperty('opacity');
-		root.classList.remove('physics-ready', 'confirming', 'pulling');
+		root.classList.remove('physics-ready', 'confirming', 'pulling', 'backing');
 	}
 
-	return { playSwap, playConfirm, setSelectHandlers, dispose };
+	return { playSwap, playConfirm, playBackToLanding, setSelectHandlers, dispose };
 }

@@ -67,3 +67,20 @@ export function appendCapture(dataUrl) {
 	const list = get(capturedPhotos);
 	if (!get(capturedImageData)) capturedImageData.set(list[0] ?? null);
 }
+
+/**
+ * Set or clear a capture at a slot index (retake support).
+ * Passing null truncates from that index onward.
+ * @param {number} index
+ * @param {string | null} dataUrl
+ */
+export function setCaptureAt(index, dataUrl) {
+	if (index < 0) return;
+	capturedPhotos.update((list) => {
+		const next = list.slice(0, index);
+		if (dataUrl != null) next.push(dataUrl);
+		return next;
+	});
+	const list = get(capturedPhotos);
+	capturedImageData.set(list[0] ?? null);
+}

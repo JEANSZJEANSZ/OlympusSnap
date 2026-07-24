@@ -1,4 +1,4 @@
-<section class="admin-view">
+<section class="admin-view" bind:this={rootEl} class:exiting>
 	<div class="sky-wash" aria-hidden="true"></div>
 	<div class="stars" aria-hidden="true">
 		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
@@ -304,6 +304,7 @@
 
 <script>
 	import { go } from '../router/index.js';
+	import { playViewExit } from '../lib/fx/viewExitMotion.js';
 	import {
 		frames,
 		stickers,
@@ -327,6 +328,14 @@
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import FrameSlotEditor from '../lib/components/FrameSlotEditor.svelte';
 	import FrameCropEditor from '../lib/components/FrameCropEditor.svelte';
+
+	/** @type {HTMLElement | undefined} */
+	let rootEl = $state();
+	let exiting = $state(false);
+	let reduced = $state(
+		typeof window !== 'undefined' &&
+			window.matchMedia('(prefers-reduced-motion: reduce)').matches
+	);
 
 	/**
 	 * @typedef {{ id: string; x: number; y: number; w: number; h: number }} FrameSlot
@@ -373,13 +382,16 @@
 		}
 	}
 
-	function goBack() {
+	async function goBack() {
+		if (exiting) return;
+		exiting = true;
 		unlocked = false;
 		pinInput = '';
 		pinError = '';
 		status = '';
 		frameDraft = null;
 		editorError = '';
+		await playViewExit(rootEl, { reduced, direction: 'right' });
 		go('landing');
 	}
 
