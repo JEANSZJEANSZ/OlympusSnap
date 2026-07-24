@@ -194,6 +194,18 @@
 		</div>
 	</header>
 
+	<div class="pager" aria-live="polite" aria-atomic="true">
+		<p class="pager-name">{frame?.name ?? 'NO RELIC'}</p>
+		<p class="pager-count">{pagerLabel}</p>
+		<div
+			class="pager-track"
+			role="presentation"
+			style:--pager-progress={pagerProgress}
+		>
+			<span class="pager-fill"></span>
+		</div>
+	</div>
+
 	<main class="carousel" aria-label="Frame selection">
 		<button class="nav nav-prev" type="button" onclick={prev} aria-label="Previous frame">
 			<span class="chev" aria-hidden="true"></span>
@@ -273,18 +285,6 @@
 		</button>
 	</main>
 
-	<div class="pager" aria-live="polite" aria-atomic="true">
-		<p class="pager-name">{frame?.name ?? 'NO RELIC'}</p>
-		<p class="pager-count">{pagerLabel}</p>
-		<div
-			class="pager-track"
-			role="presentation"
-			style:--pager-progress={pagerProgress}
-		>
-			<span class="pager-fill"></span>
-		</div>
-	</div>
-
 	<footer class="footer">
 		<DialogBox
 			speaker="HEPHAESTUS"
@@ -312,7 +312,7 @@
 		min-height: 100%;
 		overflow: hidden;
 		display: grid;
-		grid-template-rows: auto minmax(0, 1fr) auto auto;
+		grid-template-rows: auto auto minmax(0, 1fr) auto;
 		gap: clamp(0.25rem, 1.2vh, 0.65rem);
 		padding: clamp(0.55rem, 1.8vh, 1rem) clamp(0.75rem, 3vw, 2rem);
 		align-items: center;
@@ -670,12 +670,14 @@
 	}
 
 	.pager {
+		position: relative;
+		z-index: 4;
 		display: grid;
 		justify-items: center;
 		align-content: center;
 		gap: 0.28rem;
 		min-height: 44px;
-		padding: 0 0.75rem;
+		padding: 0.15rem 0.75rem 0.35rem;
 		text-align: center;
 	}
 
@@ -740,7 +742,7 @@
 
 	@media (max-width: 640px) {
 		.frame-view {
-			grid-template-rows: auto minmax(0, 1fr) auto auto;
+			grid-template-rows: auto auto minmax(0, 1fr) auto;
 		}
 
 		.headline p {

@@ -150,7 +150,7 @@
 
 		<FilterGallery
 			selectedId={filterPreset}
-			disabled={ritualOpen || reviewOpen || !cameraReady || exiting}
+			disabled={ritualOpen || liveSlot < 0 || !cameraReady || exiting}
 			onSelect={(id) => (filterPreset = id)}
 		/>
 	</main>
