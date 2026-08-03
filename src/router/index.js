@@ -16,7 +16,7 @@ import { routes, routesByName, routesByPath, landingRoute } from './routes.js';
 const FALLBACK = landingRoute;
 
 /** Same idea as createWebHistory("/Debug/TestDeploy3") — must match IIS app folder. */
-const HISTORY_BASE = '/Debug/TestDeploy3';
+const HISTORY_BASE = '/olympussnap';
 
 /** Empty in `npm run dev` so localhost still works; baked path for production builds. */
 const APP_BASE = import.meta.env.DEV ? '' : HISTORY_BASE.replace(/\/+$/, '');

@@ -10,7 +10,7 @@ export default defineConfig({
 			}
 		})
 	],
-	base: './',
+	base: '/olympussnap/',
 	server: {
 		https: false,
 		proxy: {
