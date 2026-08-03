@@ -107,5 +107,15 @@
 		width: 100%;
 		height: 100%;
 		touch-action: none;
+		display: grid;
+		place-items: center;
+		overflow: hidden;
+		background: transparent;
+	}
+
+	.konva-mount :global(.konvajs-content) {
+		/* Keep hit-testing aligned; stage is already sized by fitToContainer */
+		max-width: 100%;
+		max-height: 100%;
 	}
 </style>

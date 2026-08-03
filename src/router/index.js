@@ -106,15 +106,17 @@ export const route = derived(currentRoute, ($r) => $r.name);
 /**
  * Navigate by name (`frame`) or path (`/frame`).
  * @param {string} to
+ * @param {string} [search] Optional query string, e.g. `?s=uuid`
  */
-export function go(to) {
+export function go(to, search = '') {
 	const matched = resolve(to);
 	if (typeof history === 'undefined' || typeof location === 'undefined') {
 		currentRoute.set(matched);
 		return;
 	}
-	const next = toFullPath(matched.path);
-	if (normalizePath(location.pathname) !== normalizePath(next)) {
+	const next = toFullPath(matched.path) + (search || '');
+	const current = normalizePath(location.pathname) + (location.search || '');
+	if (current !== next) {
 		history.pushState(null, '', next);
 	}
 	currentRoute.set(matched);
@@ -123,11 +125,6 @@ export function go(to) {
 function syncFromLocation() {
 	const matched = matchLocation();
 	currentRoute.set(matched);
-	if (typeof location === 'undefined') return;
-	const next = toFullPath(matched.path);
-	if (normalizePath(location.pathname) !== normalizePath(next)) {
-		history.replaceState(null, '', next);
-	}
 }
 
 if (typeof window !== 'undefined') {

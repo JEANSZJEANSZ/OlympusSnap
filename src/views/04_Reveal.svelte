@@ -1,4 +1,7 @@
-<section class="gift-view booth-view">
+<section
+	class="gift-view booth-view"
+	class:handoff-pending={$imageHandoffBusy}
+>
 	<div class="sky-wash" aria-hidden="true"></div>
 	<div class="stars" aria-hidden="true">
 		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
@@ -23,19 +26,30 @@
 			onRevealed={() => (phase = 'revealed')}
 		/>
 		{#if showMarbleHint}
-			<p class="marble-hint">STRIKE THE MARBLE</p>
+			<p class="marble-hint">STRIKE THE RELIC</p>
 		{/if}
 	{/if}
 
 	<main class="stage" class:revealed={phase === 'revealed'} {@attach attachStage}>
 		<aside class="dock-column">
-			<div class="frame-dock" style:--frame-ar={frameAspect}>
+			<div
+				class="frame-dock"
+				style:--frame-ar={frameAspect}
+				style:--frame-ar-num={frameAspectNum}
+				data-reveal-handoff-target
+				bind:this={dockEl}
+			>
 				{#if forging}
 					<div class="forge">
 						<p>FORGING RELIC…</p>
 					</div>
 				{:else if giftImage}
-					<img class="frame-art" src={giftImage} alt="Your Olympus Snap portrait" />
+					<img
+						class="frame-art photo-smooth"
+						src={giftImage}
+						alt="Your Olympus Snap portrait"
+						draggable="false"
+					/>
 				{:else}
 					<div class="empty">
 						<p>NO IMAGE YET</p>
@@ -53,34 +67,37 @@
 			</header>
 
 			<aside class="qr-side">
-				<div class="qr-box pixel-panel" aria-label="QR code placeholder">
-					<svg viewBox="0 0 29 29" class="qr-svg" aria-hidden="true">
-						{#each Array(29) as _, y (y)}
-							{#each Array(29) as _, x (`${y}-${x}`)}
-								{#if (x * 7 + y * 3 + x * y) % 5 === 0 || (x < 7 && y < 7) || (x > 21 && y < 7) || (x < 7 && y > 21)}
-									<rect {x} {y} width="1" height="1" fill="currentColor" />
-								{/if}
-							{/each}
-						{/each}
-					</svg>
-				</div>
-				<p class="qr-caption">QR · DOWNLOAD LINK</p>
-				<p class="qr-note">(generator hooks in next pass)</p>
+				{#if sessionId && qrDataUrl}
+					<button
+						type="button"
+						class="qr-box pixel-panel qr-link"
+						aria-label="Open studio on this device (or scan with your phone)"
+						onclick={openStudioFromQr}
+					>
+						<img class="qr-img" src={qrDataUrl} alt="" draggable="false" />
+					</button>
+				{:else}
+					<div class="qr-box pixel-panel" aria-label="Studio QR code">
+						<p class="qr-loading">PREPARING GLYPH…</p>
+					</div>
+				{/if}
+				<p class="qr-caption">QR · SCAN OR TAP TO OPEN STUDIO</p>
 			</aside>
 
 			<DialogBox
 				speaker="MUSES"
-				text="Behold your mythic portrait! Scan the tablet glyph to claim your Olympus Snap."
+				text="Behold your mythic portrait! Scan the glyph on your phone — or tap it here to open Studio on this booth."
 				typewriter={false}
 			/>
 
 			<div class="actions">
 				<PixelButton label="NEW RITUAL" variant="gold" onclick={restart} />
 				<a
-					class="download"
+					class="download staff-fallback"
 					href={giftImage || '#'}
 					download="olympus-snap.png"
 					class:disabled={!giftImage}
+					title="Staff fallback — guests use the QR"
 				>
 					SAVE PNG
 				</a>
@@ -92,6 +109,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
+	import QRCode from 'qrcode';
 	import {
 		activeStickers,
 		capturedImageData,
@@ -100,7 +118,11 @@
 		selectedFrameId
 	} from '../lib/stores/stores.js';
 	import { go } from '../router/index.js';
-	import { compositeWithStickers } from '../lib/utils/canvasRenderer.js';
+	import {
+		buildStudioSessionUrl,
+		createSession
+	} from '../lib/session/sessionClient.js';
+	import { imageHandoffBusy } from '../lib/fx/imageHandoff.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import GiftMarbleCanvas from '../lib/components/GiftMarbleCanvas.svelte';
@@ -111,14 +133,17 @@
 
 	let forging = $state(true);
 	let giftImage = $state(/** @type {string | null} */ (null));
+	let qrDataUrl = $state(/** @type {string | null} */ (null));
+	let sessionId = $state(/** @type {string | null} */ (null));
 	let reduced = $state(false);
 	let showMarbleHint = $state(true);
-	/** Fresh seed minted when gift is ready — unique boulder every ritual */
 	let marbleSeed = $state(/** @type {number | null} */ (null));
 	/** @type {RevealPhase} */
 	let phase = $state('forging');
 	/** @type {HTMLElement | undefined} */
 	let stageEl = $state();
+	/** @type {HTMLElement | undefined} */
+	let dockEl = $state();
 	/** @type {(() => void) | null} */
 	let stopGiftMotion = null;
 	let giftMotionPlayed = false;
@@ -126,6 +151,7 @@
 	let frameNatW = $state(300);
 	let frameNatH = $state(400);
 	const frameAspect = $derived(`${frameNatW} / ${frameNatH}`);
+	const frameAspectNum = $derived(frameNatH > 0 ? frameNatW / frameNatH : 0.75);
 
 	/** @param {string | null} src */
 	function loadGiftMetrics(src) {
@@ -158,23 +184,55 @@
 		}
 	});
 
+	/**
+	 * @param {string} studioUrl
+	 */
+	async function renderQr(studioUrl) {
+		try {
+			qrDataUrl = await QRCode.toDataURL(studioUrl, {
+				margin: 1,
+				width: 280,
+				color: { dark: '#071936', light: '#fff8df' }
+			});
+		} catch (err) {
+			console.warn('[reveal] QR render failed', err);
+		}
+	}
+
 	onMount(() => {
 		reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-		if (!get(capturedImageData)) {
+		const base = get(capturedImageData);
+		if (!base) {
 			go('camera');
 			return;
 		}
 
 		let cancelled = false;
 		(async () => {
-			const base = get(capturedImageData);
-			const stickers = get(activeStickers);
-			const composited = await compositeWithStickers(base || '', stickers);
+			/* Marble uses raw booth capture — no stickers on the relic yet. */
+			activeStickers.set([]);
+			const unstickered = base;
 			if (cancelled) return;
-			finalCompositedImage.set(composited || base);
-			giftImage = composited || base;
+
+			finalCompositedImage.set(unstickered);
+			giftImage = unstickered;
 			marbleSeed = mintMarbleSeed(giftImage || undefined);
+
+			try {
+				const created = await createSession({
+					imageDataUrl: unstickered,
+					frameId: get(selectedFrameId)
+				});
+				if (!cancelled) {
+					sessionId = created.sessionId;
+					await renderQr(buildStudioSessionUrl(created.sessionId));
+				}
+			} catch (err) {
+				console.warn('[reveal] session create failed', err);
+			}
+
+			if (cancelled) return;
 			forging = false;
 			phase = reduced ? 'revealed' : 'marble';
 		})();
@@ -186,6 +244,12 @@
 		};
 	});
 
+	/** Same-device / booth test — click QR instead of scanning. */
+	function openStudioFromQr() {
+		if (!sessionId) return;
+		go('studio', `?s=${encodeURIComponent(sessionId)}`);
+	}
+
 	function restart() {
 		selectedFrameId.set(null);
 		clearCaptures();
@@ -193,6 +257,8 @@
 		finalCompositedImage.set(null);
 		clearMarbleSeed();
 		marbleSeed = null;
+		qrDataUrl = null;
+		sessionId = null;
 		go('landing');
 	}
 </script>
@@ -202,14 +268,21 @@
 		--sky-top: #071936;
 		--sky-mid: #153d69;
 		--sky-low: #be6f62;
+		--gift-pad-y: clamp(0.65rem, 1.5vh, 1rem);
+		--gift-pad-x: clamp(0.75rem, 2vw, 1.25rem);
 		position: relative;
 		isolation: isolate;
 		height: 100%;
 		min-height: 0;
 		overflow: hidden;
-		padding: clamp(0.65rem, 1.5vh, 1rem) clamp(0.75rem, 2vw, 1.25rem);
+		padding: var(--gift-pad-y) var(--gift-pad-x);
 		color: #fff8df;
 		background: var(--sky-top);
+	}
+
+	.gift-view.handoff-pending .frame-dock {
+		opacity: 0;
+		visibility: hidden;
 	}
 
 	.sky-wash {
@@ -269,7 +342,7 @@
 	.marble-hint {
 		position: fixed;
 		left: 50%;
-		bottom: clamp(1.25rem, 4vh, 2.5rem);
+		bottom: max(1.25rem, env(safe-area-inset-bottom));
 		z-index: 3;
 		transform: translateX(-50%);
 		font-size: var(--booth-text-sm);
@@ -313,12 +386,21 @@
 		align-items: center;
 		opacity: 0;
 		pointer-events: none;
-		transition: opacity 0.55s ease;
+		transition: opacity 0.5s ease;
 	}
 
 	.stage.revealed {
 		opacity: 1;
 		pointer-events: auto;
+	}
+
+	.stage:global(.fx-anime) .frame-dock,
+	.stage:global(.fx-anime) .head,
+	.stage:global(.fx-anime) .qr-side,
+	.stage:global(.fx-anime) :global(.dialog),
+	.stage:global(.fx-anime) .actions :global(.pixel-btn),
+	.stage:global(.fx-anime) .actions .download {
+		opacity: 0;
 	}
 
 	.dock-column {
@@ -334,8 +416,7 @@
 
 	.frame-dock {
 		position: relative;
-		/* Height-first like Studio/Camera — tall strips fill the dock */
-		width: min(100cqw, calc(100cqh * var(--frame-ar)), 560px);
+		width: min(100cqw, calc(100cqh * var(--frame-ar-num, 0.75)), 720px);
 		max-height: 100cqh;
 		aspect-ratio: var(--frame-ar);
 		background: transparent;
@@ -347,7 +428,9 @@
 		height: 100%;
 		object-fit: fill;
 		display: block;
-		image-rendering: auto;
+		/* Beat global img { image-rendering: pixelated } — keep photo sharp */
+		image-rendering: auto !important;
+		image-rendering: smooth !important;
 	}
 
 	.forge,
@@ -416,23 +499,57 @@
 			0 0 0 3px var(--gold),
 			0 0 0 6px var(--text),
 			6px 6px 0 var(--primary);
+		display: grid;
+		place-items: center;
 	}
 
-	.qr-svg {
+	button.qr-link {
+		border: none;
+		cursor: pointer;
+		font: inherit;
+		color: inherit;
+		transition:
+			transform 60ms steps(2),
+			box-shadow 60ms steps(2),
+			filter 80ms;
+	}
+
+	button.qr-link:hover {
+		filter: brightness(1.06);
+	}
+
+	button.qr-link:active {
+		transform: translate(3px, 3px);
+		box-shadow:
+			0 0 0 3px var(--gold),
+			0 0 0 6px var(--text),
+			3px 3px 0 var(--primary);
+	}
+
+	button.qr-link:focus-visible {
+		outline: 3px solid var(--gold-bright);
+		outline-offset: 4px;
+	}
+
+	.qr-img {
 		width: 100%;
 		height: 100%;
 		display: block;
+		image-rendering: pixelated;
+	}
+
+	.qr-loading {
+		font-size: var(--booth-text-xs);
+		color: color-mix(in srgb, #fff8df 65%, transparent);
+		text-align: center;
+		line-height: 1.5;
 	}
 
 	.qr-caption {
 		font-size: var(--booth-text-sm);
 		color: var(--gold-bright);
 		letter-spacing: 0.06em;
-	}
-
-	.qr-note {
-		font-size: var(--booth-text-xs);
-		color: color-mix(in srgb, #fff8df 55%, transparent);
+		text-align: center;
 	}
 
 	.actions {
@@ -458,6 +575,13 @@
 			transform 60ms steps(2),
 			box-shadow 60ms steps(2),
 			filter 80ms;
+	}
+
+	.download.staff-fallback {
+		opacity: 0.55;
+		font-size: var(--booth-text-xs);
+		padding: 0.65rem 1rem;
+		min-height: auto;
 	}
 
 	.download:not(.disabled):hover {
@@ -498,18 +622,153 @@
 			align-items: start;
 		}
 
-		.frame-dock {
-			width: min(78vw, calc(min(52dvh, 560px) * var(--frame-ar)));
-			max-height: min(52dvh, 560px);
-			margin: 0 auto;
+		.dock-column {
+			container-type: normal;
+			height: auto;
+			justify-content: center;
 		}
 
-		.dock-column {
-			justify-content: center;
+		.frame-dock {
+			width: min(84vw, calc(min(56dvh, 640px) * var(--frame-ar-num, 0.75)));
+			max-height: min(56dvh, 640px);
+			margin: 0 auto;
 		}
 
 		.detail-panel {
 			max-width: none;
+			align-items: center;
+		}
+
+		.head {
+			text-align: center;
+			width: 100%;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.gift-view {
+			--gift-pad-y: max(0.4rem, env(safe-area-inset-top));
+			--gift-pad-x: max(0.5rem, env(safe-area-inset-right));
+			padding:
+				var(--gift-pad-y)
+				max(0.5rem, env(safe-area-inset-right))
+				max(0.35rem, env(safe-area-inset-bottom))
+				max(0.5rem, env(safe-area-inset-left));
+			overflow: hidden;
+			touch-action: manipulation;
+		}
+
+		.marble-hint {
+			bottom: max(1.5rem, calc(env(safe-area-inset-bottom) + 0.75rem));
+			font-size: var(--booth-text-xs);
+		}
+
+		.stage.revealed {
+			display: flex;
+			flex-direction: column;
+			height: 100%;
+			min-height: 0;
+			overflow: hidden;
+			gap: 0;
+			align-items: stretch;
+		}
+
+		.dock-column {
+			flex: 0 1 auto;
+			width: 100%;
+			min-height: 0;
+			max-height: min(45dvh, 400px);
+			height: auto;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.frame-dock {
+			width: min(92vw, calc(min(42dvh, 360px) * var(--frame-ar-num, 0.75)));
+			max-height: min(42dvh, 360px);
+			margin-inline: auto;
+		}
+
+		.detail-panel {
+			flex: 1 1 auto;
+			width: 100%;
+			min-height: 0;
+			max-width: none;
+			align-items: center;
+			overflow-y: auto;
+			overflow-x: hidden;
+			overscroll-behavior: contain;
+			gap: 0.55rem;
+			padding-bottom: 0.25rem;
+		}
+
+		.head {
+			width: 100%;
+			text-align: center;
+		}
+
+		.detail-panel :global(.dialog) {
+			width: 100%;
+			text-align: left;
+		}
+
+		.qr-box {
+			width: min(72vw, 9rem);
+			height: min(72vw, 9rem);
+		}
+
+		.detail-panel :global(.dialog .body) {
+			line-height: 1.55;
+		}
+
+		.actions {
+			position: sticky;
+			bottom: 0;
+			z-index: 2;
+			display: grid;
+			grid-template-columns: 1fr;
+			gap: 0.5rem;
+			width: 100%;
+			padding:
+				0.45rem 0
+				max(0.35rem, env(safe-area-inset-bottom));
+			background: linear-gradient(180deg, transparent, #071936 30%);
+		}
+
+		.actions :global(.pixel-btn),
+		.actions .download {
+			width: 100%;
+			min-height: max(44px, var(--booth-touch));
+			justify-content: center;
+		}
+	}
+
+	@media (max-width: 640px) and (max-height: 580px) {
+		.dock-column {
+			max-height: min(36dvh, 280px);
+		}
+
+		.frame-dock {
+			width: min(88vw, calc(min(34dvh, 240px) * var(--frame-ar-num, 0.75)));
+			max-height: min(34dvh, 240px);
+		}
+
+		.head .sub {
+			display: none;
+		}
+
+		.qr-side {
+			gap: 0.35rem;
+		}
+	}
+
+	@media (max-width: 640px) and (max-height: 430px) {
+		.head .eyebrow {
+			display: none;
+		}
+
+		.head h1 {
+			font-size: var(--booth-text-sm);
 		}
 	}
 </style>

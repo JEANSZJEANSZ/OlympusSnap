@@ -38,13 +38,16 @@ const VOX = 0.057;
 const VOX_SIZE = VOX * 1.02;
 /** Ortho vertical span — keep in sync with layer.resize() */
 const VIEW_H = 2.25;
-/** Fill most of the viewport, leave margin for chrome + hint */
+/** Fill most of the viewport on landscape / booth; portrait phones use a tighter fit */
 const FIT_FRAC = 0.9;
+const FIT_FRAC_NARROW = 0.78;
 /** Rock grid height — used to fit inside VIEW_H */
 const ROCK_WORLD_H = MARBLE_H * VOX + 0.06;
+const ROCK_WORLD_W = MARBLE_W * VOX + 0.06;
 const ROCK_SCENE_SCALE = (VIEW_H * FIT_FRAC) / ROCK_WORLD_H;
 /** Nudge up so base clears the STRIKE hint */
 const ROCK_Y_BIAS = 0.08;
+const ROCK_Y_BIAS_NARROW = 0.02;
 
 /* Bayhem timeline */
 const CHARGE_DUR = 0.4;
@@ -1262,7 +1265,9 @@ export function createGiftMarbleReveal(canvas, opts = {}) {
 	const layer = makeRenderer(canvas, MARBLE_PX, true, {
 		powerPreference: 'high-performance',
 		pixelRatio: dpr,
-		imageRendering: 'auto'
+		imageRendering: 'auto',
+		/* Phone portrait aspect is often < 0.5 — don't fake a wider frustum (side-crops the rock) */
+		minAspect: 0.05
 	});
 	const { renderer, camera } = layer;
 
@@ -1272,6 +1277,11 @@ export function createGiftMarbleReveal(canvas, opts = {}) {
 	root.scale.setScalar(ROCK_SCENE_SCALE);
 	root.position.y = ROCK_Y_BIAS;
 	scene.add(root);
+
+	/** Max portrait pop during shatter — capped on narrow screens so the gift stays on-canvas */
+	let portraitPopCap = 1.1;
+	/** Shatter half separation multiplier — slightly less travel on phones */
+	let shatterSepMul = 1;
 
 	const marblePivot = new Group();
 	root.add(marblePivot);
@@ -1833,7 +1843,7 @@ export function createGiftMarbleReveal(canvas, opts = {}) {
 				}
 				const splitP = (crackT - t3) / SHATTER_DUR;
 				const e = smooth01(splitP);
-				const sep = e * 1.45;
+				const sep = e * 1.45 * shatterSepMul;
 				leftHalf.position.set(-sep, -e * 0.35 - e * e * 0.4, e * 0.15);
 				rightHalf.position.set(sep, -e * 0.28 - e * e * 0.45, -e * 0.1);
 				leftHalf.rotation.set(e * 0.35, e * 0.15, e * 0.55);
@@ -1846,10 +1856,10 @@ export function createGiftMarbleReveal(canvas, opts = {}) {
 				let popScale;
 				if (splitP < 0.8) {
 					const t = smooth01(splitP / 0.8);
-					popScale = 0.28 + t * (1.1 - 0.28);
+					popScale = 0.28 + t * (portraitPopCap - 0.28);
 				} else {
 					const t = smooth01((splitP - 0.8) / 0.2);
-					popScale = 1.1 + t * (1 - 1.1);
+					popScale = portraitPopCap + t * (1 - portraitPopCap);
 				}
 				portraitPlane.scale.setScalar(popScale);
 				rimGroup.scale.setScalar(popScale);
@@ -1911,8 +1921,8 @@ export function createGiftMarbleReveal(canvas, opts = {}) {
 			if (crackT >= t4) {
 				const ep = Math.min(1, (crackT - t4) / EXHALE_DUR);
 				const fade = smooth01(ep);
-				leftHalf.position.x = -1.45 - fade * 1.2;
-				rightHalf.position.x = 1.45 + fade * 1.2;
+				leftHalf.position.x = -1.45 * shatterSepMul - fade * 1.2;
+				rightHalf.position.x = 1.45 * shatterSepMul + fade * 1.2;
 				leftHalf.position.y = -0.75 - fade * 1.1;
 				rightHalf.position.y = -0.73 - fade * 1.2;
 				leftHalf.rotation.z = 0.55 + fade * 0.6;
@@ -1955,12 +1965,40 @@ export function createGiftMarbleReveal(canvas, opts = {}) {
 	}
 
 	const onResize = () => {
-		layer.resize(VIEW_H);
-		/* Keep photo sharp — don't force nearest-neighbor on the whole canvas */
+		const metrics = layer.resize(VIEW_H);
 		canvas.style.imageRendering = 'auto';
+		if (!metrics) return;
+
+		const { aspect, viewH, viewW } = metrics;
+		const narrow = aspect < 0.72;
+		const fit = narrow ? FIT_FRAC_NARROW : FIT_FRAC;
+		/* Contain rock in BOTH axes — height-only fit overflows tall phone viewports */
+		const scaleH = (viewH * fit) / ROCK_WORLD_H;
+		const scaleW = (viewW * fit) / ROCK_WORLD_W;
+		root.scale.setScalar(Math.min(scaleH, scaleW));
+		root.position.y = narrow ? ROCK_Y_BIAS_NARROW : ROCK_Y_BIAS;
+		portraitPopCap = narrow ? 1 : 1.1;
+		shatterSepMul = narrow ? 0.82 : 1;
 	};
+
 	onResize();
 	window.addEventListener('resize', onResize);
+
+	const resizeParent = canvas.parentElement;
+	/** @type {ResizeObserver | null} */
+	let resizeObserver = null;
+	if (typeof ResizeObserver !== 'undefined' && resizeParent) {
+		let queued = false;
+		resizeObserver = new ResizeObserver(() => {
+			if (queued) return;
+			queued = true;
+			requestAnimationFrame(() => {
+				queued = false;
+				onResize();
+			});
+		});
+		resizeObserver.observe(resizeParent);
+	}
 
 	/**
 	 * @param {PointerEvent} e
@@ -1995,6 +2033,7 @@ export function createGiftMarbleReveal(canvas, opts = {}) {
 	function dispose() {
 		cancelAnimationFrame(raf);
 		window.removeEventListener('resize', onResize);
+		resizeObserver?.disconnect();
 		canvas.removeEventListener('pointermove', onPointerMove);
 		canvas.removeEventListener('pointerdown', onPointerDown);
 		if (portraitTex) portraitTex.dispose();

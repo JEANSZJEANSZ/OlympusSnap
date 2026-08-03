@@ -39,7 +39,12 @@ export function box(parent, x, y, z, w, h, d, mat) {
  * @param {HTMLCanvasElement} canvas
  * @param {number} pxW
  * @param {boolean} alpha
- * @param {{ powerPreference?: 'low-power' | 'high-performance' | 'default', pixelRatio?: number, imageRendering?: string }} [opts]
+ * @param {{
+ *   powerPreference?: 'low-power' | 'high-performance' | 'default';
+ *   pixelRatio?: number;
+ *   imageRendering?: string;
+ *   minAspect?: number;
+ * }} [opts]
  */
 export function makeRenderer(canvas, pxW, alpha, opts = {}) {
 	const renderer = new WebGLRenderer({
@@ -55,15 +60,17 @@ export function makeRenderer(canvas, pxW, alpha, opts = {}) {
 	const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
 	camera.position.z = 10;
 	const imageRendering = opts.imageRendering ?? 'pixelated';
+	const minAspect = opts.minAspect ?? 0.5;
 
 	/**
 	 * @param {number} viewH
+	 * @returns {{ aspect: number, viewH: number, viewW: number } | undefined}
 	 */
 	function resize(viewH = 2.35) {
 		const parent = canvas.parentElement;
 		if (!parent) return;
 		const rect = parent.getBoundingClientRect();
-		const aspect = Math.max(0.5, rect.width / Math.max(1, rect.height));
+		const aspect = Math.max(minAspect, rect.width / Math.max(1, rect.height));
 		const w = pxW;
 		const h = Math.max(90, Math.round(pxW / aspect));
 		renderer.setSize(w, h, false);
@@ -77,6 +84,7 @@ export function makeRenderer(canvas, pxW, alpha, opts = {}) {
 		camera.top = viewH / 2;
 		camera.bottom = -viewH / 2;
 		camera.updateProjectionMatrix();
+		return { aspect, viewH, viewW };
 	}
 
 	return { renderer, camera, resize };

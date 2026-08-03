@@ -6,8 +6,8 @@
 import Landing from "../views/01_Landing.svelte";
 import FrameSelect from "../views/02_FrameSelect.svelte";
 import Camera from "../views/03_Camera.svelte";
-import Studio from "../views/04_Studio.svelte";
-import Reveal from "../views/05_Reveal.svelte";
+import Studio from "../views/05_Studio.svelte";
+import Reveal from "../views/04_Reveal.svelte";
 import Admin from "../views/07_Admin.svelte";
 
 /** @typedef {{ path: string, name: string, component: import('svelte').Component }} AppRoute */
