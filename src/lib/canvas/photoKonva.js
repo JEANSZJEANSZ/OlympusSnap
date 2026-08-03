@@ -2,6 +2,8 @@
  * Booth photo filters — CSS live preview + matching CSS capture bake.
  */
 
+import { loadImageForCanvas as loadImage } from '../utils/loadImageForCanvas.js';
+
 /** @typedef {'natural' | 'softGlow' | 'warmGolden' | 'coolMarble' | 'blackWhite' | 'highContrast' | 'sepiaVintage' | 'pastelDream' | 'dramatic' | 'olympusGold'} FilterPresetId */
 
 /**
@@ -71,19 +73,6 @@ export function getPresetById(id) {
 export function getCssFilter(id) {
 	const f = getPresetById(id).cssFilter;
 	return f === 'none' ? '' : f;
-}
-
-/**
- * @param {string} src
- * @returns {Promise<HTMLImageElement>}
- */
-function loadImage(src) {
-	return new Promise((resolve, reject) => {
-		const img = new Image();
-		img.onload = () => resolve(img);
-		img.onerror = () => reject(new Error('Filter image load failed'));
-		img.src = src;
-	});
 }
 
 /**

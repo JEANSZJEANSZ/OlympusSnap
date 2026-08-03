@@ -1,3 +1,16 @@
+# =============================================================================
+# Olympus Snap — gitignore
+#
+# COMMIT these (not listed here):
+#   - All source under src/, public/, docs/, worker/src/, worker/migrations/
+#   - Config templates: .env.example, worker/.dev.vars.example
+#   - Worker deploy config: worker/wrangler.toml, worker/package.json,
+#     worker/package-lock.json
+#   - Root package.json, package-lock.json, vite.config.js, index.html, etc.
+#
+# NEVER COMMIT secrets or local-only files (listed below).
+# =============================================================================
+
 # Logs
 logs
 *.log
@@ -7,25 +20,29 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies & build output (reinstall / rebuild locally)
 node_modules
 dist
 dist-ssr
-*.local
+build
+dist-ssr
 
-# Graphify / local tooling
+# Graphify / local tooling caches (regenerated)
 graphify-out
 .impeccable
 .svelte-kit
 .output
-build
 
-# Env
+# Env secrets — commit .env.example only (see negation below)
 .env
 .env.*
 !.env.example
 !.env.test
 
-# Editor
+# Vite local overrides
+*.local
+
+# Editor / OS noise
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -35,13 +52,11 @@ build
 *.njsproj
 *.sln
 *.sw?
-
-# OS
 Thumbs.db
 
-# Vite
+# Vite temp
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Playwright
+# Playwright artifacts
 test-results

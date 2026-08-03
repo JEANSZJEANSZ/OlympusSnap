@@ -2,7 +2,7 @@
 
 One-time image handoff from booth PC → guest phone for mobile Studio (`/studio?s={sessionId}`).
 
-**Status:** Design only — production deploy not wired yet. The frontend uses `src/lib/session/sessionStub.js` (localStorage, same-origin dev) until this API replaces it.
+**Status:** Implemented — see [`cloudflare-backend.md`](./cloudflare-backend.md) for deploy steps. Frontend uses Worker when `VITE_API_BASE` is set; otherwise `sessionStub.js` + IndexedDB.
 
 ---
 

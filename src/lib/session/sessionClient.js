@@ -1,18 +1,47 @@
 /**
- * Booth → phone session handoff. Stub today; swap transport for Cloudflare Workers + R2.
+ * Booth → phone session handoff. Cloudflare Workers + R2 when configured; stub otherwise.
  */
 import { toFullPath } from '../../router/index.js';
+import {
+	blobToDataUrl,
+	boothHeaders,
+	getApiBase,
+	stripDataUrl
+} from '../assets/assetApi.js';
 import { stubCreateSession, stubConsumeSession } from './sessionStub.js';
 
 /** @typedef {'NOT_FOUND' | 'CONSUMED' | 'NETWORK'} SessionErrorCode */
+
+function useCloud() {
+	return !!getApiBase();
+}
 
 /**
  * @param {{ imageDataUrl: string; frameId: string | null }} payload
  * @returns {Promise<{ sessionId: string }>}
  */
 export async function createSession(payload) {
-	// Future: POST /api/sessions with imageBase64 + frameId
-	return stubCreateSession(payload);
+	if (!useCloud()) {
+		return stubCreateSession(payload);
+	}
+
+	const res = await fetch(`${getApiBase()}/api/sessions`, {
+		method: 'POST',
+		headers: boothHeaders({ 'Content-Type': 'application/json' }),
+		body: JSON.stringify({
+			imageBase64: stripDataUrl(payload.imageDataUrl),
+			frameId: payload.frameId,
+			contentType: 'image/png'
+		})
+	});
+
+	if (!res.ok) {
+		const err = new Error('Session create failed');
+		err.code = 'NETWORK';
+		throw err;
+	}
+
+	return res.json();
 }
 
 /**
@@ -26,8 +55,34 @@ export async function consumeSession(sessionId) {
 		err.code = 'NOT_FOUND';
 		throw err;
 	}
-	// Future: GET /api/sessions/:id
-	return stubConsumeSession(sessionId.trim());
+
+	const id = sessionId.trim();
+
+	if (!useCloud()) {
+		return stubConsumeSession(id);
+	}
+
+	const res = await fetch(`${getApiBase()}/api/sessions/${encodeURIComponent(id)}`);
+
+	if (res.status === 410) {
+		const err = new Error('Session already used');
+		err.code = 'CONSUMED';
+		throw err;
+	}
+	if (!res.ok) {
+		const err = new Error('Session not found');
+		err.code = 'NOT_FOUND';
+		throw err;
+	}
+
+	const frameId = res.headers.get('X-Frame-Id');
+	const blob = await res.blob();
+	const imageDataUrl = await blobToDataUrl(blob);
+
+	return {
+		imageDataUrl,
+		frameId: frameId || null
+	};
 }
 
 /**

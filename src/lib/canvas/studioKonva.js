@@ -3,6 +3,7 @@
  * Inspired by https://konvajs.org/docs/sandbox/Canvas_Editor.html
  */
 import Konva from 'konva';
+import { loadImageForCanvas as loadImage } from '../utils/loadImageForCanvas.js';
 
 export const STICKER_BASE = 64;
 const MIN_SCALE = 0.35;
@@ -58,19 +59,6 @@ function applyStickerToNode(node, sticker) {
 	node.x(sticker.x + size / 2);
 	node.y(sticker.y + size / 2);
 	node.rotation(sticker.rotation ?? 0);
-}
-
-/**
- * @param {string} src
- * @returns {Promise<HTMLImageElement>}
- */
-function loadImage(src) {
-	return new Promise((resolve, reject) => {
-		const img = new Image();
-		img.onload = () => resolve(img);
-		img.onerror = () => reject(new Error('Sticker image load failed'));
-		img.src = src;
-	});
 }
 
 /** Fixed screen-pixel chrome — Konva Transformer ignores parent stage scale by design. */

@@ -11,7 +11,11 @@
 		<header class="head">
 			<p class="eyebrow">HEPHAESTUS FORGE · LOCAL RELICS · CART 01</p>
 			<h1>ADMIN ARMORY</h1>
-			<p class="tagline">Forge frames & stickers for this booth — sealed in the tablet’s vault.</p>
+			<p class="tagline">
+				Forge frames & stickers for this booth — {cloudEnabled
+					? 'synced to the cloud forge'
+					: 'sealed in the tablet’s vault'}.
+			</p>
 		</header>
 
 		{#if !unlocked}
@@ -135,10 +139,16 @@
 				</div>
 			{:else}
 				<div class="upload forge-panel">
-					<p class="panel-kicker">ADD {tab === 'frames' ? 'FRAME' : 'STICKER'}</p>
+					<p class="panel-kicker">ADD {tab === 'frames' ? 'FRAME' : 'STICKERS'}</p>
 					<label class="field">
 						<span>Name</span>
-						<input type="text" bind:value={uploadName} placeholder="Display name" />
+						<input
+							type="text"
+							bind:value={uploadName}
+							placeholder={tab === 'stickers'
+								? 'Optional — single upload only'
+								: 'Display name'}
+						/>
 					</label>
 					{#if tab === 'frames'}
 						<label class="field">
@@ -150,11 +160,12 @@
 						bind:this={fileInput}
 						type="file"
 						accept="image/png,.png"
+						multiple={tab === 'stickers'}
 						hidden
 						onchange={onFileChosen}
 					/>
 					<PixelButton
-						label={busy ? 'WAIT…' : 'CHOOSE IMAGE'}
+						label={busy ? 'WAIT…' : tab === 'stickers' ? 'CHOOSE IMAGES' : 'CHOOSE IMAGE'}
 						variant="accent"
 						fullWidth
 						disabled={busy}
@@ -282,6 +293,14 @@
 			</div>
 
 			<div class="footer-actions">
+				{#if cloudEnabled}
+					<PixelButton
+						label="UPLOAD LOCAL → CLOUD"
+						variant="ghost"
+						disabled={busy}
+						onclick={onUploadLocalToCloud}
+					/>
+				{/if}
 				<PixelButton label="EXPORT JSON" variant="ghost" disabled={busy} onclick={onExport} />
 				<label class="import-btn">
 					IMPORT JSON
@@ -295,8 +314,10 @@
 				<PixelButton label="EXIT ADMIN" variant="primary" onclick={goBack} />
 			</div>
 			<p class="hint">
-				Seeds = shipped defaults (read-only). Customs live in this tablet’s IndexedDB. Seed toggles
-				persist on this device and travel with EXPORT/IMPORT.
+				Seeds = shipped defaults (read-only). Customs live in {cloudEnabled
+					? 'Cloudflare R2 + D1 when VITE_API_BASE is set'
+					: 'this tablet’s IndexedDB'}. Seed toggles persist on this device and travel with
+				EXPORT/IMPORT.
 			</p>
 		{/if}
 	</div>
@@ -313,11 +334,13 @@
 		setShowSeedFrames,
 		setShowSeedStickers,
 		addFrame,
-		addSticker,
+		addStickers,
 		updateAsset,
 		removeCustomAsset,
 		exportCatalog,
 		importCatalog,
+		uploadLocalCustomsToCloud,
+		isCloudAssetsEnabled,
 		verifyAdminPin,
 		getAdminPin,
 		setAdminPin,
@@ -494,19 +517,20 @@
 	/** @param {Event} e */
 	async function onFileChosen(e) {
 		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
-		const file = input.files?.[0];
+		const files = Array.from(input.files ?? []);
 		input.value = '';
-		if (!file) return;
+		if (!files.length) return;
 
-		if (!isPngFile(file)) {
-			status = 'Frames and stickers must be PNG with transparency.';
-			return;
-		}
+		if (tab === 'frames') {
+			const file = files[0];
+			if (!isPngFile(file)) {
+				status = 'Frames and stickers must be PNG with transparency.';
+				return;
+			}
 
-		busy = true;
-		status = tab === 'frames' ? 'Loading frame…' : 'Uploading…';
-		try {
-			if (tab === 'frames') {
+			busy = true;
+			status = 'Loading frame…';
+			try {
 				const src = await fileToDataUrl(file);
 				editorError = '';
 				frameDraft = {
@@ -518,14 +542,39 @@
 					slots: []
 				};
 				status = 'Crop your frame, then place photo canvases.';
-			} else {
-				await addSticker({
-					name: uploadName || file.name.replace(/\.[^.]+$/, ''),
-					file
-				});
-				status = 'Sticker added.';
-				uploadName = '';
+			} catch (err) {
+				status = err instanceof Error ? err.message : 'Upload failed';
+			} finally {
+				busy = false;
 			}
+			return;
+		}
+
+		const valid = files.filter((file) => isPngFile(file));
+		const skipped = files.length - valid.length;
+		if (!valid.length) {
+			status = 'Stickers must be PNG with transparency.';
+			return;
+		}
+
+		busy = true;
+		status = valid.length > 1 ? `Uploading ${valid.length} stickers…` : 'Uploading…';
+		try {
+			const items = valid.map((file) => ({
+				name:
+					valid.length === 1 && uploadName.trim()
+						? uploadName.trim()
+						: file.name.replace(/\.[^.]+$/, ''),
+				file
+			}));
+			await addStickers(items);
+			status =
+				skipped > 0
+					? `Added ${valid.length} sticker(s). ${skipped} skipped (not PNG).`
+					: valid.length > 1
+						? `Added ${valid.length} stickers.`
+						: 'Sticker added.';
+			uploadName = '';
 		} catch (err) {
 			status = err instanceof Error ? err.message : 'Upload failed';
 		} finally {
@@ -622,7 +671,21 @@
 		status = 'PIN updated.';
 	}
 
+	const cloudEnabled = isCloudAssetsEnabled();
 	const list = $derived(tab === 'frames' ? $frames : $stickers);
+
+	async function onUploadLocalToCloud() {
+		if (!confirm('Upload IndexedDB customs to cloud? Skips ids already in R2.')) return;
+		busy = true;
+		try {
+			const { uploaded, skipped } = await uploadLocalCustomsToCloud();
+			status = `Cloud sync: ${uploaded} uploaded, ${skipped} skipped.`;
+		} catch (err) {
+			status = err instanceof Error ? err.message : 'Cloud upload failed';
+		} finally {
+			busy = false;
+		}
+	}
 </script>
 
 <style>
