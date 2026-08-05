@@ -8,6 +8,7 @@
 	import { beginFrameHandoff } from '../lib/fx/frameHandoff.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
+	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 
 	let index = $state(0);
 	let reduced = $state(false);
@@ -177,12 +178,7 @@
 </script>
 
 <section class="frame-view" class:exiting {@attach attachRoot}>
-	<div class="sky-wash" aria-hidden="true"></div>
-	<div class="stars" aria-hidden="true">
-		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-	</div>
-	<div class="mountains mountains-far" aria-hidden="true"></div>
-	<div class="mountains mountains-near" aria-hidden="true"></div>
+	<BoothOlympusBackdrop />
 	<div class="back-veil" aria-hidden="true"></div>
 
 	<header class="head">
@@ -332,7 +328,7 @@
 		transition: opacity 280ms steps(4);
 	}
 
-	.frame-view.exiting:not(.backing) .sky-wash {
+	.frame-view.exiting:not(.backing) :global(.booth-olympus) {
 		filter: brightness(0.72);
 		transition: filter 320ms steps(4);
 	}
@@ -348,62 +344,9 @@
 			linear-gradient(180deg, #071936 0%, #0d2748 55%, #1a3a5c 100%);
 	}
 
-	.sky-wash {
-		position: absolute;
-		inset: 0;
-		z-index: -4;
-		background:
-			linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 18%),
-			linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 58%, var(--sky-low) 130%);
-	}
-
-	.stars {
-		position: absolute;
-		inset: 0;
-		z-index: -3;
-		pointer-events: none;
-	}
-
-	.stars i {
-		position: absolute;
-		width: 3px;
-		height: 3px;
-		background: #fff4bd;
-		box-shadow: 3px 0 #fff4bd, 0 3px #fff4bd, 3px 3px #fff4bd;
-	}
-
-	.stars i:nth-child(1) { left: 8%; top: 15%; }
-	.stars i:nth-child(2) { left: 21%; top: 34%; transform: scale(0.65); }
-	.stars i:nth-child(3) { left: 36%; top: 12%; transform: scale(0.7); }
-	.stars i:nth-child(4) { right: 36%; top: 23%; }
-	.stars i:nth-child(5) { right: 21%; top: 11%; transform: scale(0.6); }
-	.stars i:nth-child(6) { right: 8%; top: 29%; transform: scale(0.8); }
-	.stars i:nth-child(7) { right: 14%; top: 51%; transform: scale(0.55); }
-
-	.mountains {
-		position: absolute;
-		right: -5%;
-		bottom: -1px;
-		left: -5%;
-		z-index: -2;
-		height: 46%;
-		clip-path: polygon(0 72%, 8% 48%, 15% 62%, 25% 25%, 36% 58%, 47% 35%, 58% 67%, 70% 30%, 80% 56%, 91% 22%, 100% 61%, 100% 100%, 0 100%);
-		background: #102f56;
-	}
-
-	.mountains-far {
-		bottom: 6%;
-		opacity: 0.78;
-		background: #31577a;
-	}
-
-	.mountains-near {
-		z-index: -1;
-		height: 35%;
-		clip-path: polygon(0 62%, 13% 37%, 24% 71%, 39% 27%, 52% 65%, 67% 38%, 81% 74%, 93% 40%, 100% 58%, 100% 100%, 0 100%);
-	}
-
 	.head {
+		position: relative;
+		z-index: 1;
 		width: min(100%, 760px);
 		margin: 0 auto;
 		text-align: center;
@@ -724,6 +667,8 @@
 	}
 
 	.footer {
+		position: relative;
+		z-index: 1;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		gap: clamp(0.45rem, 1.6vw, 0.9rem);

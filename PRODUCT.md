@@ -2,40 +2,34 @@
 
 ## Register
 
-brand
+product
 
 ## Users
 
-Event guests at a physical booth (shared tablet / kiosk). They arrive mid-party, often in a short queue, and want a quick fun photo souvenir with their group. Arms-reach tablet use: one person drives the flow while others pose. Throughput and clarity matter as much as spectacle.
+Event guests on a shared tablet / kiosk cart. They arrive in a social, noisy setting with little patience for instructions — they want to pose, decorate, and leave with a souvenir. Operators (long-press brand → PIN) manage frames and stickers so the booth stays stocked without guests ever seeing admin.
 
 ## Product Purpose
 
-Olympus Snap is a web-based interactive photobooth that turns a booth visit into a short mythic arcade ritual: enter Olympus, pick a frame, pose to a typed challenge, decorate with pixel stickers, crack open a marble seal, and take home your snap via QR. Success is a completed, shareable photo in a few minutes — and a memory that feels like a mini-game, not a form.
+Olympus Snap is a web photobooth that turns a short photo session into an old-school 16-bit game ritual: enter Mount Olympus, pick a frame, snap, sticker up in the studio, reveal, take it home. Success is guests feeling like they played something — fun, immersive, mythic arcade — not that they used a camera app. The flow already works; design exists to deepen that game-like immersion without adding friction.
 
 ## Brand Personality
 
-fun · playful · arcade
+Mythic · playful · arcade.
 
-Voice: cheeky RPG prompts, mythic flavor without solemnity. The theme is Greek marble meets 16-bit pixel art — Olympus as a game cartridge, not a museum.
-
-Primary register is brand (the fantasy *is* the experience), with a hybrid surface map:
-- Brand-heavy: landing hook, marble reveal, Olympus Snap export
-- Product-clear: frame selection, camera pose, sticker studio
+Voice is oracle-cheeky and pixel-era (dialog boxes, temple stagecraft, countdown drama). Emotion: delight and immersion — “we’re in a game,” not “we’re filling out a form.”
 
 ## Anti-references
 
-- Classical Bootstrap web: default blue links, rounded cards, generic navbars, “container + grid of equal cards,” soft SaaS chrome
-- Serious Classical / museum sites (revere, don’t play)
-- Soft modern SaaS photobooth UIs (blurred glass, pill buttons, purple gradients)
+Typical SaaS photobooth UIs found on the open web: clean dashboards, rounded card grids, stock gradients, generic “smile!” chrome, startup-landing CTAs. If it could be re-skinned as any event-tech SaaS, it’s wrong.
 
 ## Design Principles
 
-1. **Ritual with a clock** — Every theatrical beat must still leave a guest photo-ready within a few minutes; spectacle never blocks the next step.
-2. **Arcade clarity on tool screens** — Frame, camera, and studio prioritize one obvious action and big targets; mythology sets the mood, not the instructions.
-3. **Peak at the crack** — The marble shatter and QR gift are the emotional payoff; earlier steps set up that moment.
-4. **Myth as game cartridge** — Pixel UI, hard edges, and RPG dialogue carry the Greek motif; never slide into classical web elegance.
-5. **Shared-tablet first** — Design for arm’s-reach, one driver, group posing; assume noisy environment and short attention.
+1. **Play the booth, don’t operate a tool** — Every screen should feel like a game stage or ritual beat; utility is hidden inside play.
+2. **Mythic arcade, not museum CG** — Greek myth as 16-bit stagecraft (marble pixels, oracles, flashes), not photoreal temples or casino gold.
+3. **One clear next action** — Guests should always know the single tap/gesture that advances the session.
+4. **Spectacle earns its keep** — Animation and set pieces serve immersion and payoff; they never block completing a snap.
+5. **Operators stay invisible** — Admin and asset management must not leak into the guest fantasy.
 
 ## Accessibility & Inclusion
 
-No hard event requirements. Prefer practical booth defaults: large hit targets, readable high-contrast UI copy, and a reduced-motion path for pulse / shatter when `prefers-reduced-motion` is set (crossfade instead of crack explosion). WCAG AA as a soft baseline where it doesn’t fight the pixel aesthetic.
+No mandated WCAG level. Anyone may use the booth (guests of mixed ages/abilities on a shared tablet), so keep large touch targets, readable contrast, and clear labels where they don’t undermine the arcade fantasy. Motion is a core product goal: the experience is intentionally animation-heavy; `prefers-reduced-motion` is not a design priority for this product. Prefer graceful degradation only when motion would break usability (e.g. stuck waits), not a parallel static aesthetic.

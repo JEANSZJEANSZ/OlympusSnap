@@ -2,12 +2,7 @@
 	class="gift-view booth-view"
 	class:handoff-pending={$imageHandoffBusy}
 >
-	<div class="sky-wash" aria-hidden="true"></div>
-	<div class="stars" aria-hidden="true">
-		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-	</div>
-	<div class="mountains mountains-far" aria-hidden="true"></div>
-	<div class="mountains mountains-near" aria-hidden="true"></div>
+	<BoothOlympusBackdrop />
 
 	{#if phase === 'forging'}
 		<div class="forge-overlay">
@@ -126,6 +121,7 @@
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import GiftMarbleCanvas from '../lib/components/GiftMarbleCanvas.svelte';
+	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 	import { playRevealGiftMotion } from '../lib/fx/revealGiftMotion.js';
 	import { clearMarbleSeed, mintMarbleSeed } from '../lib/fx/marbleSeed.js';
 
@@ -283,60 +279,6 @@
 	.gift-view.handoff-pending .frame-dock {
 		opacity: 0;
 		visibility: hidden;
-	}
-
-	.sky-wash {
-		position: absolute;
-		inset: 0;
-		z-index: -4;
-		background:
-			linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 18%),
-			linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 58%, var(--sky-low) 130%);
-	}
-
-	.stars {
-		position: absolute;
-		inset: 0;
-		z-index: -3;
-		pointer-events: none;
-	}
-
-	.stars i {
-		position: absolute;
-		width: 3px;
-		height: 3px;
-		background: #fff4bd;
-		box-shadow: 3px 0 #fff4bd, 0 3px #fff4bd, 3px 3px #fff4bd;
-	}
-
-	.stars i:nth-child(1) { left: 8%; top: 15%; }
-	.stars i:nth-child(2) { left: 21%; top: 34%; transform: scale(0.65); }
-	.stars i:nth-child(3) { left: 36%; top: 12%; transform: scale(0.7); }
-	.stars i:nth-child(4) { right: 36%; top: 23%; }
-	.stars i:nth-child(5) { right: 21%; top: 11%; transform: scale(0.6); }
-	.stars i:nth-child(6) { right: 8%; top: 29%; transform: scale(0.8); }
-	.stars i:nth-child(7) { right: 14%; top: 51%; transform: scale(0.55); }
-
-	.mountains {
-		position: absolute;
-		right: 0;
-		bottom: 0;
-		left: 0;
-		z-index: -2;
-		height: 46%;
-		clip-path: polygon(0 72%, 8% 48%, 15% 62%, 25% 25%, 36% 58%, 47% 35%, 58% 67%, 70% 30%, 80% 56%, 91% 22%, 100% 61%, 100% 100%, 0 100%);
-		background: #102f56;
-	}
-
-	.mountains-far {
-		opacity: 0.55;
-		filter: brightness(0.85);
-	}
-
-	.mountains-near {
-		height: 38%;
-		background: #31577a;
-		clip-path: polygon(0 100%, 0 68%, 12% 52%, 22% 72%, 34% 40%, 48% 64%, 60% 34%, 72% 58%, 84% 28%, 100% 55%, 100% 100%);
 	}
 
 	.marble-hint {

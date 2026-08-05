@@ -202,22 +202,18 @@
 		animation: none;
 	}
 
-	/*
-	 * Soft floor wash only — a top radial + soft-light blend was painting a
-	 * visible rectangular plate over the sun/moon (the "ugly aura box").
-	 */
+	/* Hard floor shade — keeps 16-bit stage readable under the plaque */
 	.light-veil {
 		position: absolute;
 		inset: 0;
 		z-index: 2;
 		pointer-events: none;
-		opacity: 0.5;
-		background: radial-gradient(
-			ellipse 90% 42% at 50% 110%,
-			color-mix(in srgb, #1a4a72 38%, transparent),
-			transparent 72%
+		opacity: 0.35;
+		background: linear-gradient(
+			to top,
+			color-mix(in srgb, #071936 55%, transparent) 0%,
+			transparent 38%
 		);
-		mix-blend-mode: multiply;
 	}
 
 	.exit-flash {
@@ -254,10 +250,6 @@
 		);
 		transform-origin: center;
 		will-change: transform, opacity;
-	}
-
-	.landing:not(.fx-anime):not(.reduced) .light-veil {
-		animation: veil-breathe 8s ease-in-out infinite;
 	}
 
 	.stage {

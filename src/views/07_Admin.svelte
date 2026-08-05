@@ -1,10 +1,5 @@
 <section class="admin-view" bind:this={rootEl} class:exiting>
-	<div class="sky-wash" aria-hidden="true"></div>
-	<div class="stars" aria-hidden="true">
-		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-	</div>
-	<div class="mountains mountains-far" aria-hidden="true"></div>
-	<div class="mountains mountains-near" aria-hidden="true"></div>
+	<BoothOlympusBackdrop />
 	<div class="forge-glow" aria-hidden="true"></div>
 
 	<div class="content">
@@ -349,6 +344,7 @@
 	} from '../lib/assets/assetStore.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
+	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 	import FrameSlotEditor from '../lib/components/FrameSlotEditor.svelte';
 	import FrameCropEditor from '../lib/components/FrameCropEditor.svelte';
 
@@ -705,130 +701,11 @@
 		background: var(--sky-top);
 	}
 
-	.sky-wash {
-		position: absolute;
-		inset: 0;
-		z-index: -4;
-		background:
-			linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 18%),
-			linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 55%, var(--sky-low) 140%);
-		pointer-events: none;
-	}
-
-	.stars {
-		position: absolute;
-		inset: 0;
-		z-index: -3;
-		pointer-events: none;
-	}
-
-	.stars i {
-		position: absolute;
-		width: 3px;
-		height: 3px;
-		background: #fff4bd;
-		box-shadow:
-			3px 0 #fff4bd,
-			0 3px #fff4bd,
-			3px 3px #fff4bd;
-		animation: star-twinkle 2.8s steps(2) infinite;
-	}
-
-	.stars i:nth-child(1) {
-		left: 8%;
-		top: 12%;
-	}
-	.stars i:nth-child(2) {
-		left: 22%;
-		top: 28%;
-		transform: scale(0.65);
-		animation-delay: 0.4s;
-	}
-	.stars i:nth-child(3) {
-		left: 38%;
-		top: 9%;
-		transform: scale(0.7);
-		animation-delay: 1.1s;
-	}
-	.stars i:nth-child(4) {
-		right: 34%;
-		top: 18%;
-		animation-delay: 0.7s;
-	}
-	.stars i:nth-child(5) {
-		right: 18%;
-		top: 8%;
-		transform: scale(0.6);
-		animation-delay: 1.6s;
-	}
-	.stars i:nth-child(6) {
-		right: 7%;
-		top: 26%;
-		transform: scale(0.8);
-		animation-delay: 0.2s;
-	}
-	.stars i:nth-child(7) {
-		right: 12%;
-		top: 42%;
-		transform: scale(0.55);
-		animation-delay: 2s;
-	}
-
-	.mountains {
-		position: absolute;
-		right: -5%;
-		bottom: -1px;
-		left: -5%;
-		z-index: -2;
-		height: 38%;
-		clip-path: polygon(
-			0 72%,
-			8% 48%,
-			15% 62%,
-			25% 25%,
-			36% 58%,
-			47% 35%,
-			58% 67%,
-			70% 30%,
-			80% 56%,
-			91% 22%,
-			100% 61%,
-			100% 100%,
-			0 100%
-		);
-		background: #102f56;
-		pointer-events: none;
-	}
-
-	.mountains-far {
-		bottom: 5%;
-		opacity: 0.78;
-		background: #31577a;
-	}
-
-	.mountains-near {
-		z-index: -1;
-		height: 28%;
-		clip-path: polygon(
-			0 62%,
-			13% 37%,
-			24% 71%,
-			39% 27%,
-			52% 65%,
-			67% 38%,
-			81% 74%,
-			93% 40%,
-			100% 58%,
-			100% 100%,
-			0 100%
-		);
-	}
-
 	.forge-glow {
 		position: absolute;
 		left: 50%;
 		bottom: 0;
-		z-index: -1;
+		z-index: 1;
 		width: min(90%, 640px);
 		height: 28%;
 		translate: -50% 0;
@@ -843,7 +720,7 @@
 
 	.content {
 		position: relative;
-		z-index: 1;
+		z-index: 2;
 		display: flex;
 		flex-direction: column;
 		gap: 0.95rem;
@@ -1254,16 +1131,6 @@
 		opacity: 0.9;
 	}
 
-	@keyframes star-twinkle {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.35;
-		}
-	}
-
 	@keyframes forge-breathe {
 		from {
 			opacity: 0.55;
@@ -1309,7 +1176,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.stars i,
 		.forge-glow,
 		.content,
 		.forge-panel,
