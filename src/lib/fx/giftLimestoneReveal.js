@@ -62,9 +62,10 @@ const PLAQUE_FACE_H = PLAQUE_H * 0.82;
 /** Portrait bloom — full framed composite, larger than plaque face slot */
 const PORTRAIT_MAX_W = 2.0;
 const PORTRAIT_MAX_H = 2.5;
-const INSCRIPTION_ROWS = 4;
+const INSCRIPTION_ROWS = 8;
 const INSCRIPTION_LETTER_GAP = 2;
-const INSCRIPTION_WORD_GAP = 7;
+const INSCRIPTION_WORD_GAP_MIN = 4;
+const INSCRIPTION_WORD_GAP_MAX = 11;
 const PLAQUE_WORLD_W = PLAQUE_W;
 const PLAQUE_WORLD_H = PLAQUE_H;
 const PLAQUE_WORLD_D = PLAQUE_D;
@@ -366,7 +367,7 @@ const RUIN_MARK_KEYS = Object.keys(RUIN_MARKS);
  * @param {number} [texW]
  * @param {number} [texH]
  */
-function makePlaqueFaceTexture(rand, outline, crackPath, scriptRand = rand, texW = 192, texH = 144) {
+function makePlaqueFaceTexture(rand, outline, crackPath, scriptRand = rand, texW = 320, texH = 240) {
 	const cvs = document.createElement('canvas');
 	cvs.width = texW;
 	cvs.height = texH;
@@ -421,9 +422,9 @@ function makePlaqueFaceTexture(rand, outline, crackPath, scriptRand = rand, texW
 		}
 	}
 
-	/* Inner frame recess */
-	const padX = Math.round(texW * 0.1);
-	const padY = Math.round(texH * 0.14);
+	/* Inner frame recess — tighter inset leaves more room for carved lines */
+	const padX = Math.round(texW * 0.07);
+	const padY = Math.round(texH * 0.09);
 	ctx.fillStyle = 'rgba(120,110,98,0.55)';
 	ctx.fillRect(padX, padY, texW - padX * 2, 1);
 	ctx.fillRect(padX, texH - padY - 1, texW - padX * 2, 1);
@@ -435,7 +436,7 @@ function makePlaqueFaceTexture(rand, outline, crackPath, scriptRand = rand, texW
 	ctx.fillRect(padX + 2, padY + 2, 1, texH - padY * 2 - 4);
 	ctx.fillRect(texW - padX - 3, padY + 2, 1, texH - padY * 2 - 4);
 
-	/* Seeded ruin inscription — abstract marks, not readable letters */
+	/* Seeded ruin inscription — dense carved lines like weathered scripture */
 	drawRuinInscription(ctx, scriptRand, crackPath, padX, padY, texW, texH);
 
 	/* Jagged crack — dark seam + highlight lip + micro branches */
@@ -579,7 +580,7 @@ function drawIncisedMark(ctx, cx, cy, halfW, halfH, strokes, wear) {
 }
 
 /**
- * Pack seeded word groups into one inscription column (strict grid, justified).
+ * Pack one loose, hand-carved line — uneven words, jitter, no justification.
  * @param {CanvasRenderingContext2D} ctx
  * @param {() => number} rand
  * @param {number} x0
@@ -589,52 +590,58 @@ function drawIncisedMark(ctx, cx, cy, halfW, halfH, strokes, wear) {
  * @param {number} halfW
  * @param {number} halfH
  * @param {number} row
+ * @param {{
+ *   minWordLen?: number;
+ *   maxWordLen?: number;
+ *   lineFill?: number;
+ * }} [opts]
  */
-function layoutColumnMarks(ctx, rand, x0, x1, cy, markW, halfW, halfH, row) {
+function layoutColumnMarks(ctx, rand, x0, x1, cy, markW, halfW, halfH, row, opts = {}) {
 	const colW = x1 - x0;
-	if (colW < markW + 4) return;
+	if (colW < markW + 8) return;
 
-	const letterStep = markW + INSCRIPTION_LETTER_GAP;
-	/** @type {number[]} */
-	const wordLens = [];
-	let used = 0;
+	const minWordLen = opts.minWordLen ?? 2;
+	const maxWordLen = opts.maxWordLen ?? 6;
+	const lineFill = opts.lineFill ?? 0.62 + rand() * 0.32;
+	const lineEnd = x0 + colW * lineFill;
+	const lineCy = cy + Math.round((rand() - 0.5) * markW * 0.55);
+	const letterStepBase = markW + INSCRIPTION_LETTER_GAP;
 
-	while (used < colW * 0.92) {
-		const wl = 2 + ((rand() * 3) | 0);
-		const wordW = wl * letterStep - INSCRIPTION_LETTER_GAP;
-		const gap = wordLens.length > 0 ? INSCRIPTION_WORD_GAP : 0;
-		if (used + gap + wordW > colW) break;
-		wordLens.push(wl);
-		used += gap + wordW;
-	}
+	let cursor = x0 + Math.round(rand() * markW * (0.9 + rand() * 0.8));
 
-	if (wordLens.length === 0) {
-		const wl = Math.max(1, (colW / letterStep) | 0);
-		wordLens.push(wl);
-		used = wl * letterStep - INSCRIPTION_LETTER_GAP;
-	}
+	while (cursor < lineEnd - markW) {
+		const wl =
+			minWordLen +
+			((rand() * (maxWordLen - minWordLen + 1)) | 0);
 
-	const gapBonus =
-		wordLens.length > 1 ? Math.max(0, colW - used) / (wordLens.length - 1) : 0;
-	const contentW = used + gapBonus * Math.max(0, wordLens.length - 1);
-	let cursor = x0 + Math.max(0, (colW - contentW) * 0.5);
+		for (let mi = 0; mi < wl; mi++) {
+			if (cursor > lineEnd) break;
+			if (rand() < 0.06) {
+				cursor += letterStepBase * (0.65 + rand() * 0.55);
+				continue;
+			}
 
-	for (let wi = 0; wi < wordLens.length; wi++) {
-		if (wi > 0) cursor += INSCRIPTION_WORD_GAP + gapBonus;
-		for (let mi = 0; mi < wordLens[wi]; mi++) {
-			const cx = Math.round(cursor + halfW);
-			cursor += letterStep;
+			const letterStep = letterStepBase * (0.82 + rand() * 0.38);
+			const scale = 0.86 + rand() * 0.32;
+			const cx = Math.round(cursor + halfW + (rand() - 0.5) * 3.5);
+			const jcy = lineCy + Math.round((rand() - 0.5) * 3);
 			const key = RUIN_MARK_KEYS[(rand() * RUIN_MARK_KEYS.length) | 0];
 			const strokes = RUIN_MARKS[key];
-			let wear = Math.min(0.85, row * 0.12 + rand() * 0.28);
-			if (rand() < 0.06) wear = Math.min(0.9, wear + 0.35);
-			drawIncisedMark(ctx, cx, cy, halfW, halfH, strokes, wear);
+			let wear = Math.min(0.82, row * 0.07 + rand() * 0.32);
+			if (rand() < 0.11) wear = Math.min(0.92, wear + 0.28 + rand() * 0.2);
+
+			drawIncisedMark(ctx, cx, jcy, halfW * scale, halfH * scale, strokes, wear);
+			cursor += letterStep;
 		}
+
+		cursor += INSCRIPTION_WORD_GAP_MIN + rand() * (INSCRIPTION_WORD_GAP_MAX - INSCRIPTION_WORD_GAP_MIN);
+		if (rand() < 0.14) cursor += 3 + rand() * 8;
+		if (rand() < 0.07) break;
 	}
 }
 
 /**
- * Seeded rows of abstract ruin marks — two columns flanking the crack.
+ * Seeded carved lines — big loose marks, uneven rows, columns split by the crack.
  * @param {CanvasRenderingContext2D} ctx
  * @param {() => number} rand
  * @param {Vector2[]} crackPath
@@ -645,28 +652,71 @@ function layoutColumnMarks(ctx, rand, x0, x1, cy, markW, halfW, halfH, row) {
  */
 function drawRuinInscription(ctx, rand, crackPath, padX, padY, texW, texH) {
 	const innerH = texH - padY * 2;
-	const rowH = innerH / (INSCRIPTION_ROWS + 0.35);
-	const markH = Math.max(6, Math.min(11, (rowH * 0.58) | 0));
-	const markW = Math.max(5, (markH * 0.75) | 0);
+	const rowH = innerH / (INSCRIPTION_ROWS + 0.32);
+	const markH = Math.max(9, Math.min(13, (rowH * 0.64) | 0));
+	const markW = Math.max(7, (markH * 0.76) | 0);
 	const halfH = markH * 0.5;
 	const halfW = markW * 0.5;
-	const crackMargin = markW * 0.85;
+	const crackMargin = markW * (0.35 + rand() * 0.35);
+	const fullX0 = padX + 2;
+	const fullX1 = texW - padX - 2;
 
 	for (let row = 0; row < INSCRIPTION_ROWS; row++) {
-		const cy = Math.round(padY + rowH * (row + 0.7));
+		if (rand() < 0.035) continue;
+
+		const rowDrift = (rand() - 0.5) * rowH * 0.32;
+		const cy = Math.round(padY + rowH * (row + 0.5) + rowDrift);
 		const wy = (0.5 - cy / texH) * PLAQUE_H;
 		const crackTx = worldToTex(sampleCrackX(crackPath, wy), wy, texW, texH).x;
 
-		const leftX0 = padX + 2;
-		const leftX1 = crackTx - crackMargin;
-		const rightX0 = crackTx + crackMargin;
-		const rightX1 = texW - padX - 2;
+		const leftX0 = fullX0 + Math.round(rand() * markW * 0.55);
+		const leftX1 = crackTx - crackMargin - Math.round(rand() * markW * 0.25);
+		const rightX0 = crackTx + crackMargin + Math.round(rand() * markW * 0.25);
+		const rightX1 = fullX1 - Math.round(rand() * markW * 0.55);
 
-		if (leftX1 > leftX0 + markW) {
-			layoutColumnMarks(ctx, rand, leftX0, leftX1, cy, markW, halfW, halfH, row);
+		const lineOpts = {
+			minWordLen: 2 + ((rand() * 2) | 0),
+			maxWordLen: 5 + ((rand() * 4) | 0),
+			lineFill: 0.58 + rand() * 0.36
+		};
+
+		if (rand() < 0.16) {
+			layoutColumnMarks(ctx, rand, fullX0 + Math.round(rand() * markW), fullX1, cy, markW, halfW, halfH, row, {
+				...lineOpts,
+				lineFill: 0.64 + rand() * 0.32,
+				maxWordLen: 6 + ((rand() * 3) | 0)
+			});
+			continue;
 		}
-		if (rightX1 > rightX0 + markW) {
-			layoutColumnMarks(ctx, rand, rightX0, rightX1, cy, markW, halfW, halfH, row);
+
+		if (leftX1 > leftX0 + markW * 2) {
+			layoutColumnMarks(ctx, rand, leftX0, leftX1, cy, markW, halfW, halfH, row, lineOpts);
+		}
+		if (rightX1 > rightX0 + markW * 2) {
+			layoutColumnMarks(ctx, rand, rightX0, rightX1, cy, markW, halfW, halfH, row, {
+				...lineOpts,
+				lineFill: lineOpts.lineFill * (0.82 + rand() * 0.28)
+			});
+		}
+
+		/* Occasional staggered continuation — extra scribble below the main line */
+		if (rand() < 0.22) {
+			layoutColumnMarks(
+				ctx,
+				rand,
+				leftX0 + Math.round(rand() * markW),
+				rightX1 - Math.round(rand() * markW),
+				cy + Math.round(markH * (0.72 + rand() * 0.35)),
+				Math.max(7, markW - 1),
+				halfW * 0.92,
+				halfH * 0.92,
+				row,
+				{
+					minWordLen: 2,
+					maxWordLen: 4 + ((rand() * 3) | 0),
+					lineFill: 0.42 + rand() * 0.38
+				}
+			);
 		}
 	}
 }
