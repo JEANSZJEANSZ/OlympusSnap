@@ -36,6 +36,69 @@ export function box(parent, x, y, z, w, h, d, mat) {
 }
 
 /**
+ * Cover-fit pixel canvases to a host (crop on portrait, no stretch).
+ * Bottom-anchored so cloud/ground art meets the viewport edge — no dead band.
+ * @param {HTMLElement} el
+ * @param {HTMLElement} host
+ * @param {number} bitmapW
+ * @param {number} bitmapH
+ * @param {number} [pad]
+ */
+export function applyCoverFitCanvas(el, host, bitmapW, bitmapH, pad = 1.08) {
+	const cw = host.clientWidth;
+	const ch = host.clientHeight;
+	if (cw < 1 || ch < 1) return;
+	const bitmapAr = bitmapW / bitmapH;
+	const viewAr = cw / ch;
+	let dw;
+	let dh;
+	if (viewAr > bitmapAr) {
+		dw = cw * pad;
+		dh = dw / bitmapAr;
+	} else {
+		dh = ch * pad;
+		dw = dh * bitmapAr;
+	}
+	el.style.position = 'absolute';
+	el.style.left = '50%';
+	el.style.bottom = '0';
+	el.style.top = 'auto';
+	el.style.width = `${dw}px`;
+	el.style.height = `${dh}px`;
+	el.style.transform = 'translateX(-50%)';
+}
+
+/**
+ * Fill host 1:1 — bitmap matches CSS pixels (sharp photos, no upscale blur).
+ * @param {HTMLElement} el
+ */
+export function applyFillCanvas(el) {
+	el.style.position = 'absolute';
+	el.style.left = '0';
+	el.style.top = '0';
+	el.style.width = '100%';
+	el.style.height = '100%';
+	el.style.transform = 'none';
+}
+
+/**
+ * @param {HTMLElement[]} elements
+ * @param {HTMLElement} host
+ * @param {number} bitmapW
+ * @param {number} bitmapH
+ * @param {number} [pad]
+ */
+export function observeCoverFit(elements, host, bitmapW, bitmapH, pad = 1.08) {
+	const fit = () => {
+		for (const el of elements) applyCoverFitCanvas(el, host, bitmapW, bitmapH, pad);
+	};
+	const ro = new ResizeObserver(fit);
+	ro.observe(host);
+	fit();
+	return () => ro.disconnect();
+}
+
+/**
  * @param {HTMLCanvasElement} canvas
  * @param {number} pxW
  * @param {boolean} alpha
@@ -60,23 +123,39 @@ export function makeRenderer(canvas, pxW, alpha, opts = {}) {
 	const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
 	camera.position.z = 10;
 	const imageRendering = opts.imageRendering ?? 'pixelated';
-	const minAspect = opts.minAspect ?? 0.5;
+	let currentPxW = pxW;
+	/** @type {'cover' | 'fill'} */
+	let layoutMode = 'cover';
+
+	/** @param {number} w */
+	function setRenderWidth(w) {
+		currentPxW = Math.max(90, Math.round(w));
+	}
+
+	/** @param {'cover' | 'fill'} mode */
+	function setLayoutMode(mode) {
+		layoutMode = mode;
+	}
 
 	/**
 	 * @param {number} viewH
-	 * @returns {{ aspect: number, viewH: number, viewW: number } | undefined}
+	 * @returns {{ aspect: number, viewH: number, viewW: number, bitmapW: number, bitmapH: number } | undefined}
 	 */
 	function resize(viewH = 2.35) {
 		const parent = canvas.parentElement;
 		if (!parent) return;
 		const rect = parent.getBoundingClientRect();
-		const aspect = Math.max(minAspect, rect.width / Math.max(1, rect.height));
-		const w = pxW;
-		const h = Math.max(90, Math.round(pxW / aspect));
+		if (rect.width < 1 || rect.height < 1) return;
+		const aspect = rect.width / Math.max(1, rect.height);
+		const w = currentPxW;
+		const h = Math.max(90, Math.round(w / aspect));
 		renderer.setSize(w, h, false);
-		canvas.style.width = '100%';
-		canvas.style.height = '100%';
 		canvas.style.imageRendering = imageRendering;
+		if (layoutMode === 'fill') {
+			applyFillCanvas(canvas);
+		} else {
+			applyCoverFitCanvas(canvas, parent, w, h);
+		}
 
 		const viewW = viewH * (w / h);
 		camera.left = -viewW / 2;
@@ -84,10 +163,10 @@ export function makeRenderer(canvas, pxW, alpha, opts = {}) {
 		camera.top = viewH / 2;
 		camera.bottom = -viewH / 2;
 		camera.updateProjectionMatrix();
-		return { aspect, viewH, viewW };
+		return { aspect, viewH, viewW, bitmapW: w, bitmapH: h };
 	}
 
-	return { renderer, camera, resize };
+	return { renderer, camera, resize, setRenderWidth, setLayoutMode };
 }
 
 /**

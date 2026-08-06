@@ -60,14 +60,6 @@ export function mintMarbleSeed(portraitUrl = '') {
 	return seed;
 }
 
-/**
- * @deprecated Prefer mintMarbleSeed on each marble enter — cached seeds look “static”.
- * @param {string} [portraitUrl]
- */
-export function resolveMarbleSeed(portraitUrl = '') {
-	return mintMarbleSeed(portraitUrl);
-}
-
 /** Drop seed so the next ritual gets a new boulder. */
 export function clearMarbleSeed() {
 	try {

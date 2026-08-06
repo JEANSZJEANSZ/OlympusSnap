@@ -1,13 +1,48 @@
 /**
- * HD-pixel Olympus sky — Stardew density, ImageData + cached sprites (fast).
+ * Hybrid Olympus sky — smooth CSS sky wash + pixel canvas mountains/clouds/celestials.
  * Day clock unchanged; temple/hero stay in olympusTemple.js.
  */
 import { Color } from 'three';
 import { DRIFT_HALF, createDayClock, sampleKey, wrapDrift } from './dayCycle.js';
+import { observeCoverFit, applyCoverFitCanvas } from './pixelShared.js';
 
-/** Balanced density: crisp when upscaled, cheap to paint */
+/** Canvas layer matches hero framing; CSS backdrop is full-bleed */
 const PX_W = 480;
 const PX_H = 270;
+
+const SKY_CSS = `
+.olympus-sky {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	z-index: 0;
+	pointer-events: none;
+	background: #071936;
+}
+.olympus-sky .sky-css-wash {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	will-change: background;
+}
+.olympus-sky .sky-canvas {
+	position: absolute;
+	left: 50%;
+	bottom: 0;
+	top: auto;
+	image-rendering: pixelated;
+	image-rendering: crisp-edges;
+}
+.olympus-sky .sky-terrain {
+	z-index: 1;
+}
+.olympus-sky .sky-celestial {
+	z-index: 2;
+}
+.olympus-sky .sky-clouds {
+	z-index: 3;
+}
+`;
 
 const BAYER8 = [
 	[0, 32, 8, 40, 2, 34, 10, 42],
@@ -19,40 +54,6 @@ const BAYER8 = [
 	[15, 47, 7, 39, 13, 45, 5, 37],
 	[63, 31, 55, 23, 61, 29, 53, 21]
 ];
-
-const SKY_CSS = `
-.olympus-sky {
-	position: absolute;
-	inset: 0;
-	overflow: hidden;
-	z-index: 0;
-	pointer-events: none;
-	background: #040a14;
-}
-.olympus-sky .sky-canvas {
-	position: absolute;
-	inset: 0;
-	width: 100%;
-	height: 100%;
-	image-rendering: pixelated;
-	image-rendering: crisp-edges;
-}
-.olympus-sky .sky-clouds {
-	z-index: 1;
-}
-.olympus-sky .sky-scan {
-	position: absolute;
-	inset: 0;
-	pointer-events: none;
-	z-index: 2;
-	background: repeating-linear-gradient(
-		0deg,
-		transparent 0 3px,
-		rgba(15, 23, 42, 0.06) 3px 4px
-	);
-	opacity: 0.3;
-}
-`;
 
 const MTN_LOOP = {
 	far: [
@@ -143,14 +144,13 @@ const _cA = new Color();
 const _cB = new Color();
 const _cO = new Color();
 
-/** Little-endian RGBA packed for ImageData */
 function packRgb(r, g, b, a = 255) {
 	return (a << 24) | (b << 16) | (g << 8) | r;
 }
 
 /**
  * @param {string} css
- * @returns {number} packed RGBA
+ * @returns {number}
  */
 function cssToPacked(css) {
 	_cA.set(css);
@@ -161,8 +161,8 @@ function cssToPacked(css) {
 }
 
 /**
- * @param {number} pa packed
- * @param {number} pb packed
+ * @param {number} pa
+ * @param {number} pb
  * @param {number} t
  */
 function mixPacked(pa, pb, t) {
@@ -193,38 +193,15 @@ function mixCss(a, b, t) {
 	return `#${_cO.getHexString()}`;
 }
 
-/**
- * @param {string} zenith
- * @param {string} horizon
- * @param {number} bands
- * @returns {number[]} packed colors
- */
-function skyBandsPacked(zenith, horizon, bands = 14) {
-	_cA.set(zenith);
-	_cB.set(horizon);
-	/** @type {number[]} */
-	const out = [];
-	for (let i = 0; i < bands; i++) {
-		const t = i / (bands - 1);
-		const u = t * t * (3 - 2 * t);
-		_cO.copy(_cA).lerp(_cB, u);
-		const r = Math.round(Math.round(_cO.r * 48) / 48 * 255);
-		const g = Math.round(Math.round(_cO.g * 48) / 48 * 255);
-		const b = Math.round(Math.round(_cO.b * 48) / 48 * 255);
-		out.push(packRgb(r, g, b, 255));
-	}
-	return out;
-}
-
 function celestialToPx(xy) {
 	return {
-		x: (PX_W * 0.5 + (xy.x / 2.85) * (PX_W * 0.46) + 0.5) | 0,
-		y: (PX_H * 0.7 - xy.y * (PX_H * 0.5) + 0.5) | 0
+		x: PX_W * 0.5 + (xy.x / 2.85) * (PX_W * 0.46),
+		y: PX_H * 0.7 - xy.y * (PX_H * 0.5)
 	};
 }
 
 function driftToPx(driftX) {
-	return (PX_W * 0.5 + (driftX / DRIFT_HALF) * (PX_W * 0.72) + 0.5) | 0;
+	return PX_W * 0.5 + (driftX / DRIFT_HALF) * (PX_W * 0.72);
 }
 
 /**
@@ -254,6 +231,65 @@ function buildRidge(seed, base, peak) {
 }
 
 /**
+ * @param {Uint32Array} buf
+ * @param {number[]} ridge
+ * @param {number} shift
+ * @param {{ hi: number, mid: number, low: number, base: number, leeHi: number, leeMid: number, leeLow: number, leeBase: number, snow: number, tree: number, snowAmt: number, peakH: number, withTrees: boolean }} pal
+ */
+function rasterRidge(buf, ridge, shift, pal) {
+	const snowCut = pal.peakH * 0.8;
+	const treeLo = pal.peakH * 0.16;
+	for (let x = 0; x < PX_W; x++) {
+		const sx = (x + shift + PX_W * 40) % PX_W;
+		const h = ridge[sx];
+		const prev = ridge[(sx - 1 + PX_W) % PX_W];
+		const next = ridge[(sx + 1) % PX_W];
+		const top = PX_H - h;
+		if (top >= PX_H) continue;
+		const lee = h < prev - 2;
+		const cHi = lee ? pal.leeHi : pal.hi;
+		const cMid = lee ? pal.leeMid : pal.mid;
+		const cLow = lee ? pal.leeLow : pal.low;
+		const cBase = lee ? pal.leeBase : pal.base;
+		const yB = top + ((h * 0.12) | 0);
+		const yC = top + ((h * 0.35) | 0);
+		const yD = top + ((h * 0.65) | 0);
+
+		for (let y = top; y < PX_H; y++) {
+			let col = cBase;
+			if (y < yB) col = cHi;
+			else if (y < yC) col = cMid;
+			else if (y < yD) col = cLow;
+			if (y >= yB - 1 && y <= yB + 1) col = BAYER8[y & 7][x & 7] > 32 ? cMid : cHi;
+			else if (y >= yC - 1 && y <= yC + 1) col = BAYER8[y & 7][x & 7] > 32 ? cLow : cMid;
+			else if (y >= yD - 1 && y <= yD + 1) col = BAYER8[y & 7][x & 7] > 32 ? cBase : cLow;
+			buf[y * PX_W + x] = col;
+		}
+
+		if (pal.withTrees && h > treeLo && h < snowCut * 0.86) {
+			const hash = (sx * 17 + 31) % 14;
+			if (hash < 2) {
+				const th = 4 + (hash % 3);
+				for (let i = 0; i < th; i++) {
+					const yy = top - th + i;
+					if (yy >= 0 && yy < PX_H) buf[yy * PX_W + x] = pal.tree;
+				}
+			}
+		}
+
+		if (pal.snowAmt < 0.06 || h < snowCut) continue;
+		const localMax = h >= prev - 1 && h >= next - 1;
+		if (!localMax && h < pal.peakH * 0.92) continue;
+		const capH = h > pal.peakH * 0.92 ? 4 : 2;
+		for (let i = 0; i < capH; i++) {
+			if (i > 1 && BAYER8[(top + i) & 7][x & 7] > 40) continue;
+			const yy = top + i;
+			if (yy >= 0 && yy < PX_H) buf[yy * PX_W + x] = pal.snow;
+		}
+	}
+}
+
+/**
  * @param {CanvasRenderingContext2D} ctx
  * @param {number} cx
  * @param {number} cy
@@ -272,7 +308,6 @@ function fillCircle(ctx, cx, cy, r) {
 }
 
 /**
- * Bake a cloud sprite once (neutral gray tones → recolored via canvas filter-free blit + cache per day bucket).
  * @param {number} kind
  * @param {string} shade
  * @param {string} body
@@ -367,7 +402,6 @@ function bakeMoon() {
 	g.fillStyle = '#6a7a90';
 	g.fillRect(cx - 1, cy - 2, 2, 2);
 	g.fillRect(cx + 2, cy + 1, 3, 2);
-	/* crescent punch with transparent */
 	g.globalCompositeOperation = 'destination-out';
 	fillCircle(g, cx - 5, cy, 6);
 	g.globalCompositeOperation = 'source-over';
@@ -375,64 +409,29 @@ function bakeMoon() {
 }
 
 /**
- * Rasterize ridge into packed buffer (overwrites opaque pixels).
- * @param {Uint32Array} buf
- * @param {number[]} ridge
- * @param {number} shift
- * @param {{ hi: number, mid: number, low: number, base: number, leeHi: number, leeMid: number, leeLow: number, leeBase: number, snow: number, tree: number, snowAmt: number, peakH: number, withTrees: boolean }} pal
+ * @param {HTMLElement} root
  */
-function rasterRidge(buf, ridge, shift, pal) {
-	const snowCut = pal.peakH * 0.8;
-	const treeLo = pal.peakH * 0.16;
-	for (let x = 0; x < PX_W; x++) {
-		const sx = (x + shift + PX_W * 40) % PX_W;
-		const h = ridge[sx];
-		const prev = ridge[(sx - 1 + PX_W) % PX_W];
-		const next = ridge[(sx + 1) % PX_W];
-		const top = PX_H - h;
-		if (top >= PX_H) continue;
-		const lee = h < prev - 2;
-		const cHi = lee ? pal.leeHi : pal.hi;
-		const cMid = lee ? pal.leeMid : pal.mid;
-		const cLow = lee ? pal.leeLow : pal.low;
-		const cBase = lee ? pal.leeBase : pal.base;
-		const yB = top + ((h * 0.12) | 0);
-		const yC = top + ((h * 0.35) | 0);
-		const yD = top + ((h * 0.65) | 0);
+function buildCssSky(root) {
+	const wash = document.createElement('div');
+	wash.className = 'sky-css-wash';
+	root.appendChild(wash);
+	return wash;
+}
 
-		for (let y = top; y < PX_H; y++) {
-			let col = cBase;
-			if (y < yB) col = cHi;
-			else if (y < yC) col = cMid;
-			else if (y < yD) col = cLow;
-			/* dither only near seams */
-			if (y >= yB - 1 && y <= yB + 1) col = BAYER8[y & 7][x & 7] > 32 ? cMid : cHi;
-			else if (y >= yC - 1 && y <= yC + 1) col = BAYER8[y & 7][x & 7] > 32 ? cLow : cMid;
-			else if (y >= yD - 1 && y <= yD + 1) col = BAYER8[y & 7][x & 7] > 32 ? cBase : cLow;
-			buf[y * PX_W + x] = col;
-		}
+/**
+ * @param {HTMLElement} wash
+ * @param {ReturnType<typeof import('./dayCycle.js').sampleDay>} s
+ */
+function applyCssSky(wash, s) {
+	const mid = mixCss(s.zenith, s.horizon, 0.44);
+	const warm = mixCss(s.horizon, '#fff8df', 0.28 + s.dayAmt * 0.22);
+	const glowPct = Math.round((0.1 + s.dayAmt * 0.42) * 100);
+	const glowY = 16 + s.dayAmt * 12;
 
-		if (pal.withTrees && h > treeLo && h < snowCut * 0.86) {
-			const hash = (sx * 17 + 31) % 14;
-			if (hash < 2) {
-				const th = 4 + (hash % 3);
-				for (let i = 0; i < th; i++) {
-					const yy = top - th + i;
-					if (yy >= 0 && yy < PX_H) buf[yy * PX_W + x] = pal.tree;
-				}
-			}
-		}
-
-		if (pal.snowAmt < 0.06 || h < snowCut) continue;
-		const localMax = h >= prev - 1 && h >= next - 1;
-		if (!localMax && h < pal.peakH * 0.92) continue;
-		const capH = h > pal.peakH * 0.92 ? 4 : 2;
-		for (let i = 0; i < capH; i++) {
-			if (i > 1 && BAYER8[(top + i) & 7][x & 7] > 40) continue;
-			const yy = top + i;
-			if (yy >= 0 && yy < PX_H) buf[yy * PX_W + x] = pal.snow;
-		}
-	}
+	wash.style.background = [
+		`radial-gradient(ellipse 92% 56% at 50% ${glowY}%, color-mix(in srgb, ${warm} ${glowPct}%, transparent), transparent 64%)`,
+		`linear-gradient(180deg, ${s.zenith} 0%, ${mid} 44%, ${s.horizon} 100%)`
+	].join(', ');
 }
 
 /**
@@ -454,12 +453,21 @@ export function createOlympusSky(root, opts = {}) {
 	root.setAttribute('aria-hidden', 'true');
 	root.innerHTML = '';
 
-	const canvas = document.createElement('canvas');
-	canvas.className = 'sky-canvas';
-	canvas.width = PX_W;
-	canvas.height = PX_H;
-	canvas.setAttribute('aria-hidden', 'true');
-	root.appendChild(canvas);
+	const cssWash = buildCssSky(root);
+
+	const terrainCanvas = document.createElement('canvas');
+	terrainCanvas.className = 'sky-canvas sky-terrain';
+	terrainCanvas.width = PX_W;
+	terrainCanvas.height = PX_H;
+	terrainCanvas.setAttribute('aria-hidden', 'true');
+	root.appendChild(terrainCanvas);
+
+	const celestialCanvas = document.createElement('canvas');
+	celestialCanvas.className = 'sky-canvas sky-celestial';
+	celestialCanvas.width = PX_W;
+	celestialCanvas.height = PX_H;
+	celestialCanvas.setAttribute('aria-hidden', 'true');
+	root.appendChild(celestialCanvas);
 
 	const cloudCanvas = document.createElement('canvas');
 	cloudCanvas.className = 'sky-canvas sky-clouds';
@@ -468,13 +476,10 @@ export function createOlympusSky(root, opts = {}) {
 	cloudCanvas.setAttribute('aria-hidden', 'true');
 	root.appendChild(cloudCanvas);
 
-	const scan = document.createElement('div');
-	scan.className = 'sky-scan';
-	root.appendChild(scan);
-
-	const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+	const terrainCtx = terrainCanvas.getContext('2d', { alpha: true, desynchronized: true });
+	const celestialCtx = celestialCanvas.getContext('2d', { alpha: true, desynchronized: true });
 	const cloudCtx = cloudCanvas.getContext('2d', { alpha: true, desynchronized: true });
-	if (!ctx || !cloudCtx) {
+	if (!terrainCtx || !celestialCtx || !cloudCtx) {
 		return {
 			setDay() {},
 			nudgeDay() {},
@@ -488,11 +493,14 @@ export function createOlympusSky(root, opts = {}) {
 			}
 		};
 	}
-	ctx.imageSmoothingEnabled = false;
+	terrainCtx.imageSmoothingEnabled = false;
+	celestialCtx.imageSmoothingEnabled = false;
 	cloudCtx.imageSmoothingEnabled = false;
 
-	const image = ctx.createImageData(PX_W, PX_H);
-	const buf = new Uint32Array(image.data.buffer);
+	const stopCoverFit = observeCoverFit([terrainCanvas, celestialCanvas, cloudCanvas], root, PX_W, PX_H);
+
+	const terrainImage = terrainCtx.createImageData(PX_W, PX_H);
+	const terrainBuf = new Uint32Array(terrainImage.data.buffer);
 
 	/** @type {{ x: number, y: number, kind: number, bright: number, tw: number, twSpeed: number }[]} */
 	const stars = [];
@@ -545,7 +553,6 @@ export function createOlympusSky(root, opts = {}) {
 		const lit = mixCss(tint, '#ffffff', 0.42);
 		list = [0, 1, 2, 3, 4].map((k) => bakeCloud(k, shade, tint, lit));
 		cloudCache.set(key, list);
-		/* Keep cache small */
 		if (cloudCache.size > 24) {
 			const first = cloudCache.keys().next().value;
 			if (first !== undefined) cloudCache.delete(first);
@@ -560,35 +567,18 @@ export function createOlympusSky(root, opts = {}) {
 	let scrubDrift = 0;
 	let frame = 0;
 
-	/** Dirty keys — rebuild ImageData only when these change */
 	let lastDayQ = -1;
 	let lastPar = -999;
 	let lastStarPhase = -1;
 
 	/**
+	 * Pixel mountains + stars on a transparent canvas (sky is CSS underneath).
 	 * @param {ReturnType<typeof import('./dayCycle.js').sampleDay>} s
 	 * @param {number} parX
 	 * @param {number} starPhase
 	 */
-	function paintBackdrop(s, parX, starPhase) {
-		const bands = skyBandsPacked(s.zenith, s.horizon, 14);
-		const bandH = Math.ceil(PX_H / bands.length);
-
-		for (let i = 0; i < bands.length; i++) {
-			const y0 = i * bandH;
-			const y1 = Math.min(PX_H, y0 + bandH);
-			const a = bands[i];
-			const b = bands[Math.min(i + 1, bands.length - 1)];
-			for (let y = y0; y < y1; y++) {
-				const row = y * PX_W;
-				const inBlend = i < bands.length - 1 && y >= y1 - 8;
-				const thresh = inBlend ? ((y1 - y) / 8) * 64 : -1;
-				for (let x = 0; x < PX_W; x++) {
-					buf[row + x] =
-						thresh >= 0 && BAYER8[y & 7][x & 7] < thresh ? b : a;
-				}
-			}
-		}
+	function paintTerrain(s, parX, starPhase) {
+		terrainBuf.fill(0);
 
 		const gate = 0.08 + s.nightAmt * 0.92;
 		const WHITE = packRgb(255, 255, 255, 255);
@@ -603,14 +593,14 @@ export function createOlympusSky(root, opts = {}) {
 				const px = star.x + (((mx - 0.5) * -4) | 0);
 				const py = star.y + (((my - 0.5) * -2) | 0);
 				if (px < 1 || px >= PX_W - 1 || py < 1 || py >= PX_H - 1) continue;
-				buf[py * PX_W + px] = WHITE;
+				terrainBuf[py * PX_W + px] = WHITE;
 				if (star.kind >= 1) {
-					buf[py * PX_W + px - 1] = WHITE;
-					buf[py * PX_W + px + 1] = WHITE;
-					buf[(py - 1) * PX_W + px] = WHITE;
-					buf[(py + 1) * PX_W + px] = WHITE;
+					terrainBuf[py * PX_W + px - 1] = WHITE;
+					terrainBuf[py * PX_W + px + 1] = WHITE;
+					terrainBuf[(py - 1) * PX_W + px] = WHITE;
+					terrainBuf[(py + 1) * PX_W + px] = WHITE;
 				}
-				if (star.kind >= 2) buf[py * PX_W + px] = STAR;
+				if (star.kind >= 2) terrainBuf[py * PX_W + px] = STAR;
 			}
 		}
 
@@ -652,32 +642,36 @@ export function createOlympusSky(root, opts = {}) {
 		const midFill = sampleKey(MTN_LOOP.mid, s.day, 'c');
 		const nearFill = sampleKey(MTN_LOOP.near, s.day, 'c');
 
-		rasterRidge(buf, ridgeFar, (parX * -8) | 0, palFor(farFill, peakFar, false, 0.28));
-		rasterRidge(buf, ridgeMid, (parX * -5) | 0, {
+		rasterRidge(terrainBuf, ridgeFar, (parX * -8) | 0, palFor(farFill, peakFar, false, 0.28));
+		rasterRidge(terrainBuf, ridgeMid, (parX * -5) | 0, {
 			...palFor(midFill, peakMid, true, 0.32),
 			snowAmt
 		});
-		rasterRidge(buf, ridgeNear, (parX * -2) | 0, {
+		rasterRidge(terrainBuf, ridgeNear, (parX * -2) | 0, {
 			...palFor(nearFill, peakNear, true, 0.38),
 			snowAmt: snowAmt * 0.9
 		});
 
-		ctx.putImageData(image, 0, 0);
+		terrainCtx.putImageData(terrainImage, 0, 0);
+	}
 
-		/* Celestials — cached sprites */
+	/**
+	 * @param {ReturnType<typeof import('./dayCycle.js').sampleDay>} s
+	 */
+	function paintCelestials(s) {
+		celestialCtx.clearRect(0, 0, PX_W, PX_H);
 		if (s.showSun && s.sunFade > 0.01) {
 			const p = celestialToPx(s.sunXY);
 			const spr = s.dayAmt > 0.55 ? sunDay : sunDawn;
-			ctx.globalAlpha = Math.min(1, s.sunFade);
-			ctx.drawImage(spr, p.x - 22, p.y - 22);
-			ctx.globalAlpha = 1;
+			celestialCtx.globalAlpha = Math.min(1, s.sunFade);
+			celestialCtx.drawImage(spr, p.x - 22, p.y - 22);
 		}
 		if (s.showMoon && s.moonFade > 0.01) {
 			const p = celestialToPx(s.moonXY);
-			ctx.globalAlpha = Math.min(1, s.moonFade);
-			ctx.drawImage(moonSpr, p.x - 14, p.y - 14);
-			ctx.globalAlpha = 1;
+			celestialCtx.globalAlpha = Math.min(1, s.moonFade);
+			celestialCtx.drawImage(moonSpr, p.x - 14, p.y - 14);
 		}
+		celestialCtx.globalAlpha = 1;
 	}
 
 	/**
@@ -694,8 +688,8 @@ export function createOlympusSky(root, opts = {}) {
 				? def.x
 				: wrapDrift(def.x + elapsed * def.speed + scrubDrift, DRIFT_HALF);
 			const cx = driftToPx(x);
-			const bob = reduced ? 0 : (Math.sin(elapsed * 0.32 + def.x) * 2) | 0;
-			const cy = ((def.y / 100) * PX_H) | 0;
+			const bob = reduced ? 0 : Math.sin(elapsed * 0.32 + def.x) * 2;
+			const cy = (def.y / 100) * PX_H;
 			const spr = sprites[def.kind];
 			cloudCtx.drawImage(spr.canvas, cx - spr.ox, cy + bob - spr.oy);
 		}
@@ -718,7 +712,11 @@ export function createOlympusSky(root, opts = {}) {
 			mx = x;
 			my = y;
 		},
-		resize() {},
+		resize() {
+			applyCoverFitCanvas(terrainCanvas, root, PX_W, PX_H);
+			applyCoverFitCanvas(celestialCanvas, root, PX_W, PX_H);
+			applyCoverFitCanvas(cloudCanvas, root, PX_W, PX_H);
+		},
 		/**
 		 * @param {number} dt
 		 * @param {number} nowElapsed
@@ -731,30 +729,24 @@ export function createOlympusSky(root, opts = {}) {
 			const s = clock.sample();
 			const dayQ = (s.day * 96) | 0;
 			const par = (((mx - 0.5) * 10) | 0);
-			const starPhase = (elapsed * 2) | 0;
+			const starBucket = (elapsed * 2) | 0;
 
-			/*
-			 * Backdrop (sky + stars + mountains + sun/moon) is the heavy path.
-			 * Rebuild when day/parallax/star-twinkle bucket changes — not every RAF.
-			 * Clouds blit every frame (cheap drawImage).
-			 */
-			const needBackdrop =
-				dayQ !== lastDayQ ||
-				par !== lastPar ||
-				starPhase !== lastStarPhase ||
-				frame <= 2;
+			applyCssSky(cssWash, s);
 
-			if (needBackdrop) {
+			const needTerrain =
+				dayQ !== lastDayQ || par !== lastPar || starBucket !== lastStarPhase || frame <= 2;
+			if (needTerrain) {
 				lastDayQ = dayQ;
 				lastPar = par;
-				lastStarPhase = starPhase;
-				paintBackdrop(s, mx - 0.5, elapsed);
+				lastStarPhase = starBucket;
+				paintTerrain(s, mx - 0.5, elapsed);
 			}
 
-			/* Clouds live on a separate transparent layer — no full-sky rewrite */
+			paintCelestials(s);
 			paintClouds(s);
 		},
 		dispose() {
+			stopCoverFit();
 			cloudCache.clear();
 			root.innerHTML = '';
 			root.classList.remove('olympus-sky');

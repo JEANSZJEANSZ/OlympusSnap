@@ -1,9 +1,6 @@
 /**
- * Frame Select motion — literal Matter.js port of Ropesimulator.html
- * (stack + chain + rect payload + MouseConstraint + stretch snap),
- * with DOM bird/strip/SVG sync and fade/glide swap kept on top.
- *
- * Source of truth: /Ropesimulator.html
+ * Frame Select motion — Matter.js rope + strip payload physics,
+ * with DOM bird/strip/SVG sync and fade/glide swap.
  */
 import Matter from 'matter-js';
 import { animate, createTimeline, stagger } from 'animejs';
@@ -17,9 +14,9 @@ const FLY_TRAVEL = 0.62;
 const FLY_ARC_PX = 18;
 const FIXED_MS = 1000 / 60;
 
-// ——— Ropesimulator.html params, scaled to the flight stage ———
+// ——— Rope + payload params, scaled to the flight stage ———
 /** A bit longer hang under the bird (was 5×14 — too stubby). */
-const ROPE_SEGMENTS = 8;
+const ROPE_SEGMENTS = 7;
 const SEG_W = 10;
 const SEG_H = 16;
 const CHAIN_STIFFNESS = 0.9;
@@ -235,7 +232,7 @@ export function createFrameSelectMotion(root, opts = {}) {
 	}
 
 	/**
-	 * Build world exactly like Ropesimulator.html.
+	 * Build Matter.js rope world.
 	 * @param {number} [offsetX]
 	 */
 	function buildWorld(offsetX = 0) {
@@ -252,7 +249,8 @@ export function createFrameSelectMotion(root, opts = {}) {
 		hangEl.style.removeProperty('opacity');
 
 		if (birdRig) {
-			birdRig.style.top = '0px';
+			// Base hang height comes from CSS `--rig-lift` on `.bird-rig` (may use clamp()).
+			birdRig.style.removeProperty('top');
 			birdRig.style.removeProperty('opacity');
 			const birdRect = birdRig.getBoundingClientRect();
 			anchorBaseY = birdRect.top - stageRect.top + birdRect.height * 0.95;
@@ -503,7 +501,7 @@ export function createFrameSelectMotion(root, opts = {}) {
 		finishTimer = window.setTimeout(finishGone, FALL_SAFETY_MS);
 	}
 
-	/** Ropesimulator.html stretch snap — only while pulling (or just after), never idle auto-break. */
+	/** Stretch snap — only while pulling (or just after), never idle auto-break. */
 	function checkStretchSnaps() {
 		if (snapped || confirming || mode === 'swapping' || !engine) return;
 

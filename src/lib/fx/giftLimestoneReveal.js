@@ -15,19 +15,39 @@ import {
 	Shape,
 	SRGBColorSpace,
 	TextureLoader,
-	Vector2
+	Vector2,
+	Vector3
 } from 'three';
 import { MeshBasicMaterial, box, disposeScene, makeRenderer, smooth01 } from './pixelShared.js';
 import { createRng, deriveSeed, mintMarbleSeed } from './marbleSeed.js';
 import {
 	AFTERSHOCK_AT,
+	cheapNoise,
 	fadeBolt,
 	lightningFlicker,
 	setupGodCrackKit
 } from './giftGodCrackFx.js';
+import { buildGodRaysShader } from './giftGodRaysFx.js';
 
 /** Low internal res + CSS pixelated upscale = chunky stele look */
-const RENDER_PX = 640;
+function pickRenderPx() {
+	if (typeof window === 'undefined') return 560;
+	const narrow =
+		window.innerWidth < 768 || window.matchMedia('(pointer: coarse)').matches;
+	return narrow ? 480 : 560;
+}
+
+/** Higher buffer while portrait is visible — match display pixels × DPR */
+function pickPhotoRenderPx(canvas) {
+	if (typeof window === 'undefined') return 960;
+	const parent = canvas?.parentElement;
+	if (!parent) return 960;
+	const rect = parent.getBoundingClientRect();
+	const dpr = Math.min(2, window.devicePixelRatio || 1);
+	return Math.min(2048, Math.round(Math.max(rect.width, rect.height) * dpr));
+}
+
+const RENDER_PX = pickRenderPx();
 const VIEW_H = 2.25;
 /** Booth / landscape — leave sky + mountains visible */
 const FIT_FRAC = 0.62;
@@ -39,6 +59,12 @@ const PLAQUE_H = 1.48;
 const PLAQUE_D = 0.34;
 const PLAQUE_FACE_W = PLAQUE_W * 0.9;
 const PLAQUE_FACE_H = PLAQUE_H * 0.82;
+/** Portrait bloom — full framed composite, larger than plaque face slot */
+const PORTRAIT_MAX_W = 2.0;
+const PORTRAIT_MAX_H = 2.5;
+const INSCRIPTION_ROWS = 4;
+const INSCRIPTION_LETTER_GAP = 2;
+const INSCRIPTION_WORD_GAP = 7;
 const PLAQUE_WORLD_W = PLAQUE_W;
 const PLAQUE_WORLD_H = PLAQUE_H;
 const PLAQUE_WORLD_D = PLAQUE_D;
@@ -50,13 +76,22 @@ const SPRING = 10;
 const CHARGE_DUR = 0.4;
 const BOLT_DUR = 0.52;
 const IMPACT_DUR = 0.28;
-const SHATTER_DUR = 1.05;
+const SHATTER_DUR = 1.18;
 const SETTLE_DUR = 0.32;
 const EXHALE_DUR = 0.55;
 const CANVAS_FADE_DUR = 0.48;
 
 const DEBRIS_HEX = ['#faf8f2', '#f2ede3', '#e8e0d2', '#ddd5c8', '#c9bfb0'];
 const SPARK_COLORS = ['#ffffff', '#ffd86a', '#fff4c8', '#f5ead8'];
+const DIVINE_DUST = ['#fff8df', '#ffd86a', '#fff4c8', '#ffe8a0', '#ffffff'];
+
+/** Elastic overshoot — portrait bloom punch */
+function elasticOut(t, amp = 1.12) {
+	if (t <= 0) return 0;
+	if (t >= 1) return 1;
+	const c4 = (2 * Math.PI) / 3;
+	return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) * amp + 1;
+}
 
 /**
  * @param {number} aspect
@@ -544,7 +579,62 @@ function drawIncisedMark(ctx, cx, cy, halfW, halfH, strokes, wear) {
 }
 
 /**
- * Seeded rows of abstract ruin marks (unique per scripture seed).
+ * Pack seeded word groups into one inscription column (strict grid, justified).
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {() => number} rand
+ * @param {number} x0
+ * @param {number} x1
+ * @param {number} cy
+ * @param {number} markW
+ * @param {number} halfW
+ * @param {number} halfH
+ * @param {number} row
+ */
+function layoutColumnMarks(ctx, rand, x0, x1, cy, markW, halfW, halfH, row) {
+	const colW = x1 - x0;
+	if (colW < markW + 4) return;
+
+	const letterStep = markW + INSCRIPTION_LETTER_GAP;
+	/** @type {number[]} */
+	const wordLens = [];
+	let used = 0;
+
+	while (used < colW * 0.92) {
+		const wl = 2 + ((rand() * 3) | 0);
+		const wordW = wl * letterStep - INSCRIPTION_LETTER_GAP;
+		const gap = wordLens.length > 0 ? INSCRIPTION_WORD_GAP : 0;
+		if (used + gap + wordW > colW) break;
+		wordLens.push(wl);
+		used += gap + wordW;
+	}
+
+	if (wordLens.length === 0) {
+		const wl = Math.max(1, (colW / letterStep) | 0);
+		wordLens.push(wl);
+		used = wl * letterStep - INSCRIPTION_LETTER_GAP;
+	}
+
+	const gapBonus =
+		wordLens.length > 1 ? Math.max(0, colW - used) / (wordLens.length - 1) : 0;
+	const contentW = used + gapBonus * Math.max(0, wordLens.length - 1);
+	let cursor = x0 + Math.max(0, (colW - contentW) * 0.5);
+
+	for (let wi = 0; wi < wordLens.length; wi++) {
+		if (wi > 0) cursor += INSCRIPTION_WORD_GAP + gapBonus;
+		for (let mi = 0; mi < wordLens[wi]; mi++) {
+			const cx = Math.round(cursor + halfW);
+			cursor += letterStep;
+			const key = RUIN_MARK_KEYS[(rand() * RUIN_MARK_KEYS.length) | 0];
+			const strokes = RUIN_MARKS[key];
+			let wear = Math.min(0.85, row * 0.12 + rand() * 0.28);
+			if (rand() < 0.06) wear = Math.min(0.9, wear + 0.35);
+			drawIncisedMark(ctx, cx, cy, halfW, halfH, strokes, wear);
+		}
+	}
+}
+
+/**
+ * Seeded rows of abstract ruin marks — two columns flanking the crack.
  * @param {CanvasRenderingContext2D} ctx
  * @param {() => number} rand
  * @param {Vector2[]} crackPath
@@ -554,34 +644,29 @@ function drawIncisedMark(ctx, cx, cy, halfW, halfH, strokes, wear) {
  * @param {number} texH
  */
 function drawRuinInscription(ctx, rand, crackPath, padX, padY, texW, texH) {
-	const rows = 3 + ((rand() * 2) | 0); /* 3–4 lines */
-	const innerW = texW - padX * 2;
 	const innerH = texH - padY * 2;
-	const rowH = innerH / (rows + 0.35);
+	const rowH = innerH / (INSCRIPTION_ROWS + 0.35);
 	const markH = Math.max(6, Math.min(11, (rowH * 0.58) | 0));
 	const markW = Math.max(5, (markH * 0.75) | 0);
 	const halfH = markH * 0.5;
 	const halfW = markW * 0.5;
+	const crackMargin = markW * 0.85;
 
-	for (let row = 0; row < rows; row++) {
-		const marksInRow = 4 + ((rand() * 3) | 0); /* 4–6 marks */
-		const rowShift = ((rand() - 0.5) * 5) | 0;
-		const yJitter = ((rand() - 0.5) * 2) | 0;
-		const cy = Math.round(padY + rowH * (row + 0.7) + yJitter);
-		const span = Math.min(innerW - 8, marksInRow * (markW + 3));
-		const startX = padX + ((innerW - span) / 2 | 0) + rowShift;
+	for (let row = 0; row < INSCRIPTION_ROWS; row++) {
+		const cy = Math.round(padY + rowH * (row + 0.7));
+		const wy = (0.5 - cy / texH) * PLAQUE_H;
+		const crackTx = worldToTex(sampleCrackX(crackPath, wy), wy, texW, texH).x;
 
-		for (let col = 0; col < marksInRow; col++) {
-			const cx = Math.round(startX + col * (markW + 3) + halfW + ((rand() - 0.5) * 1.5));
-			const wy = (0.5 - cy / texH) * PLAQUE_H;
-			const crackTx = worldToTex(sampleCrackX(crackPath, wy), wy, texW, texH).x;
-			if (Math.abs(cx - crackTx) < markW * 0.7) continue;
+		const leftX0 = padX + 2;
+		const leftX1 = crackTx - crackMargin;
+		const rightX0 = crackTx + crackMargin;
+		const rightX1 = texW - padX - 2;
 
-			const key = RUIN_MARK_KEYS[(rand() * RUIN_MARK_KEYS.length) | 0];
-			const strokes = RUIN_MARKS[key];
-			const wear = Math.min(0.85, row * 0.12 + rand() * 0.35);
-			if (rand() < 0.08 + row * 0.04) continue;
-			drawIncisedMark(ctx, cx, cy, halfW, halfH, strokes, wear);
+		if (leftX1 > leftX0 + markW) {
+			layoutColumnMarks(ctx, rand, leftX0, leftX1, cy, markW, halfW, halfH, row);
+		}
+		if (rightX1 > rightX0 + markW) {
+			layoutColumnMarks(ctx, rand, rightX0, rightX1, cy, markW, halfW, halfH, row);
 		}
 	}
 }
@@ -802,6 +887,51 @@ function buildAura(parent) {
 }
 
 /**
+ * Expanding divine ring at portrait emergence.
+ * @param {Group} parent
+ */
+function buildDivineRing(parent) {
+	const mat = new MeshBasicMaterial({
+		color: '#ffd86a',
+		transparent: true,
+		opacity: 0,
+		depthWrite: false,
+		depthTest: false
+	});
+	const ring = new Mesh(new PlaneGeometry(0.4, 0.4), mat);
+	ring.renderOrder = 3;
+	parent.add(ring);
+	let life = 0;
+	let active = false;
+
+	function fire() {
+		active = true;
+		life = 0;
+		mat.opacity = 0.95;
+		ring.scale.setScalar(0.15);
+		ring.visible = true;
+	}
+
+	/** @param {number} dt */
+	function tick(dt) {
+		if (!active) return;
+		life += dt;
+		const t = Math.min(1, life / 0.72);
+		const e = smooth01(t);
+		ring.scale.setScalar(0.15 + e * 3.8);
+		mat.opacity = 0.95 * (1 - e * e);
+		if (t >= 1) {
+			active = false;
+			mat.opacity = 0;
+			ring.visible = false;
+		}
+	}
+
+	ring.visible = false;
+	return { fire, tick, dispose: () => { mat.dispose(); ring.geometry.dispose(); } };
+}
+
+/**
  * @param {Group} parent
  */
 function buildShockwave(parent) {
@@ -845,12 +975,14 @@ function buildParticlePool(parent, count, rand, colors) {
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{ portraitUrl?: string | null, reduced?: boolean, seed?: number, onPhaseChange?: (p: string) => void, onRevealed?: () => void }} [opts]
+ * @param {{ portraitUrl?: string | null, reduced?: boolean, seed?: number, onPhaseChange?: (p: string) => void, onRevealed?: () => void, onPortraitOpacity?: (opacity: number, meta?: { scale?: number, glow?: number, burst?: number, anchorX?: number, anchorY?: number }) => void }} [opts]
  */
 export function createGiftLimestoneReveal(canvas, opts = {}) {
 	const reduced = !!opts.reduced;
 	const onPhaseChange = opts.onPhaseChange || (() => {});
 	const onRevealed = opts.onRevealed || (() => {});
+	const onPortraitOpacity = opts.onPortraitOpacity || (() => {});
+	const useDomPortrait = opts.onPortraitOpacity != null;
 
 	const seed =
 		opts.seed != null && Number.isFinite(opts.seed)
@@ -867,7 +999,7 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		imageRendering: 'pixelated',
 		minAspect: 0.05
 	});
-	const { renderer, camera } = layer;
+	const { renderer, camera, resize, setRenderWidth, setLayoutMode } = layer;
 
 	const sideMat = new MeshBasicMaterial({ color: '#cfc4b2' });
 	const chipMat = new MeshBasicMaterial({ color: '#e8e0d2' });
@@ -891,6 +1023,15 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 	root.add(pivot);
 
 	const aura = buildAura(pivot);
+
+	/** Portrait + god-rays scale together during bloom */
+	const portraitReveal = new Group();
+	portraitReveal.position.z = PLAQUE_D / 2 + 0.012;
+	portraitReveal.scale.setScalar(0.22);
+	pivot.add(portraitReveal);
+
+	const godRays = buildGodRaysShader(portraitReveal, reduced, seed);
+	const divineRing = buildDivineRing(portraitReveal);
 	const solid = new Group();
 	pivot.add(solid);
 	const { crackMat } = buildSolidPlaque(solid, faceTex, sideMat, outline, crackPath, rand);
@@ -910,36 +1051,9 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		opacity: 0,
 		depthWrite: false
 	});
-	let portraitPlane = new Mesh(new PlaneGeometry(0.9, 1.15), portraitMat);
-	portraitPlane.position.z = PLAQUE_D / 2 + 0.012;
-	portraitPlane.scale.setScalar(0.22);
-	pivot.add(portraitPlane);
-
-	const rimMat = new MeshBasicMaterial({
-		color: '#ffd86a',
-		transparent: true,
-		opacity: 0,
-		depthWrite: false
-	});
-	const rimGroup = new Group();
-	rimGroup.position.z = PLAQUE_D / 2 + 0.018;
-	rimGroup.scale.setScalar(0.22);
-	pivot.add(rimGroup);
-
-	/** @param {number} pw @param {number} ph */
-	function rebuildRim(pw, ph) {
-		while (rimGroup.children.length) {
-			const c = /** @type {Mesh} */ (rimGroup.children[0]);
-			rimGroup.remove(c);
-			c.geometry?.dispose();
-		}
-		const t = 0.035;
-		box(rimGroup, 0, ph / 2 + t / 2, 0, pw + t * 2, t, 0.018, rimMat);
-		box(rimGroup, 0, -(ph / 2 + t / 2), 0, pw + t * 2, t, 0.018, rimMat);
-		box(rimGroup, -(pw / 2 + t / 2), 0, 0, t, ph, 0.018, rimMat);
-		box(rimGroup, pw / 2 + t / 2, 0, 0, t, ph, 0.018, rimMat);
-	}
-	rebuildRim(0.9, 1.15);
+	let portraitPlane = new Mesh(new PlaneGeometry(PORTRAIT_MAX_W, PORTRAIT_MAX_H), portraitMat);
+	portraitPlane.renderOrder = 2;
+	portraitReveal.add(portraitPlane);
 
 	const flashMat = new MeshBasicMaterial({
 		color: '#ffffff',
@@ -976,8 +1090,9 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 	}
 
 	const shock = buildShockwave(pivot);
-	const debris = buildParticlePool(pivot, 28, rand, DEBRIS_HEX);
-	const sparks = buildParticlePool(pivot, 18, rand, SPARK_COLORS);
+	const debris = buildParticlePool(pivot, 22, rand, DEBRIS_HEX);
+	const sparks = buildParticlePool(pivot, 14, rand, SPARK_COLORS);
+	const divineDust = buildParticlePool(portraitReveal, 28, rand, DIVINE_DUST);
 
 	let phase = reduced ? 'revealed' : 'enter';
 	let enterT = 0;
@@ -999,19 +1114,53 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 	/** @type {'zeus' | 'poseidon' | 'hades'} */
 	let crackGod = 'zeus';
 	let aftershockFired = false;
+	let divineFlashFired = false;
+	let portraitBurstT = 0;
 	let timeScale = 1;
 	let punch = 1;
 	let dutch = 0;
 	let fitScale = 1;
+	let lastViewW = 4;
+	let lastViewH = 2.25;
 	let canvasPhotoMode = false;
+	const anchorProj = new Vector3();
+
+	/** Project portraitReveal origin → 0–1 CSS screen coords (matches god-ray hub). */
+	function portraitAnchorScreen() {
+		portraitReveal.getWorldPosition(anchorProj);
+		anchorProj.project(camera);
+		return {
+			anchorX: (anchorProj.x + 1) * 0.5,
+			anchorY: (1 - anchorProj.y) * 0.5
+		};
+	}
+
+	function syncPortraitOpacity(op, meta = {}) {
+		const v = Math.max(0, Math.min(1, op));
+		const fullMeta = v > 0.001 ? { ...meta, ...portraitAnchorScreen() } : meta;
+		if (useDomPortrait) {
+			portraitMat.opacity = 0;
+			onPortraitOpacity(v, fullMeta);
+		} else {
+			portraitMat.opacity = v;
+			onPortraitOpacity(0, fullMeta);
+		}
+	}
 
 	function applyRootScale() {
 		root.scale.setScalar(fitScale * punch);
 	}
 
-	/** Plaque = pixelated; once the gift photo blooms, bilinear upscale */
+	/** Plaque = pixelated; portrait bloom = display-res buffer, 1:1 CSS fill */
 	function setCanvasPhotoMode(photoMode) {
-		canvasPhotoMode = !!photoMode;
+		const next = !!photoMode;
+		if (next === canvasPhotoMode) return;
+		canvasPhotoMode = next;
+		root.position.y = next ? 0 : 0.05;
+		canvas.style.imageRendering = canvasPhotoMode ? 'auto' : 'pixelated';
+		setLayoutMode(canvasPhotoMode ? 'fill' : 'cover');
+		setRenderWidth(canvasPhotoMode ? pickPhotoRenderPx(canvas) : RENDER_PX);
+		resize(VIEW_H);
 		canvas.style.imageRendering = canvasPhotoMode ? 'auto' : 'pixelated';
 	}
 
@@ -1021,6 +1170,7 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		flashQuad.geometry = new PlaneGeometry(vw * 1.12, vh * 1.12);
 		const fxScale = Math.min(1, 3.5 / Math.max(vw, 2.8));
 		godsFx.scale.setScalar(fxScale);
+		godRays.resize?.(vw, vh, portraitReveal.scale.x);
 	}
 
 	/** @type {import('three').Texture | null} */
@@ -1030,20 +1180,23 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		const img = /** @type {HTMLImageElement} */ (tex.image);
 		const iw = img?.naturalWidth || img?.width || 3;
 		const ih = img?.naturalHeight || img?.height || 4;
-		const { w, h } = containSize(iw / ih, PLAQUE_FACE_W, PLAQUE_FACE_H);
+		const { w, h } = containSize(iw / ih, PORTRAIT_MAX_W, PORTRAIT_MAX_H);
 		portraitPlane.geometry.dispose();
 		portraitPlane.geometry = new PlaneGeometry(w, h);
-		rebuildRim(w, h);
 	}
 
 	if (opts.portraitUrl) {
+		const litePortrait =
+			typeof window !== 'undefined' &&
+			(window.innerWidth < 768 || window.matchMedia('(pointer: coarse)').matches);
 		portraitTex = new TextureLoader().load(opts.portraitUrl, (tex) => {
 			tex.colorSpace = SRGBColorSpace;
-			/* Smooth photo — plaque face stays nearest; portrait must not look blocky */
+			/* Smooth photo — full framed composite at native res */
 			tex.magFilter = LinearFilter;
-			tex.minFilter = LinearMipmapLinearFilter;
-			tex.generateMipmaps = true;
-			tex.anisotropy = 4;
+			tex.minFilter = LinearFilter;
+			tex.generateMipmaps = false;
+			const maxAniso = renderer.capabilities.getMaxAnisotropy?.() ?? 4;
+			tex.anisotropy = litePortrait ? 2 : maxAniso;
 			tex.needsUpdate = true;
 			portraitMat.map = tex;
 			portraitMat.needsUpdate = true;
@@ -1073,6 +1226,8 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		halvesSwapped = false;
 		debrisSpawned = false;
 		aftershockFired = false;
+		divineFlashFired = false;
+		portraitBurstT = 0;
 		timeScale = 1;
 		punch = 1;
 		dutch = 0;
@@ -1080,9 +1235,9 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		shock.active = false;
 		shock.mat.opacity = 0;
 		portraitMat.opacity = 0;
-		rimMat.opacity = 0;
-		portraitPlane.scale.setScalar(0.22);
-		rimGroup.scale.setScalar(0.22);
+		onPortraitOpacity(0);
+		godRays.setOpacity(0);
+		portraitReveal.scale.setScalar(0.22);
 		gods.hideAll();
 	}
 
@@ -1197,8 +1352,8 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 					flashMat.opacity = 0.5 * smooth01(p);
 					flashGold.opacity = 0.22 * p;
 					ensureTsunami().setProgress(0.04 + 0.14 * p, 0.4 + p * 0.45);
-					pivot.position.x = (Math.random() - 0.5) * 0.05 * p;
-					camera.position.x += (Math.random() - 0.5) * 0.012 * p;
+					pivot.position.x = cheapNoise(elapsed, 1) * 0.05 * p;
+					camera.position.x += cheapNoise(elapsed, 2) * 0.012 * p;
 				} else if (crackGod === 'hades') {
 					flashMat.color.set('#0a040c');
 					flashGold.color.set('#5b1d8a');
@@ -1212,8 +1367,8 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 					flashGold.opacity = 0.12 * p;
 				}
 				crackMat.opacity = 0.35 + p * 0.45;
-				pivot.position.x = (Math.random() - 0.5) * 0.04 * p;
-				pivot.position.y = (Math.random() - 0.5) * 0.035 * p;
+				pivot.position.x = cheapNoise(elapsed, 3) * 0.04 * p;
+				pivot.position.y = cheapNoise(elapsed, 4) * 0.035 * p;
 				shakeAmp = 0.02 * p;
 				aura.tick(elapsed, 1 + p * 0.35);
 			}
@@ -1234,7 +1389,7 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 					flashGold.color.set('#ff9a3c');
 					flashMat.opacity = Math.max(flashMat.opacity, op * 0.55);
 					flashGold.opacity = Math.max(flashGold.opacity, op * 0.25);
-					if (Math.random() < 0.35) {
+					if (Math.sin(bt * 120) > 0.65) {
 						flashMat.opacity = Math.min(0.85, op * 0.9);
 					}
 					shakeAmp = 0.04 + op * 0.06;
@@ -1249,10 +1404,10 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 					flashMat.opacity = 0.32 + surge * 0.35 + crest * 0.35 + crash * 0.4;
 					flashGold.opacity = 0.2 + surge * 0.3 + crest * 0.35 + crash * 0.35;
 					shakeAmp = 0.045 + surge * 0.06 + crest * 0.07 + crash * 0.1;
-					pivot.position.x = -0.02 * surge + (Math.random() - 0.5) * 0.07 * surge;
-					pivot.position.y = (Math.random() - 0.5) * 0.04 * crest;
-					if (bt > 0.5) camera.position.x += (Math.random() - 0.5) * 0.025;
-					if (bt > 0.75) camera.position.y += (Math.random() - 0.5) * 0.02;
+					pivot.position.x = -0.02 * surge + cheapNoise(elapsed, 5) * 0.07 * surge;
+					pivot.position.y = cheapNoise(elapsed, 6) * 0.04 * crest;
+					if (bt > 0.5) camera.position.x += cheapNoise(elapsed, 7) * 0.025;
+					if (bt > 0.75) camera.position.y += cheapNoise(elapsed, 8) * 0.02;
 				} else {
 					const rise = smooth01(bt);
 					const bloom = bt > 0.6 ? lightningFlicker((bt - 0.6) / 0.4) : 0;
@@ -1262,8 +1417,8 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 					flashMat.opacity = 0.45 + rise * 0.35 + bloom * 0.45;
 					flashGold.opacity = 0.22 + rise * 0.38 + bloom * 0.45;
 					shakeAmp = 0.045 + rise * 0.06 + bloom * 0.08;
-					pivot.position.y = (Math.random() - 0.5) * 0.05 * rise;
-					camera.position.y += (Math.random() - 0.5) * 0.015 * rise;
+					pivot.position.y = cheapNoise(elapsed, 9) * 0.05 * rise;
+					camera.position.y += cheapNoise(elapsed, 10) * 0.015 * rise;
 				}
 
 				crackMat.opacity = 0.95;
@@ -1287,7 +1442,7 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 				flashGold.opacity = 0.55 * (1 - ip);
 				shakeAmp = 0.12 * (1 - ip);
 				punch = 1 + Math.sin(ip * Math.PI) * 0.14;
-				dutch = (Math.random() - 0.5) * 0.08 * (1 - ip);
+				dutch = cheapNoise(elapsed, 11) * 0.08 * (1 - ip);
 				applyRootScale();
 				root.rotation.z = dutch;
 
@@ -1365,19 +1520,46 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 				leftHalf.rotation.set(e * 0.22, e * 0.08, e * 0.35);
 				rightHalf.rotation.set(-e * 0.2, -e * 0.1, -e * 0.32);
 
-				const popOp = smooth01(Math.min(1, e * 1.3));
-				portraitMat.opacity = popOp;
-				rimMat.opacity = popOp * 0.85;
+				/* Divine emergence — light before form, then elastic overshoot */
+				const revealDelay = 0.1;
+				const revealT = Math.max(0, (splitP - revealDelay) / (1 - revealDelay));
+				const popOp = smooth01(Math.min(1, revealT * 1.35)) * smooth01(e * 1.1);
+				const glow = Math.max(0, 1 - revealT * 0.55) * popOp;
+				const burst = divineFlashFired ? Math.max(0, 1 - portraitBurstT * 2.2) : 0;
+
 				let popScale;
-				if (splitP < 0.78) {
-					const t = smooth01(splitP / 0.78);
-					popScale = 0.22 + t * (portraitPopCap - 0.22);
+				if (splitP < 0.72) {
+					const t = elasticOut(Math.min(1, splitP / 0.72), 1.14);
+					popScale = 0.06 + t * (portraitPopCap + 0.12);
 				} else {
-					const t = smooth01((splitP - 0.78) / 0.22);
-					popScale = portraitPopCap + t * (giftPortraitScale - portraitPopCap);
+					const t = smooth01((splitP - 0.72) / 0.28);
+					popScale = portraitPopCap + 0.12 + t * (giftPortraitScale - portraitPopCap - 0.12);
 				}
-				portraitPlane.scale.setScalar(popScale);
-				rimGroup.scale.setScalar(popScale);
+				portraitReveal.scale.setScalar(popScale);
+				godRays.resize?.(lastViewW, lastViewH, popScale);
+
+				syncPortraitOpacity(popOp, { scale: popScale, glow, burst });
+				const rayOp = reduced ? popOp * 0.5 : popOp * 1.05;
+				godRays.setOpacity(rayOp);
+				godRays.setBurst?.(burst + popOp * 0.35);
+				if (!reduced) godRays.tick(elapsed, popOp);
+				divineRing.tick(rawDt);
+
+				/* First divine flash — portrait materializes from light */
+				if (splitP >= 0.06 && splitP < 0.14 && !divineFlashFired) {
+					divineFlashFired = true;
+					portraitBurstT = 0;
+					flashMat.opacity = 0.92;
+					flashGold.opacity = 0.78;
+					shakeAmp = 0.16;
+					punch = 1.14;
+					timeScale = 0.28;
+					divineRing.fire();
+					spawnBurst(divineDust, 2.4, 1.6, { biasY: 0.85 });
+					spawnBurst(sparks, 1.8, 1.1);
+					fireShockwave();
+				}
+				if (divineFlashFired) portraitBurstT += rawDt;
 
 				if (!aftershockFired && splitP >= AFTERSHOCK_AT) {
 					aftershockFired = true;
@@ -1439,10 +1621,11 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 				rightHalf.position.x = 0.95 * shatterSepMul + fade * 0.85;
 				leftHalf.position.y = -0.45 - fade * 0.75;
 				rightHalf.position.y = -0.42 - fade * 0.8;
-				portraitPlane.scale.setScalar(giftPortraitScale);
-				rimGroup.scale.setScalar(giftPortraitScale);
-				portraitMat.opacity = 1;
-				rimMat.opacity = 0.75;
+				portraitReveal.scale.setScalar(giftPortraitScale);
+				syncPortraitOpacity(1, { scale: giftPortraitScale, glow: 0, burst: 0 });
+				godRays.setOpacity(reduced ? 0.35 : 0.85 * (1 - fade * 0.35));
+				godRays.setBurst?.(0);
+				if (!reduced) godRays.tick(elapsed, 1 - fade * 0.3);
 				flashMat.opacity = 0;
 				flashGold.opacity = 0;
 				tsunami?.hide();
@@ -1457,6 +1640,7 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 
 			tickPool(debris, dt, 3.4);
 			tickPool(sparks, dt, 1.8);
+			tickPool(divineDust, dt, 1.4);
 			if (crackGod === 'poseidon') tickPool(seaSplash, dt, 2.6);
 			if (crackGod === 'hades') tickPool(hadesEmbers, dt, 2.2);
 		}
@@ -1465,9 +1649,15 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 			settleT += rawDt;
 			setCanvasPhotoMode(true);
 			gods.hideAll();
-			portraitPlane.scale.setScalar(giftPortraitScale);
-			rimGroup.scale.setScalar(giftPortraitScale);
-			canvasFade = 1 - smooth01(Math.min(1, settleT / CANVAS_FADE_DUR));
+			portraitReveal.scale.setScalar(giftPortraitScale);
+			const settleFade = 1 - smooth01(Math.min(1, settleT / CANVAS_FADE_DUR));
+			syncPortraitOpacity(settleFade, { scale: giftPortraitScale, glow: settleFade * 0.4, burst: 0 });
+			godRays.setOpacity((reduced ? 0.25 : 0.75) * settleFade);
+			godRays.setBurst?.(0);
+			if (!reduced) godRays.tick(elapsed, settleFade);
+			divineRing.tick(rawDt);
+			tickPool(divineDust, dt, 1.2);
+			canvasFade = settleFade;
 			canvas.style.opacity = String(canvasFade);
 			leftHalf.visible = canvasFade > 0.15;
 			rightHalf.visible = canvasFade > 0.15;
@@ -1481,6 +1671,8 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 			flashGoldQuad.visible = false;
 			gods.hideAll();
 			aura.setOpacity(0);
+			godRays.setOpacity(0);
+			onPortraitOpacity(0);
 			shock.mat.opacity = 0;
 			canvas.style.opacity = '0';
 			leftHalf.visible = false;
@@ -1488,8 +1680,8 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		}
 
 		if (shakeAmp > 0.001) {
-			camera.position.x = (Math.random() - 0.5) * shakeAmp * 2;
-			camera.position.y = (Math.random() - 0.5) * shakeAmp * 2;
+			camera.position.x = cheapNoise(elapsed, 12) * shakeAmp * 2;
+			camera.position.y = cheapNoise(elapsed, 13) * shakeAmp * 2;
 			shakeAmp *= 0.88;
 		} else {
 			camera.position.set(0, 0, 10);
@@ -1498,17 +1690,29 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		/* Never leave flash planes in the scene when idle — edge shows as a box */
 		syncFlashVisibility();
 
-		renderer.render(scene, camera);
+		const shouldRender = phase !== 'revealed' || canvasFade > 0.01;
+		if (shouldRender) {
+			renderer.render(scene, camera);
+		}
+
+		if (phase === 'revealed' && canvasFade <= 0.01) {
+			raf = 0;
+			return;
+		}
 		raf = requestAnimationFrame(tick);
 	}
 
 	const onResize = () => {
-		const metrics = layer.resize(VIEW_H);
-		/* makeRenderer resets imageRendering — restore photo mode if active */
-		setCanvasPhotoMode(canvasPhotoMode);
+		if (canvasPhotoMode) {
+			setRenderWidth(pickPhotoRenderPx(canvas));
+		}
+		const metrics = resize(VIEW_H);
+		canvas.style.imageRendering = canvasPhotoMode ? 'auto' : 'pixelated';
 		if (!metrics) return;
 
 		const { aspect, viewH: vh, viewW: vw } = metrics;
+		lastViewW = vw;
+		lastViewH = vh;
 		const narrow = aspect < 0.72;
 		const fit = narrow ? FIT_FRAC_NARROW : FIT_FRAC;
 		const scaleH = (vh * fit) / PLAQUE_WORLD_H;
@@ -1516,11 +1720,11 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		fitScale = Math.min(scaleH, scaleW);
 		applyRootScale();
 		resizeOverlays(vw, vh);
-		root.position.y = narrow ? 0.01 : 0.05;
+		root.position.y = canvasPhotoMode ? 0 : narrow ? 0.01 : 0.05;
 
-		portraitPopCap = narrow ? 0.78 : 0.92;
+		portraitPopCap = narrow ? 0.88 : 1.0;
 		shatterSepMul = narrow ? 0.78 : 1;
-		giftPortraitScale = narrow ? 0.72 : 0.88;
+		giftPortraitScale = narrow ? 0.92 : 1.05;
 	};
 
 	onResize();
@@ -1579,6 +1783,8 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		sideMat.dispose();
 		chipMat.dispose();
 		aura.dispose?.();
+		godRays.dispose?.();
+		divineRing.dispose?.();
 		disposeScene(scene);
 		renderer.dispose();
 	}
@@ -1591,6 +1797,3 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		destroy: dispose
 	};
 }
-
-/** @deprecated Use createGiftLimestoneReveal */
-export const createGiftMarbleReveal = createGiftLimestoneReveal;

@@ -1,9 +1,9 @@
 /**
  * Tiny history router (Vue Router–style), no library.
- * URLs (app-relative): / | /frame | /camera | /studio | /reveal | /admin
+ * Browser URLs always include the deploy folder:
+ *   /olympussnap/ | /olympussnap/frame | /olympussnap/camera | …
  *
- * IIS base = same role as Vue's:
- *   createWebHistory("/Debug/Vue3Template")
+ * Must match Vite `base` in vite.config.js (same as IIS / Cloudflare Pages path).
  */
 import { writable, derived } from 'svelte/store';
 import { routes, routesByName, routesByPath, landingRoute } from './routes.js';
@@ -15,11 +15,8 @@ import { routes, routesByName, routesByPath, landingRoute } from './routes.js';
 /** @type {AppRoute} */
 const FALLBACK = landingRoute;
 
-/** Same idea as createWebHistory("/Debug/TestDeploy3") — must match IIS app folder. */
-const HISTORY_BASE = '/olympussnap';
-
-/** Empty in `npm run dev` so localhost still works; baked path for production builds. */
-const APP_BASE = import.meta.env.DEV ? '' : HISTORY_BASE.replace(/\/+$/, '');
+/** Deploy subpath — keep in sync with vite.config.js `base`. */
+const APP_BASE = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/olympussnap';
 
 /**
  * Normalize pathname: strip trailing slash (except root), drop query/hash.
@@ -99,6 +96,9 @@ export function matchLocation() {
 
 /** @type {import('svelte/store').Writable<AppRoute>} */
 export const currentRoute = writable(matchLocation());
+
+/** Route name to restore when leaving admin (set before entering admin). */
+export const adminReturnTo = writable('landing');
 
 /** Route name only — keeps existing `$route === 'landing'` style if needed */
 export const route = derived(currentRoute, ($r) => $r.name);

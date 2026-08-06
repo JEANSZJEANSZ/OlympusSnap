@@ -1,5 +1,6 @@
 <section class="admin-view" bind:this={rootEl} class:exiting>
 	<BoothOlympusBackdrop />
+	<div class="back-veil" aria-hidden="true"></div>
 	<div class="forge-glow" aria-hidden="true"></div>
 
 	<div class="content">
@@ -319,8 +320,10 @@
 </section>
 
 <script>
-	import { go } from '../router/index.js';
-	import { playViewExit } from '../lib/fx/viewExitMotion.js';
+	import { onMount, tick } from 'svelte';
+	import { get } from 'svelte/store';
+	import { adminReturnTo, go } from '../router/index.js';
+	import { createAdminExitMotion, playAdminExitOnce } from '../lib/fx/adminExitMotion.js';
 	import {
 		frames,
 		stickers,
@@ -401,17 +404,34 @@
 		}
 	}
 
+	/** @type {null | ReturnType<typeof createAdminExitMotion>} */
+	let exitMotion = null;
+
+	onMount(() => {
+		let disposed = false;
+		(async () => {
+			await tick();
+			if (disposed || !rootEl) return;
+			exitMotion = createAdminExitMotion(rootEl, { reduced });
+		})();
+		return () => {
+			disposed = true;
+			exitMotion?.dispose();
+			exitMotion = null;
+		};
+	});
+
 	async function goBack() {
 		if (exiting) return;
 		exiting = true;
-		unlocked = false;
-		pinInput = '';
-		pinError = '';
-		status = '';
-		frameDraft = null;
-		editorError = '';
-		await playViewExit(rootEl, { reduced, direction: 'right' });
-		go('landing');
+
+		await new Promise((resolve) => {
+			if (exitMotion) exitMotion.playExit(resolve);
+			else playAdminExitOnce(rootEl, { reduced }).then(resolve);
+		});
+
+		const returnTo = get(adminReturnTo);
+		go(returnTo);
 	}
 
 	function triggerUpload() {
@@ -699,6 +719,22 @@
 		overflow: auto;
 		color: #fff8df;
 		background: var(--sky-top);
+	}
+
+	.admin-view.exiting {
+		pointer-events: none;
+		overflow: hidden;
+	}
+
+	.back-veil {
+		position: absolute;
+		inset: 0;
+		z-index: 3;
+		pointer-events: none;
+		opacity: 0;
+		background:
+			radial-gradient(ellipse at 50% 72%, rgba(255, 176, 96, 0.35), transparent 58%),
+			linear-gradient(180deg, #071936 0%, #0d2748 55%, #1a3a5c 100%);
 	}
 
 	.forge-glow {

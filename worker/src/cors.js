@@ -1,6 +1,20 @@
 const DEFAULT_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
 /**
+ * Allow any localhost port (Vite may use 5174, 5175, … when 5173 is taken).
+ * @param {string | null} origin
+ */
+function isLocalDevOrigin(origin) {
+	if (!origin) return false;
+	try {
+		const u = new URL(origin);
+		return u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
+	} catch {
+		return false;
+	}
+}
+
+/**
  * @param {Record<string, string | undefined>} env
  * @returns {string[]}
  */
@@ -18,7 +32,7 @@ function allowedOrigins(env) {
  * @returns {Record<string, string>}
  */
 export function corsHeaders(origin, env) {
-	if (!origin || !allowedOrigins(env).includes(origin)) {
+	if (!origin || (!allowedOrigins(env).includes(origin) && !isLocalDevOrigin(origin))) {
 		return {};
 	}
 	return {

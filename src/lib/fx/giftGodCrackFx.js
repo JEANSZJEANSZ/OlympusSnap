@@ -24,6 +24,11 @@ const _quat = new Quaternion();
 const _scl = new Vector3();
 const _axisZ = new Vector3(0, 0, 1);
 
+/** Cheap deterministic jitter — avoids Math.random() every frame in the crack loop. */
+export function cheapNoise(t, salt = 0) {
+	return Math.sin(t * 47.3 + salt * 13.7) * Math.cos(t * 31.1 + salt * 7.9);
+}
+
 /** @param {() => number} rand @param {object} [opts] */
 export function buildLightningPath(rand, opts = {}) {
 	const startX = opts.startX ?? (rand() - 0.5) * 0.12;
@@ -87,8 +92,8 @@ export function buildLightningTree(parent, rand, opts = {}) {
 		const len = Math.hypot(dx, dy) || 0.01;
 		const ux = dx / len;
 		const uy = dy / len;
-		const chunk = 0.055 * scale;
-		const steps = Math.max(1, Math.ceil(len / (chunk * 0.72)));
+		const chunk = 0.065 * scale;
+		const steps = Math.max(1, Math.ceil(len / (chunk * 1.05)));
 		const base = 0.07 * thick * scale;
 
 		for (let s = 0; s <= steps; s++) {
@@ -98,14 +103,13 @@ export function buildLightningTree(parent, rand, opts = {}) {
 			const zJitter = (rand() - 0.5) * 0.06;
 			const z = 0.28 + zJitter;
 			const wobble = (rand() - 0.5) * 0.012 * thick;
-			box(group, px + wobble, py, z - 0.04, base * 1.85, base * 1.85, 0.1 * scale, glowMat);
-			box(group, px, py, z - 0.02, base * 1.25, base * 1.25, 0.08 * scale, goldMat);
-			box(group, px, py, z, base * 0.85, base * 0.85, 0.065 * scale, midMat);
-			box(group, px, py, z + 0.015, base * 0.45, base * 0.45, 0.05 * scale, coreMat);
-			if (rand() < 0.22 && thick > 0.5) {
+			/* glow + core only — half the draw calls, still reads as a bolt */
+			box(group, px + wobble, py, z - 0.03, base * 1.75, base * 1.75, 0.09 * scale, glowMat);
+			box(group, px, py, z + 0.01, base * 0.55, base * 0.55, 0.055 * scale, coreMat);
+			if (rand() < 0.14 && thick > 0.55) {
 				const sx = px + uy * (rand() < 0.5 ? -1 : 1) * (0.04 + rand() * 0.06);
 				const sy = py - ux * (0.02 + rand() * 0.04);
-				box(group, sx, sy, z, base * 0.55, base * 0.55, 0.055 * scale, midMat);
+				box(group, sx, sy, z, base * 0.5, base * 0.5, 0.05 * scale, midMat);
 			}
 		}
 	}
@@ -130,10 +134,9 @@ export function buildLightningTree(parent, rand, opts = {}) {
 	}
 
 	const tip = path[path.length - 1];
-	for (let k = 0; k < 5; k++) {
-		const o = (k - 2) * 0.035;
-		box(group, tip.x + o * 0.3, tip.y + Math.abs(o) * 0.15, 0.3, 0.08 * scale, 0.08 * scale, 0.07 * scale, coreMat);
-		box(group, tip.x + o * 0.5, tip.y, 0.26, 0.12 * scale, 0.12 * scale, 0.09 * scale, goldMat);
+	for (let k = 0; k < 3; k++) {
+		const o = (k - 1) * 0.04;
+		box(group, tip.x + o * 0.35, tip.y + Math.abs(o) * 0.12, 0.3, 0.09 * scale, 0.09 * scale, 0.07 * scale, coreMat);
 	}
 
 	return {
@@ -188,8 +191,8 @@ export function buildTsunami(parent, rand) {
 	const cells = [];
 
 	/* Tall curling wall — C-shaped ocean face (reads as a god-wave, not spray) */
-	const wallCols = 8;
-	const wallRows = 14;
+	const wallCols = 7;
+	const wallRows = 11;
 	for (let r = 0; r < wallRows; r++) {
 		for (let c = 0; c < wallCols; c++) {
 			const u = c / (wallCols - 1);
@@ -240,8 +243,8 @@ export function buildTsunami(parent, rand) {
 	}
 
 	/* Foam lip along the crest arc */
-	for (let i = 0; i < 18; i++) {
-		const u = i / 17;
+	for (let i = 0; i < 12; i++) {
+		const u = i / 11;
 		cells.push({
 			kind: 'crest',
 			bx: (u - 0.5) * 1.35 - 0.55,
@@ -258,7 +261,7 @@ export function buildTsunami(parent, rand) {
 	}
 
 	/* Horizontal wind streaks — Poseidon as god of winds */
-	for (let i = 0; i < 22; i++) {
+	for (let i = 0; i < 14; i++) {
 		cells.push({
 			kind: 'wind',
 			bx: (rand() - 0.5) * 2.4,
@@ -410,14 +413,25 @@ export function buildTsunami(parent, rand) {
 		}
 	}
 
+	let lastT = -1;
+	let lastOp = -1;
+	function setProgress(t, op) {
+		const qt = Math.round(t * 50) / 50;
+		const qo = Math.round(op * 40) / 40;
+		if (qt === lastT && qo === lastOp) return;
+		lastT = qt;
+		lastOp = qo;
+		writeMatrices(t, op);
+	}
+
 	writeMatrices(0, 0);
 	return {
 		group,
 		mats,
-		setProgress(t, op) {
-			writeMatrices(t, op);
-		},
+		setProgress,
 		hide() {
+			lastT = -1;
+			lastOp = -1;
 			writeMatrices(0, 0);
 			group.visible = false;
 		}
@@ -474,7 +488,7 @@ export function buildUnderworldRupture(parent, rand, floorY) {
 	];
 	for (let pi = 0; pi < pillarDefs.length; pi++) {
 		const def = pillarDefs[pi];
-		const layers = pi === 0 ? 11 : 8;
+		const layers = pi === 0 ? 8 : 6;
 		for (let L = 0; L < layers; L++) {
 			const hN = L / layers;
 			const h = hN * def.maxH;
@@ -550,14 +564,25 @@ export function buildUnderworldRupture(parent, rand, floorY) {
 		}
 	}
 
+	let lastT = -1;
+	let lastOp = -1;
+	function setProgress(t, op) {
+		const qt = Math.round(t * 50) / 50;
+		const qo = Math.round(op * 40) / 40;
+		if (qt === lastT && qo === lastOp) return;
+		lastT = qt;
+		lastOp = qo;
+		writeMatrices(t, op);
+	}
+
 	writeMatrices(0, 0);
 	return {
 		group,
 		mats,
-		setProgress(t, op) {
-			writeMatrices(t, op);
-		},
+		setProgress,
 		hide() {
+			lastT = -1;
+			lastOp = -1;
 			writeMatrices(0, 0);
 			group.visible = false;
 		}
@@ -604,9 +629,13 @@ export function fadeBolt(bolt, rate, dt) {
  * @param {{ deriveSeed: Function, createRng: Function }} helpers
  */
 export function setupGodCrackKit(root, seed, floorY, { deriveSeed, createRng }) {
+	const lite =
+		typeof window !== 'undefined' &&
+		(window.innerWidth < 768 || window.matchMedia('(pointer: coarse)').matches);
+
 	const boltMain = buildLightningTree(root, createRng(deriveSeed(seed, 'bolt-main')), {
-		path: buildLightningPath(createRng(deriveSeed(seed, 'path-main')), { segs: 18 }),
-		branchChance: 0.5 + createRng(deriveSeed(seed, 'bolt-main-chance'))() * 0.2,
+		path: buildLightningPath(createRng(deriveSeed(seed, 'path-main')), { segs: lite ? 10 : 12 }),
+		branchChance: 0.38 + createRng(deriveSeed(seed, 'bolt-main-chance'))() * 0.15,
 		scale: 1.15
 	});
 	const ghostOff = createRng(deriveSeed(seed, 'path-ghost'));
@@ -614,9 +643,9 @@ export function setupGodCrackKit(root, seed, floorY, { deriveSeed, createRng }) 
 		path: buildLightningPath(createRng(deriveSeed(seed, 'path-ghost-line')), {
 			startX: (ghostOff() - 0.5) * 0.2,
 			endX: (ghostOff() - 0.5) * 0.1,
-			segs: 14
+			segs: lite ? 8 : 10
 		}),
-		branchChance: 0.3 + ghostOff() * 0.2,
+		branchChance: 0.22 + ghostOff() * 0.15,
 		scale: 0.85
 	});
 	boltGhost.group.position.z = -0.04;
@@ -625,9 +654,9 @@ export function setupGodCrackKit(root, seed, floorY, { deriveSeed, createRng }) 
 		path: buildLightningPath(createRng(deriveSeed(seed, 'path-side-line')), {
 			startX: -0.15 - sideOff() * 0.25,
 			endX: (sideOff() - 0.5) * 0.12,
-			segs: 12
+			segs: lite ? 7 : 8
 		}),
-		branchChance: 0.35 + sideOff() * 0.2,
+		branchChance: 0.25 + sideOff() * 0.15,
 		scale: 0.75
 	});
 	const afterOff = createRng(deriveSeed(seed, 'path-after'));
@@ -635,9 +664,9 @@ export function setupGodCrackKit(root, seed, floorY, { deriveSeed, createRng }) 
 		path: buildLightningPath(createRng(deriveSeed(seed, 'path-after-line')), {
 			startX: (afterOff() - 0.5) * 0.3,
 			endX: (afterOff() - 0.5) * 0.08,
-			segs: 14
+			segs: lite ? 8 : 10
 		}),
-		branchChance: 0.45 + afterOff() * 0.2,
+		branchChance: 0.32 + afterOff() * 0.15,
 		scale: 0.95
 	});
 
@@ -661,9 +690,15 @@ export function setupGodCrackKit(root, seed, floorY, { deriveSeed, createRng }) 
 	flashGoldQuad.frustumCulled = false;
 	root.add(flashGoldQuad);
 
-	const seaSplash = buildGodParticlePool(root, 36, createRng(deriveSeed(seed, 'sea')), SEA_HEX, [0.025, 0.07]);
-	const hadesEmbers = buildGodParticlePool(root, 36, createRng(deriveSeed(seed, 'embers')), HADES_HEX, [
-		0.02, 0.055
+	const splashCount = lite ? 22 : 30;
+	const emberCount = lite ? 22 : 30;
+	const seaSplash = buildGodParticlePool(root, splashCount, createRng(deriveSeed(seed, 'sea')), SEA_HEX, [
+		0.025,
+		0.07
+	]);
+	const hadesEmbers = buildGodParticlePool(root, emberCount, createRng(deriveSeed(seed, 'embers')), HADES_HEX, [
+		0.02,
+		0.055
 	]);
 
 	return {

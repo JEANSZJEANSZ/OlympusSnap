@@ -34,3 +34,21 @@ export function loadImageForCanvas(src) {
 		img.src = src;
 	});
 }
+
+/** @type {Map<string, Promise<HTMLImageElement | null>>} */
+const framePreloadCache = new Map();
+
+/**
+ * Warm a frame image (deduped). Resolves null on failure so UI can still proceed.
+ * @param {string | undefined | null} src
+ * @returns {Promise<HTMLImageElement | null>}
+ */
+export function preloadFrameImage(src) {
+	if (!src) return Promise.resolve(null);
+	let pending = framePreloadCache.get(src);
+	if (!pending) {
+		pending = loadImageForCanvas(src).catch(() => null);
+		framePreloadCache.set(src, pending);
+	}
+	return pending;
+}

@@ -6,6 +6,7 @@
 	import { frames } from '../lib/assets/assetStore.js';
 	import { createFrameSelectMotion } from '../lib/fx/frameSelectMotion.js';
 	import { beginFrameHandoff } from '../lib/fx/frameHandoff.js';
+	import { preloadFrameImage } from '../lib/utils/loadImageForCanvas.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
@@ -13,6 +14,7 @@
 	let index = $state(0);
 	let reduced = $state(false);
 	let exiting = $state(false);
+	let frameArtReady = $state(false);
 	let rootEl;
 	/** @type {Record<string, { w: number; h: number }>} */
 	let measuredDims = $state({});
@@ -40,18 +42,38 @@
 
 	$effect(() => {
 		const f = frame;
-		if (!f?.src || (f.w && f.h)) return;
-		if (measuredDims[f.id]) return;
-		const img = new Image();
-		img.onload = () => {
-			if (img.naturalWidth && img.naturalHeight) {
+		if (!f?.src) {
+			frameArtReady = false;
+			return;
+		}
+		const id = f.id;
+		const src = f.src;
+		let cancelled = false;
+		frameArtReady = false;
+
+		preloadFrameImage(src).then((img) => {
+			if (cancelled || frame?.id !== id) return;
+			frameArtReady = true;
+			if (img?.naturalWidth && img.naturalHeight && !(f.w && f.h)) {
 				measuredDims = {
 					...measuredDims,
-					[f.id]: { w: img.naturalWidth, h: img.naturalHeight }
+					[id]: { w: img.naturalWidth, h: img.naturalHeight }
 				};
 			}
+		});
+
+		return () => {
+			cancelled = true;
 		};
-		img.src = f.src;
+	});
+
+	/** Warm the next/prev relic so carousel swaps do not flash empty slots. */
+	$effect(() => {
+		if (list.length < 2) return;
+		const prev = list[(index - 1 + list.length) % list.length];
+		const next = list[(index + 1) % list.length];
+		if (prev?.src) preloadFrameImage(prev.src);
+		if (next?.src) preloadFrameImage(next.src);
 	});
 
 	/** Unitless w/h for CSS aspect-ratio + width cap calc. */
@@ -128,7 +150,11 @@
 		};
 
 		if (motion && !reduced) {
-			motion.playSwap(direction, apply);
+			const targetFrame = list[nextIndex];
+			preloadFrameImage(targetFrame?.src).then(() => {
+				if (exiting) return;
+				motion.playSwap(direction, apply);
+			});
 		} else {
 			apply();
 		}
@@ -247,6 +273,7 @@
 				<button
 					type="button"
 					class="frame-body"
+					class:art-ready={frameArtReady}
 					style:--frame-ar={frameAr}
 					data-motif={frame?.id ?? 'none'}
 					data-frame-select-handoff-target
@@ -270,7 +297,17 @@
 						{/each}
 					</div>
 					{#if frame?.src}
-						<img class="frame-art" src={frame.src} alt="" draggable="false" />
+						{#key frame.id}
+							<img
+								class="frame-art"
+								src={frame.src}
+								alt=""
+								draggable="false"
+								onload={() => {
+									frameArtReady = true;
+								}}
+							/>
+						{/key}
 					{/if}
 				</button>
 			</div>
@@ -288,7 +325,7 @@
 				? reduced
 					? `${frame.name} hangs ready. Tap the strip to proceed.`
 					: `${frame.name} hangs ready. Pull hard, hold if you wish, then release to drop.`
-				: 'The courier bears no relic. Open Admin to add a frame.'}
+				: 'The courier bears no relic. Open Admin to forge a frame.'}
 			typewriter={false}
 		/>
 		<div class="actions">
@@ -395,16 +432,18 @@
 		display: grid;
 		grid-template-columns: minmax(44px, 3.25rem) minmax(0, 1fr) minmax(44px, 3.25rem);
 		gap: clamp(0.35rem, 2vw, 1rem);
-		align-items: center;
+		align-items: start;
 		justify-self: center;
 		max-width: 780px;
 		width: 100%;
 		margin: 0 auto;
 		height: 100%;
 		min-height: 0;
+		padding-top: clamp(0.15rem, 0.8vh, 0.45rem);
 	}
 
 	.nav {
+		align-self: center;
 		position: relative;
 		z-index: 1;
 		display: grid;
@@ -457,10 +496,11 @@
 		z-index: 2;
 		width: 100%;
 		height: 100%;
-		max-height: min(62dvh, 400px);
+		max-height: min(62dvh, 360px);
 		min-height: 260px;
 		margin: 0 auto;
 		overflow: visible;
+		--rig-lift: clamp(-20px, -3vh, -8px);
 	}
 
 	.bird-rig,
@@ -472,7 +512,7 @@
 
 	.bird-rig {
 		z-index: 3;
-		top: 0;
+		top: var(--rig-lift);
 		width: clamp(150px, 20vw, 180px);
 		translate: -50% 0;
 		transform-origin: center 35%;
@@ -499,6 +539,7 @@
 		transform-origin: left center;
 	}
 
+
 	.rope-physics {
 		position: absolute;
 		inset: 0;
@@ -521,7 +562,7 @@
 
 	.snap-spark {
 		z-index: 5;
-		top: clamp(66px, 10vh, 78px);
+		top: clamp(32px, 5vh, 44px);
 		width: 24px;
 		height: 24px;
 		transform: translate(-50%, -50%);
@@ -559,7 +600,7 @@
 		--frame-ar: 3 / 4;
 		position: relative;
 		display: block;
-		width: min(58vw, 300px, calc(min(48dvh, 340px) * var(--frame-ar)));
+		width: min(58vw, 280px, calc(min(37dvh, 230px) * var(--frame-ar)));
 		height: auto;
 		aspect-ratio: var(--frame-ar);
 		padding: 0;
@@ -598,6 +639,16 @@
 		background:
 			linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, transparent 42%),
 			#1a1c1f;
+		opacity: 0;
+		transition: opacity 160ms steps(3);
+	}
+
+	.frame-body.art-ready .frame-slot {
+		opacity: 1;
+	}
+
+	.frame-body:not(.art-ready) {
+		background: rgba(12, 18, 28, 0.28);
 	}
 
 	.frame-art {
@@ -610,6 +661,12 @@
 		object-fit: contain;
 		pointer-events: none;
 		-webkit-user-drag: none;
+		opacity: 0;
+		transition: opacity 180ms steps(3);
+	}
+
+	.frame-body.art-ready .frame-art {
+		opacity: 1;
 	}
 
 	.pager {
@@ -726,7 +783,7 @@
 		}
 
 		.bird-rig {
-			scale: 0.86;
+			scale: 0.78;
 			transform-origin: top center;
 		}
 

@@ -26,23 +26,34 @@ export function playRevealGiftMotion(root, opts = {}) {
 	if (dock) {
 		tl.add(
 			dock,
-			{ opacity: [0, 1], y: ['0.85rem', '0'], scale: [0.72, 1], duration: 720 },
+			{
+				opacity: [0, 1],
+				y: ['1.4rem', '0'],
+				scale: [0.58, 1.06, 1],
+				rotate: ['-3deg', '1.5deg', '0deg'],
+				duration: 920,
+				ease: 'outElastic(1, 0.72)'
+			},
 			0
 		);
 	}
 	if (head) {
-		tl.add(head, { opacity: [0, 1], y: ['0.65rem', '0'], duration: 520 }, 90);
+		tl.add(head, { opacity: [0, 1], y: ['0.85rem', '0'], scale: [0.94, 1], duration: 620 }, 120);
 	}
 	if (qr) {
-		tl.add(qr, { opacity: [0, 1], y: ['0.75rem', '0'], duration: 520 }, 200);
+		tl.add(qr, { opacity: [0, 1], y: ['0.95rem', '0'], scale: [0.88, 1], duration: 580 }, 240);
 	}
 	if (dialog) {
-		tl.add(dialog, { opacity: [0, 1], y: ['0.55rem', '0'], duration: 480 }, 300);
+		tl.add(dialog, { opacity: [0, 1], y: ['0.7rem', '0'], duration: 520 }, 360);
 	}
 	if (actions) {
 		const kids = actions.children;
 		if (kids.length) {
-			tl.add(kids, { opacity: [0, 1], y: ['0.4rem', '0'], delay: stagger(70), duration: 380 }, 400);
+			tl.add(
+				kids,
+				{ opacity: [0, 1], y: ['0.55rem', '0'], scale: [0.92, 1], delay: stagger(85), duration: 440 },
+				480
+			);
 		}
 	}
 

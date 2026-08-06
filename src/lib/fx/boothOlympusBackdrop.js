@@ -28,11 +28,10 @@ const CSS = `
 }
 .booth-olympus .bo-layer {
 	position: absolute;
-	inset: -4%;
-	width: 108%;
-	height: 108%;
-	left: -4%;
-	top: -4%;
+	left: 50%;
+	bottom: 0;
+	top: auto;
+	/* width/height set in JS (cover-fit, keeps 16:9 — no portrait squish) */
 	image-rendering: pixelated;
 	image-rendering: crisp-edges;
 	will-change: transform;
@@ -832,8 +831,8 @@ function paintMid(buf, w, h) {
 	paintCloud(buf, w, h, 392, 246, 1.2, true, 0);
 
 	/* side Doric temples on floating islands (hexastyle marble facades) */
-	paintIsland(buf, w, h, 78, 126, 78, 14, 18);
-	paintIsland(buf, w, h, 400, 130, 76, 14, 17);
+	paintIsland(buf, w, h, 78, 126, 78, 14, false);
+	paintIsland(buf, w, h, 400, 130, 76, 14, false);
 	paintTemple(buf, w, h, 40, 126, 78, 32, 6, 1, 'grand');
 	paintTemple(buf, w, h, 360, 130, 76, 30, 6, 1, 'grand');
 
@@ -843,7 +842,7 @@ function paintMid(buf, w, h) {
 	paintTemple(buf, w, h, 148, 200, 42, 18, 4, 0.85, 'shrine');
 	paintTemple(buf, w, h, 290, 202, 40, 17, 4, 0.85, 'shrine');
 
-	/* central pantheon — cascade off to the side so strip stays clear */
+	/* central pantheon — cascades off the sides of the main island */
 	paintIsland(buf, w, h, 240, 164, 110, 18, false);
 	paintWaterfall(buf, w, h, 198, 178, 36, 16);
 	paintWaterfall(buf, w, h, 282, 180, 34, 15);
@@ -987,13 +986,15 @@ export function createBoothOlympusBackdrop(root, opts = {}) {
 		{ x: 160, y: 230, speed: 4 }
 	];
 
-	/* live waterfall shimmer over baked cascades */
+	/* live waterfall shimmer over baked cascades (central pantheon only) */
 	const falls = [
-		{ x: 84, y: 136, h: 40, lip: 20 },
 		{ x: 198, y: 178, h: 36, lip: 16 },
-		{ x: 282, y: 180, h: 34, lip: 15 },
-		{ x: 406, y: 140, h: 38, lip: 18 }
+		{ x: 282, y: 180, h: 34, lip: 15 }
 	];
+
+	const layers = [farCvs, midCvs, nearCvs, live];
+	const LAYER_AR = PX_W / PX_H;
+	const COVER_PAD = 1.08;
 
 	let mx = 0.5;
 	let my = 0.45;
@@ -1002,14 +1003,49 @@ export function createBoothOlympusBackdrop(root, opts = {}) {
 	let elapsed = 0;
 	let tick = 0;
 
+	function layerTransform(px, py, depthX, depthY) {
+		const tx = (-px * depthX).toFixed(2);
+		const ty = (-py * depthY).toFixed(2);
+		return `translate3d(calc(-50% + ${tx}px), ${ty}px, 0)`;
+	}
+
 	function applyParallax() {
 		const px = (mx - 0.5) * 12;
 		const py = (my - 0.5) * 5;
-		farCvs.style.transform = `translate3d(${(-px * 0.12).toFixed(2)}px, ${(-py * 0.08).toFixed(2)}px, 0)`;
-		midCvs.style.transform = `translate3d(${(-px * 0.32).toFixed(2)}px, ${(-py * 0.22).toFixed(2)}px, 0)`;
-		nearCvs.style.transform = `translate3d(${(-px * 0.7).toFixed(2)}px, ${(-py * 0.4).toFixed(2)}px, 0)`;
-		live.style.transform = `translate3d(${(-px * 0.38).toFixed(2)}px, ${(-py * 0.26).toFixed(2)}px, 0)`;
+		farCvs.style.transform = layerTransform(px, py, 0.12, 0.08);
+		midCvs.style.transform = layerTransform(px, py, 0.32, 0.22);
+		nearCvs.style.transform = layerTransform(px, py, 0.7, 0.4);
+		live.style.transform = layerTransform(px, py, 0.38, 0.26);
 	}
+
+	/** Cover-fit layers to host — crop on narrow viewports instead of stretching. */
+	function fitLayers() {
+		const cw = root.clientWidth;
+		const ch = root.clientHeight;
+		if (cw < 1 || ch < 1) return;
+		const viewAr = cw / ch;
+		let dw;
+		let dh;
+		if (viewAr > LAYER_AR) {
+			dw = cw * COVER_PAD;
+			dh = dw / LAYER_AR;
+		} else {
+			dh = ch * COVER_PAD;
+			dw = dh * LAYER_AR;
+		}
+		for (const el of layers) {
+			el.style.width = `${dw}px`;
+			el.style.height = `${dh}px`;
+			el.style.top = 'auto';
+			el.style.bottom = '0';
+			el.style.left = '50%';
+		}
+		applyParallax();
+	}
+
+	const ro = new ResizeObserver(() => fitLayers());
+	ro.observe(root);
+	fitLayers();
 
 	function paintLive() {
 		lctx.clearRect(0, 0, PX_W, PX_H);
@@ -1072,6 +1108,7 @@ export function createBoothOlympusBackdrop(root, opts = {}) {
 		},
 		dispose() {
 			cancelAnimationFrame(raf);
+			ro.disconnect();
 			root.innerHTML = '';
 			root.classList.remove('booth-olympus');
 		}
