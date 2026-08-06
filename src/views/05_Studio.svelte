@@ -60,6 +60,10 @@
 						<header class="mobile-head">
 							<p class="eyebrow">MOBILE STUDIO</p>
 							<h1>DECORATE YOUR RELIC</h1>
+							<p class="mobile-hint">
+								Tap stickers below · drag to move · pinch or twist with two fingers to resize &amp;
+								rotate
+							</p>
 						</header>
 					{/if}
 
@@ -169,7 +173,7 @@
 
 	const dialogText = $derived(
 		mobileSession
-			? 'Tap a sticker, drag it into place, then SAVE MY SNAP when your relic is ready.'
+			? 'Tap a sticker to add it. Drag to move. Pinch or spread with two fingers to resize; twist to rotate.'
 			: 'Scan the QR at the booth to open mobile studio.'
 	);
 
@@ -672,6 +676,14 @@
 	.mobile-head h1 {
 		font-size: var(--booth-text-sm);
 		color: #fff8df;
+	}
+
+	.mobile-hint {
+		margin: 0.35rem 0 0;
+		font-size: clamp(0.38rem, 2.6vw, 0.48rem);
+		line-height: 1.65;
+		color: color-mix(in srgb, #fff8df 78%, transparent);
+		text-wrap: pretty;
 	}
 
 	.gallery {
