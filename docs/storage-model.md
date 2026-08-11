@@ -1,6 +1,8 @@
-# Storage Model — Frames, Stickers & Session Images
+# Storage Model — Frames, Stickers & Capture Handoff
 
-This document explains **what gets saved**, **where**, and **how frame photo-canvas coordinates work**, so you can implement the same contract in a production database (PostgreSQL, MySQL, etc.) instead of the current Cloudflare D1 + R2 test stack.
+This document explains **what gets saved**, **where**, and **how frame photo-canvas coordinates work**, so you can implement the same contract against **OpenHouse Photobooth** (or another production API) instead of local-only IndexedDB.
+
+Cloud backend for this app: **Photobooth** (`/api/photobooth` on SFOpenHouseAPI). See [photobooth-backend.md](./photobooth-backend.md).
 
 ---
 
@@ -10,7 +12,7 @@ This document explains **what gets saved**, **where**, and **how frame photo-can
 |------|------------|----------|----------------|
 | **Custom frame** | PNG file | name, motif, w, h | `slots[]` — photo canvas rects |
 | **Custom sticker** | PNG file | name | none |
-| **Session image** | PNG composite | frameId, consumed flag | one-time QR handoff |
+| **Capture (session)** | PNG composite | frameId | reusable capability `id` + `key` for QR |
 
 The app does **not** auto-detect transparent holes in frame PNGs. An admin **draws rectangles** on the frame in Admin → those become `slots`.
 
@@ -158,17 +160,17 @@ Admin can upload **multiple PNGs at once**; each file becomes one sticker row.
 
 ---
 
-## Session image (QR → Studio handoff)
+## Capture handoff (QR → Studio)
 
 After Camera/Reveal, the booth uploads an **unstickered composite PNG** so the guest phone can open Studio and add stickers.
 
-### Create (booth only)
+### Create (booth)
 
-**Request:** `POST /api/sessions`
+**Request:** `POST /api/photobooth/captures`
 
 ```json
 {
-  "imageBase64": "<base64 PNG without data: prefix>",
+  "imageBase64": "<base64 PNG without data: prefix, or data-URL>",
   "frameId": "frame-abc123",
   "contentType": "image/png"
 }
@@ -177,98 +179,68 @@ After Camera/Reveal, the booth uploads an **unstickered composite PNG** so the g
 **Response:**
 
 ```json
-{ "sessionId": "550e8400-e29b-41d4-a716-446655440000" }
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "key": "<capability-secret>",
+  "frameId": "frame-abc123"
+}
 ```
 
-### Consume (guest phone, one-time)
+### Load (guest phone, reusable)
 
-**Request:** `GET /api/sessions/:sessionId`
+**Request:** `GET /api/photobooth/captures/:id?key=...`
 
 **Response:** raw PNG body + header `X-Frame-Id: frame-abc123`
 
-- First GET: returns image, marks `consumed = true`.
-- Second GET: `410 Gone`.
+- Same `id`+`key` may be opened again (reusable capability, not one-time consume).
+- Missing/invalid key → 401/403/404.
 
-QR URL: `{VITE_PUBLIC_ORIGIN}/studio?s={sessionId}`
+QR URL: `{VITE_PUBLIC_ORIGIN}{base}/studio?ses={base64url(`${id}::${key}`)}`
 
-### Session metadata
+### Capture metadata (logical)
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `id` | UUID | Session id (also in QR) |
+| `id` | UUID | Capture id (in QR via `ses`) |
+| `key` | string | Capability secret (paired with id) |
 | `image` | blob | Composite PNG (photos in slots + frame, no stickers) |
 | `frame_id` | string? | Which frame was used (for Studio context) |
-| `created_at` | timestamp | TTL / cleanup |
-| `consumed` | boolean | One-time guarantee |
+| `created_at` | timestamp | TTL / recent-admin ring |
 
-**Code:** [`src/lib/session/sessionClient.js`](../src/lib/session/sessionClient.js), [`worker/src/sessions.js`](../worker/src/sessions.js).
+**Code:** [`src/lib/session/sessionClient.js`](../src/lib/session/sessionClient.js).
 
 ---
 
-## Current test stack (Cloudflare)
+## Current cloud stack (Photobooth)
 
 ```
-┌─────────────┐     metadata      ┌──────────────┐
-│  D1 assets  │◄──────────────────│    Worker    │
-│  slots_json │                   │     API      │
-│  r2_key     │     blobs         └──────┬───────┘
-└─────────────┘                          │
-                                         ▼
-                                  ┌──────────────┐
-                                  │  R2 bucket   │
-                                  │ frames/*.png │
-                                  │ stickers/*.  │
-                                  │ sessions/*.  │
-                                  └──────────────┘
+┌──────────────────┐     meta + enc blobs     ┌────────────────────┐
+│  Photobooth API  │◄─────────────────────────│  Booth / Admin /   │
+│  /api/photobooth │                          │  guest Studio      │
+│  frames/stickers │                          └────────────────────┘
+│  captures        │
+└──────────────────┘
 ```
 
-### D1 `assets` table
+| Mode | Trigger | Customs | Captures |
+|------|---------|---------|----------|
+| Cloud | `VITE_API_BASE` set | Photobooth frames/stickers | Photobooth captures (`id`+`key`) |
+| Offline | `VITE_API_BASE` empty | IndexedDB (data URL `src`) | In-memory stub (same `ses` shape) |
 
-```sql
-CREATE TABLE assets (
-  id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL,           -- 'frame' | 'sticker'
-  name TEXT NOT NULL,
-  motif TEXT,
-  r2_key TEXT NOT NULL,         -- e.g. frames/{id}.png
-  w INTEGER,
-  h INTEGER,
-  slots_json TEXT,              -- JSON string; NULL for stickers
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-```
-
-`slots_json` example:
-
-```json
-[{"id":"slot-1","x":0.09,"y":0.06,"w":0.81,"h":0.73}]
-```
-
-### D1 `sessions` table
-
-```sql
-CREATE TABLE sessions (
-  id TEXT PRIMARY KEY,
-  r2_key TEXT NOT NULL,         -- sessions/{id}.png
-  frame_id TEXT,
-  created_at INTEGER NOT NULL,
-  consumed INTEGER NOT NULL DEFAULT 0
-);
-```
+Admin writes and recent-capture peek send header `Auth: {VITE_ADMIN_AUTH}`. Public GETs do not.
 
 ### Offline fallback (no cloud)
 
 When `VITE_API_BASE` is unset:
 
 - **Assets:** IndexedDB, same JSON shape; `src` is a data URL instead of HTTP URL.
-- **Sessions:** in-memory Map on the booth tab (same-machine dev only).
+- **Captures:** in-memory Map on the booth tab (same-machine / same-tab Studio).
 
 ---
 
 ## Mapping to a production database
 
-The Cloudflare stack is a reference implementation. For PostgreSQL (or similar), split **blobs** and **metadata** the same way:
+Photobooth is the production-facing API for this app. If you host your own store, split **blobs** and **metadata** the same way:
 
 ### Recommended schema
 
@@ -280,14 +252,14 @@ The Cloudflare stack is a reference implementation. For PostgreSQL (or similar),
 | `kind` | enum | `frame`, `sticker` |
 | `name` | varchar | |
 | `motif` | varchar nullable | |
-| `image_url` | varchar | S3/R2/CDN URL |
+| `image_url` | varchar | Object storage / CDN URL |
 | `width` | int nullable | PNG natural width |
 | `height` | int nullable | PNG natural height |
 | `slots` | **JSONB** nullable | Frame only — same array shape |
 | `created_at` | timestamptz | |
 | `updated_at` | timestamptz | |
 
-**Option A — JSONB column (simplest, matches today):**
+**Option A — JSONB column (simplest):**
 
 ```sql
 slots JSONB  -- [{"id":"slot-1","x":0.1,"y":0.05,"w":0.8,"h":0.7}, ...]
@@ -310,31 +282,29 @@ CREATE TABLE frame_slots (
 
 When reading a frame for the app, either return embedded `slots` JSON or `JOIN frame_slots ORDER BY slot_index` and build the array.
 
-**`sessions`**
+**`captures`**
 
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | UUID PK | |
+| `key_hash` | varchar | Store hashed capability key |
 | `image_url` | varchar | Or object key in blob storage |
 | `frame_id` | UUID FK nullable | |
 | `created_at` | timestamptz | |
-| `consumed_at` | timestamptz nullable | NULL = not yet opened |
 
-### API contract to keep frontend working
-
-Your backend should expose the same shapes the app already expects:
+### API contract the frontend expects (Photobooth)
 
 | Endpoint | Notes |
 |----------|-------|
-| `GET /api/assets` | `{ assets: [...] }` with `slots` array on frames |
-| `GET /api/assets/:id/file` | Stream PNG; **CORS** required for canvas |
-| `POST /api/assets` | Multipart: `file`, `kind`, `name`, `slots` (JSON string for frames) |
-| `PATCH /api/assets/:id` | Update name / image / slots |
-| `DELETE /api/assets/:id` | |
-| `POST /api/sessions` | Booth auth; body with image + frameId |
-| `GET /api/sessions/:id` | PNG body + `X-Frame-Id`; one-time consume |
+| `GET /api/photobooth/frames` + `.../stickers` | Merge into app `assets[]`; `slots` on frames |
+| `GET` frame/sticker image URLs | Stream PNG; **CORS** required for canvas |
+| `POST /api/photobooth/frames` or `.../stickers` | Multipart: `File`, `Name`, `Slots` / `Motif` (PascalCase) |
+| `PATCH` / `DELETE` on kind paths | Admin `Auth` header |
+| `POST /api/photobooth/captures` | Body with image + frameId → `{ id, key, frameId }` |
+| `GET /api/photobooth/captures/:id?key=` | PNG body + `X-Frame-Id`; reusable |
+| `GET /api/photobooth/admin/captures/recent` | Admin Auth; last few previews |
 
-Frontend modules that call these: [`assetApi.js`](../src/lib/assets/assetApi.js), [`assetStore.js`](../src/lib/assets/assetStore.js), [`sessionClient.js`](../src/lib/session/sessionClient.js).
+Frontend modules: [`assetApi.js`](../src/lib/assets/assetApi.js), [`assetStore.js`](../src/lib/assets/assetStore.js), [`sessionClient.js`](../src/lib/session/sessionClient.js).
 
 ---
 
@@ -362,9 +332,8 @@ Admin draws slots on PNG
         ▼
 slots[] normalized 0–1
         │
-        ├── Cloud: POST /api/assets (multipart)
-        │         → blob → object storage
-        │         → metadata + slots_json → DB
+        ├── Cloud: POST /api/photobooth/frames (multipart)
+        │         → encrypted blob + meta on Photobooth
         │
         └── Local: IndexedDB record (src = data URL, slots inline)
         │
@@ -375,22 +344,22 @@ initAssets() → frames store
 Camera uses slots for hole CSS + snap count
         │
         ▼
-compositeFramePhotos() → Reveal → session upload
+compositeFramePhotos() → Reveal → capture upload
 ```
 
-### Session handoff
+### Capture handoff
 
 ```
 Reveal composites photos + frame (no stickers)
         │
         ▼
-POST /api/sessions { imageBase64, frameId }
+POST /api/photobooth/captures { imageBase64, frameId }
         │
         ▼
-DB row + PNG in blob storage
+{ id, key, frameId }
         │
         ▼
-QR → guest phone GET /api/sessions/:id
+QR → guest phone GET .../captures/{id}?key=...
         │
         ▼
 Studio loads image + frameId → sticker editor
@@ -400,17 +369,17 @@ Studio loads image + frameId → sticker editor
 
 ## Checklist for your real database
 
-- [ ] Store frame PNG in blob storage; URL in `assets.image_url`
+- [ ] Store frame PNG in blob storage; URL on asset record
 - [ ] Store `slots` as JSONB (or `frame_slots` table) — **same `{id,x,y,w,h}` shape**
 - [ ] Store sticker PNG the same way without slots
-- [ ] Store session PNG + `frame_id` + one-time consume flag
+- [ ] Store capture PNG + `frame_id` + reusable capability key
 - [ ] Serve asset URLs with `Access-Control-Allow-Origin` (canvas export breaks without CORS)
-- [ ] Keep booth-only auth on POST/PATCH/DELETE assets and POST sessions
-- [ ] Return `slots` array on `GET /api/assets` so guest phones load customs in Studio
+- [ ] Keep Admin-only auth on POST/PATCH/DELETE assets and recent captures
+- [ ] Return `slots` array on frame list so guest phones load customs in Studio
 
 ---
 
 ## Related docs
 
-- [cloudflare-backend.md](./cloudflare-backend.md) — deploy the current test Worker
-- [cloudflare-session-draft.md](./cloudflare-session-draft.md) — original session design notes
+- [photobooth-backend.md](./photobooth-backend.md) — env, QR `ses`, offline vs cloud
+- [Photobooth API integration design](./superpowers/specs/2026-08-11-photobooth-api-integration-design.md)

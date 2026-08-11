@@ -106,7 +106,7 @@ export const route = derived(currentRoute, ($r) => $r.name);
 /**
  * Navigate by name (`frame`) or path (`/frame`).
  * @param {string} to
- * @param {string} [search] Optional query string, e.g. `?s=uuid`
+ * @param {string} [search] Optional query string, e.g. `?ses=...`
  */
 export function go(to, search = '') {
 	const matched = resolve(to);
