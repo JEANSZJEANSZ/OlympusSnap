@@ -1,5 +1,5 @@
 /**
- * Live asset catalog: seed frames/stickers + custom uploads (Cloudflare or IndexedDB).
+ * Live asset catalog: seed frames/stickers + custom uploads (Photobooth API or IndexedDB).
  */
 import { get, writable } from 'svelte/store';
 import {
@@ -361,7 +361,8 @@ export async function updateAsset(id, patch) {
 			if (!cleaned?.length) throw new Error('Add at least one photo canvas');
 			apiPatch.slots = cleaned;
 		}
-		await apiPatchAsset(id, apiPatch);
+		const kind = get(stickers).some((s) => s.id === id) ? 'sticker' : 'frame';
+		await apiPatchAsset(id, apiPatch, kind);
 		rebuildStores(await loadCustoms());
 		return;
 	}
@@ -393,7 +394,8 @@ export async function removeCustomAsset(id) {
 	if (!hit?.custom) throw new Error('Seed assets cannot be deleted');
 
 	if (isCloudAssetsEnabled()) {
-		await apiDeleteAsset(id);
+		const kind = get(stickers).some((s) => s.id === id) ? 'sticker' : 'frame';
+		await apiDeleteAsset(id, kind);
 		rebuildStores(await loadCustoms());
 		return;
 	}
@@ -403,7 +405,7 @@ export async function removeCustomAsset(id) {
 }
 
 /**
- * Push IndexedDB customs to cloud (skips ids already present remotely).
+ * Push IndexedDB customs to cloud (skips name+kind already present remotely).
  * @returns {Promise<{ uploaded: number; skipped: number }>}
  */
 export async function uploadLocalCustomsToCloud() {
@@ -415,18 +417,16 @@ export async function uploadLocalCustomsToCloud() {
 	if (!local.length) return { uploaded: 0, skipped: 0 };
 
 	const cloud = await listCustoms();
-	const cloudIds = new Set(cloud.map((a) => a.id));
 
 	let uploaded = 0;
 	let skipped = 0;
 
 	for (const row of local) {
-		if (cloudIds.has(row.id)) {
+		if (cloud.some((c) => c.kind === row.kind && c.name === row.name)) {
 			skipped++;
 			continue;
 		}
 		await apiCreateAsset({
-			id: row.id,
 			kind: row.kind,
 			name: row.name,
 			motif: row.motif,
