@@ -88,23 +88,3 @@ export function buildStudioSessionUrl({ id, key }) {
 	const path = `${toFullPath('/studio')}?ses=${encodeURIComponent(encodeSes({ id, key }))}`;
 	return `${origin}${path}`;
 }
-
-/**
- * @deprecated Removed in Task 5 — Reveal/Studio migrate in Task 6.
- * @param {string} _sessionId
- */
-export async function consumeSession(_sessionId) {
-	const err = new Error('consumeSession removed — use loadCapture(id, key) (Task 6)');
-	err.code = 'NOT_FOUND';
-	throw err;
-}
-
-/**
- * @deprecated Removed in Task 5 — use getSessionFromUrl() (Task 6).
- * @returns {never}
- */
-export function getSessionIdFromUrl() {
-	const err = new Error('getSessionIdFromUrl removed — use getSessionFromUrl() (Task 6)');
-	err.code = 'NOT_FOUND';
-	throw err;
-}
