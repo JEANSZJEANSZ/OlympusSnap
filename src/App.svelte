@@ -28,7 +28,8 @@
 
 <script>
 	import { onMount } from 'svelte';
-	import { currentRoute, go } from './router/index.js';
+	import { get } from 'svelte/store';
+	import { adminReturnTo, currentRoute, go } from './router/index.js';
 	import { initAssets } from './lib/assets/assetStore.js';
 	import FrameHandoffOverlay from './lib/components/FrameHandoffOverlay.svelte';
 	import ImageHandoffOverlay from './lib/components/ImageHandoffOverlay.svelte';
@@ -48,6 +49,8 @@
 		pressTimer = setTimeout(() => {
 			pressTimer = null;
 			suppressClick = true;
+			const from = get(currentRoute).name;
+			adminReturnTo.set(from === 'admin' ? 'landing' : from);
 			go('admin');
 		}, 900);
 	}
@@ -111,6 +114,6 @@
 		flex: 1;
 		min-height: 0;
 		position: relative;
-		overflow: auto;
+		overflow: hidden;
 	}
 </style>

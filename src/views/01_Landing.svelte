@@ -13,7 +13,10 @@
 	<div class="world" aria-hidden="true">
 		<div class="olympus-sky-mount" {@attach attachSkyRoot}></div>
 		<canvas class="pixel-canvas hero" {@attach attachHeroCanvas}></canvas>
+		<canvas class="ember-canvas" {@attach attachEmberCanvas} aria-hidden="true"></canvas>
+		<div class="sky-flicker" aria-hidden="true"></div>
 		<div class="light-veil"></div>
+		<div class="scan-ritual" aria-hidden="true"></div>
 	</div>
 
 	<div class="exit-flash" aria-hidden="true">
@@ -40,18 +43,19 @@
 
 		<footer class="foot">
 			<div class="oracle">
-				<DialogBox speaker="PYTHIA" text={oracleLine} />
+				<DialogBox speaker="PYTHIA" text={oracleLine} typewriter={!reduced} />
 			</div>
 		</footer>
 	</div>
 </div>
 
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { go } from '../router/index.js';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import { randomPythiaQuote } from '../lib/content/pythiaQuotes.js';
 	import { createLandingMotion } from '../lib/fx/landingMotion.js';
+	import { createLandingEmbers, createLandingSkyFlicker } from '../lib/fx/landingOverdrive.js';
 
 	const oracleLine = randomPythiaQuote();
 
@@ -59,6 +63,8 @@
 	let skyRootEl = $state();
 	/** @type {HTMLCanvasElement | undefined} */
 	let heroCanvasEl = $state();
+	/** @type {HTMLCanvasElement | undefined} */
+	let emberCanvasEl = $state();
 	let reduced = $state(false);
 	let exiting = $state(false);
 
@@ -78,17 +84,30 @@
 		};
 	};
 
+	/** @type {import('svelte/attachments').Attachment<HTMLCanvasElement>} */
+	const attachEmberCanvas = (element) => {
+		emberCanvasEl = element;
+		return () => {
+			if (emberCanvasEl === element) emberCanvasEl = undefined;
+		};
+	};
+
 	/** @type {null | { setDay: (d: number, immediate?: boolean) => void, nudgeDay: (d: number) => void, setPointer: (x: number, y: number) => void, dispose: () => void }} */
 	let world = null;
-	/** @type {null | { playExit: (onDone: () => void) => void, dispose: () => void }} */
+	/** @type {null | { playExit: (onDone: () => void, hooks?: { burstSky?: () => void }) => void, setPointerParallax: (x: number, y: number) => void, dispose: () => void }} */
 	let uiMotion = null;
+	/** @type {null | { resize: () => void, setPointer: (x: number, y: number) => void, dispose: () => void }} */
+	let embers = null;
+	/** @type {null | { burst: () => void, dispose: () => void }} */
+	let skyFlicker = null;
 
 	function enterOlympus() {
 		if (exiting) return;
 		exiting = true;
 		const finish = () => go('frame');
-		if (uiMotion) uiMotion.playExit(finish);
-		else finish();
+		if (uiMotion) {
+			uiMotion.playExit(finish, { burstSky: () => skyFlicker?.burst() });
+		} else finish();
 	}
 
 	/** @param {KeyboardEvent} e */
@@ -103,7 +122,11 @@
 	function onPointerMove(e) {
 		if (reduced) return;
 		const r = /** @type {HTMLElement} */ (e.currentTarget).getBoundingClientRect();
-		world?.setPointer((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+		const x = (e.clientX - r.left) / r.width;
+		const y = (e.clientY - r.top) / r.height;
+		world?.setPointer(x, y);
+		uiMotion?.setPointerParallax(x, y);
+		embers?.setPointer(x, y);
 	}
 
 	onMount(() => {
@@ -111,7 +134,20 @@
 		const el = /** @type {HTMLElement | null} */ (document.querySelector('.landing'));
 		let disposed = false;
 
-		if (el) uiMotion = createLandingMotion(el, { reduced });
+		if (el) {
+			uiMotion = createLandingMotion(el, { reduced });
+			skyFlicker = createLandingSkyFlicker(el, { reduced });
+		}
+
+		const bootEmbers = async () => {
+			await tick();
+			if (disposed || reduced || !emberCanvasEl) return;
+			embers = createLandingEmbers(emberCanvasEl, { reduced });
+		};
+		bootEmbers();
+
+		const onResize = () => embers?.resize();
+		window.addEventListener('resize', onResize);
 
 		/** @param {WheelEvent} e */
 		const onWheel = (e) => {
@@ -136,10 +172,15 @@
 		return () => {
 			disposed = true;
 			el?.removeEventListener('wheel', onWheel);
+			window.removeEventListener('resize', onResize);
 			world?.dispose();
 			world = null;
 			uiMotion?.dispose();
 			uiMotion = null;
+			embers?.dispose();
+			embers = null;
+			skyFlicker?.dispose();
+			skyFlicker = null;
 		};
 	});
 </script>
@@ -174,10 +215,11 @@
 
 	.pixel-canvas {
 		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
+		left: 50%;
+		bottom: 0;
+		top: auto;
 		display: block;
+		/* width/height from makeRenderer cover-fit */
 		image-rendering: pixelated;
 		image-rendering: crisp-edges;
 	}
@@ -192,6 +234,58 @@
 		z-index: 1;
 	}
 
+	.ember-canvas {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+		image-rendering: pixelated;
+		image-rendering: crisp-edges;
+	}
+
+	.sky-flicker {
+		position: absolute;
+		inset: 0;
+		z-index: 3;
+		pointer-events: none;
+		opacity: 0;
+		background:
+			radial-gradient(ellipse 90% 55% at 50% 28%, rgba(255, 252, 235, 0.55), transparent 62%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, transparent 35%);
+		mix-blend-mode: screen;
+	}
+
+	:global(.sky-flicker.active) {
+		opacity: 1;
+		animation: zeus-flash 0.2s steps(3, end) both;
+	}
+
+	:global(.olympus-sky-mount.divine-kick) {
+		animation: divine-kick 0.2s ease-out both;
+	}
+
+	.scan-ritual {
+		position: absolute;
+		inset: 0;
+		z-index: 4;
+		pointer-events: none;
+		opacity: 0.055;
+		background: repeating-linear-gradient(
+			0deg,
+			transparent,
+			transparent 2px,
+			rgba(4, 12, 28, 0.45) 2px,
+			rgba(4, 12, 28, 0.45) 4px
+		);
+		mix-blend-mode: multiply;
+	}
+
+	.landing:not(.reduced) .scan-ritual {
+		animation: scan-drift 12s linear infinite;
+	}
+
 	:global(.landing.fx-anime) .pixel-canvas.hero,
 	:global(.landing.fx-anime) .plaque,
 	:global(.landing.fx-anime) .word,
@@ -202,22 +296,18 @@
 		animation: none;
 	}
 
-	/*
-	 * Soft floor wash only — a top radial + soft-light blend was painting a
-	 * visible rectangular plate over the sun/moon (the "ugly aura box").
-	 */
+	/* Hard floor shade — keeps 16-bit stage readable under the plaque */
 	.light-veil {
 		position: absolute;
 		inset: 0;
 		z-index: 2;
 		pointer-events: none;
-		opacity: 0.5;
-		background: radial-gradient(
-			ellipse 90% 42% at 50% 110%,
-			color-mix(in srgb, #1a4a72 38%, transparent),
-			transparent 72%
+		opacity: 0.35;
+		background: linear-gradient(
+			to top,
+			color-mix(in srgb, #071936 55%, transparent) 0%,
+			transparent 38%
 		);
-		mix-blend-mode: multiply;
 	}
 
 	.exit-flash {
@@ -256,19 +346,16 @@
 		will-change: transform, opacity;
 	}
 
-	.landing:not(.fx-anime):not(.reduced) .light-veil {
-		animation: veil-breathe 8s ease-in-out infinite;
-	}
-
 	.stage {
 		position: relative;
-		z-index: 4;
+		z-index: 5;
 		height: 100%;
 		display: grid;
 		grid-template-rows: auto 1fr auto;
 		padding: clamp(0.55rem, 2vh, 1rem) 1rem 0.55rem;
 		pointer-events: none;
 		text-align: center;
+		will-change: transform;
 	}
 
 	.landing.exiting .stage {
@@ -628,6 +715,42 @@
 		}
 	}
 
+	@keyframes zeus-flash {
+		0% {
+			opacity: 0;
+		}
+		35% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 0;
+		}
+	}
+
+	@keyframes divine-kick {
+		0% {
+			transform: translate(0, 0) scale(1);
+			filter: brightness(1);
+		}
+		35% {
+			transform: translate(-4px, 2px) scale(1.012);
+			filter: brightness(1.18) saturate(1.08);
+		}
+		100% {
+			transform: translate(0, 0) scale(1);
+			filter: brightness(1);
+		}
+	}
+
+	@keyframes scan-drift {
+		from {
+			background-position: 0 0;
+		}
+		to {
+			background-position: 0 48px;
+		}
+	}
+
 	.landing.reduced .plaque,
 	.landing.reduced .word,
 	.landing.reduced .kicker,
@@ -635,11 +758,19 @@
 	.landing.reduced .ascend-hint,
 	.landing.reduced .oracle,
 	.landing.reduced .pixel-canvas.hero,
-	.landing.reduced .light-veil {
+	.landing.reduced .light-veil,
+	.landing.reduced .scan-ritual,
+	.landing.reduced .ember-canvas,
+	.landing.reduced .sky-flicker {
 		animation: none;
 		opacity: 1;
 		transform: none;
 		filter: none;
+	}
+
+	.landing.reduced .ember-canvas,
+	.landing.reduced .sky-flicker {
+		display: none;
 	}
 
 	.landing.reduced .plaque::before,

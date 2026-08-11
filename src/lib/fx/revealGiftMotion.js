@@ -1,5 +1,5 @@
 /**
- * Gift reveal UI entrance — anime.js stagger after marble crack.
+ * Gift reveal UI entrance — anime.js stagger after limestone crack settles.
  */
 import { createTimeline, stagger } from 'animejs';
 
@@ -24,21 +24,36 @@ export function playRevealGiftMotion(root, opts = {}) {
 	});
 
 	if (dock) {
-		tl.add(dock, { opacity: [0, 1], y: ['1.2rem', '0'], scale: [0.94, 1], duration: 650 }, 0);
+		tl.add(
+			dock,
+			{
+				opacity: [0, 1],
+				y: ['1.4rem', '0'],
+				scale: [0.58, 1.06, 1],
+				rotate: ['-3deg', '1.5deg', '0deg'],
+				duration: 920,
+				ease: 'outElastic(1, 0.72)'
+			},
+			0
+		);
 	}
 	if (head) {
-		tl.add(head, { opacity: [0, 1], y: ['0.8rem', '0'], duration: 550 }, 80);
+		tl.add(head, { opacity: [0, 1], y: ['0.85rem', '0'], scale: [0.94, 1], duration: 620 }, 120);
 	}
 	if (qr) {
-		tl.add(qr, { opacity: [0, 1], y: ['1rem', '0'], duration: 550 }, 180);
+		tl.add(qr, { opacity: [0, 1], y: ['0.95rem', '0'], scale: [0.88, 1], duration: 580 }, 240);
 	}
 	if (dialog) {
-		tl.add(dialog, { opacity: [0, 1], y: ['0.8rem', '0'], duration: 500 }, 280);
+		tl.add(dialog, { opacity: [0, 1], y: ['0.7rem', '0'], duration: 520 }, 360);
 	}
 	if (actions) {
 		const kids = actions.children;
 		if (kids.length) {
-			tl.add(kids, { opacity: [0, 1], y: ['0.5rem', '0'], delay: stagger(80), duration: 400 }, 380);
+			tl.add(
+				kids,
+				{ opacity: [0, 1], y: ['0.55rem', '0'], scale: [0.92, 1], delay: stagger(85), duration: 440 },
+				480
+			);
 		}
 	}
 

@@ -85,6 +85,14 @@ video {
 	image-rendering: crisp-edges;
 }
 
+/* Photobooth portraits / composites — never nearest-neighbor upscale */
+img.photo-smooth,
+.photo-smooth {
+	image-rendering: auto !important;
+	image-rendering: smooth !important;
+	-ms-interpolation-mode: bicubic;
+}
+
 button {
 	font-family: inherit;
 	cursor: pointer;
@@ -273,6 +281,13 @@ a {
 		--booth-filter-rail-width: clamp(18rem, 15rem + 4vw, 26rem);
 		--booth-filter-swatch: clamp(5.25rem, 4.5rem + 1.5vh, 6.75rem);
 		--booth-filter-tile-h: calc(var(--booth-filter-swatch) + 1.1rem);
+	}
+}
+
+@media (max-width: 640px) {
+	.booth-view {
+		--booth-filter-swatch: clamp(2.75rem, 10vw, 3.5rem);
+		--booth-touch: max(2.75rem, 44px);
 	}
 }
 

@@ -14,24 +14,12 @@
  */
 
 import { getLiveFrameById } from '../assets/assetStore.js';
+import { loadImageForCanvas as loadImage } from './loadImageForCanvas.js';
 
 /** Minimum long edge for composite exports (sharp frame strokes). */
 const EXPORT_MIN_LONG_EDGE = 2400;
 /** Maximum long edge to stay within browser canvas limits. */
 const EXPORT_MAX_LONG_EDGE = 4096;
-
-/**
- * @param {string} src
- * @returns {Promise<HTMLImageElement>}
- */
-function loadImage(src) {
-	return new Promise((resolve, reject) => {
-		const img = new Image();
-		img.onload = () => resolve(img);
-		img.onerror = () => reject(new Error(`Failed to load ${src}`));
-		img.src = src;
-	});
-}
 
 /**
  * Cover-fit `img` into destination rect (clip).

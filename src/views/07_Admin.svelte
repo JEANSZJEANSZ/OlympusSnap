@@ -1,24 +1,26 @@
 <section class="admin-view" bind:this={rootEl} class:exiting>
-	<div class="sky-wash" aria-hidden="true"></div>
-	<div class="stars" aria-hidden="true">
-		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-	</div>
-	<div class="mountains mountains-far" aria-hidden="true"></div>
-	<div class="mountains mountains-near" aria-hidden="true"></div>
+	<BoothOlympusBackdrop />
+	<div class="back-veil" aria-hidden="true"></div>
 	<div class="forge-glow" aria-hidden="true"></div>
 
 	<div class="content">
 		<header class="head">
 			<p class="eyebrow">HEPHAESTUS FORGE · LOCAL RELICS · CART 01</p>
 			<h1>ADMIN ARMORY</h1>
-			<p class="tagline">Forge frames & stickers for this booth — sealed in the tablet’s vault.</p>
+			<p class="tagline">
+				Forge frames & stickers for this booth — {cloudEnabled
+					? 'synced to the cloud forge'
+					: 'sealed in the tablet’s vault'}.
+			</p>
 		</header>
 
 		{#if !unlocked}
 			<div class="gate forge-panel">
 				<DialogBox
 					speaker="CERBERUS"
-					text="Enter the Admin PIN to forge new relics. Default: olympus"
+					text={cloudEnabled
+						? 'Enter PIN + Photobooth Auth to forge relics. Default PIN: olympus'
+						: 'Enter the Admin PIN to forge new relics. Default: olympus'}
 					typewriter={false}
 				/>
 				<label class="field">
@@ -30,6 +32,18 @@
 						onkeydown={(e) => e.key === 'Enter' && tryUnlock()}
 					/>
 				</label>
+				{#if cloudEnabled}
+					<label class="field">
+						<span>API AUTH</span>
+						<input
+							type="password"
+							bind:value={authInput}
+							autocomplete="off"
+							placeholder="Auth header for Photobooth"
+							onkeydown={(e) => e.key === 'Enter' && tryUnlock()}
+						/>
+					</label>
+				{/if}
 				{#if pinError}
 					<p class="err">{pinError}</p>
 				{/if}
@@ -135,10 +149,16 @@
 				</div>
 			{:else}
 				<div class="upload forge-panel">
-					<p class="panel-kicker">ADD {tab === 'frames' ? 'FRAME' : 'STICKER'}</p>
+					<p class="panel-kicker">ADD {tab === 'frames' ? 'FRAME' : 'STICKERS'}</p>
 					<label class="field">
 						<span>Name</span>
-						<input type="text" bind:value={uploadName} placeholder="Display name" />
+						<input
+							type="text"
+							bind:value={uploadName}
+							placeholder={tab === 'stickers'
+								? 'Optional — single upload only'
+								: 'Display name'}
+						/>
 					</label>
 					{#if tab === 'frames'}
 						<label class="field">
@@ -150,11 +170,12 @@
 						bind:this={fileInput}
 						type="file"
 						accept="image/png,.png"
+						multiple={tab === 'stickers'}
 						hidden
 						onchange={onFileChosen}
 					/>
 					<PixelButton
-						label={busy ? 'WAIT…' : 'CHOOSE IMAGE'}
+						label={busy ? 'WAIT…' : tab === 'stickers' ? 'CHOOSE IMAGES' : 'CHOOSE IMAGE'}
 						variant="accent"
 						fullWidth
 						disabled={busy}
@@ -281,7 +302,42 @@
 				</div>
 			</div>
 
+			{#if cloudEnabled}
+				<div class="recent-panel forge-panel">
+					<p class="panel-kicker">RECENT CAPTURES</p>
+					{#if recentError}
+						<p class="hint">{recentError}</p>
+					{:else if !recent?.length}
+						<p class="hint">No recent captures (or API restarted).</p>
+					{:else}
+						<ul class="recent-grid">
+							{#each recent as item}
+								<li>
+									{#if item.previewBase64}
+										<img
+											src={`data:image/png;base64,${item.previewBase64}`}
+											alt=""
+										/>
+									{/if}
+									<span>{item.frameId}</span>
+									<span>{item.createdAt}</span>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					<PixelButton label="REFRESH" variant="ghost" onclick={refreshRecent} />
+				</div>
+			{/if}
+
 			<div class="footer-actions">
+				{#if cloudEnabled}
+					<PixelButton
+						label="UPLOAD LOCAL → CLOUD"
+						variant="ghost"
+						disabled={busy}
+						onclick={onUploadLocalToCloud}
+					/>
+				{/if}
 				<PixelButton label="EXPORT JSON" variant="ghost" disabled={busy} onclick={onExport} />
 				<label class="import-btn">
 					IMPORT JSON
@@ -295,16 +351,20 @@
 				<PixelButton label="EXIT ADMIN" variant="primary" onclick={goBack} />
 			</div>
 			<p class="hint">
-				Seeds = shipped defaults (read-only). Customs live in this tablet’s IndexedDB. Seed toggles
-				persist on this device and travel with EXPORT/IMPORT.
+				Seeds = shipped defaults (read-only). Customs live in {cloudEnabled
+					? 'OpenHouse Photobooth API when VITE_API_BASE is set'
+					: 'this tablet’s IndexedDB'}. Seed toggles persist on this device and travel with
+				EXPORT/IMPORT.
 			</p>
 		{/if}
 	</div>
 </section>
 
 <script>
-	import { go } from '../router/index.js';
-	import { playViewExit } from '../lib/fx/viewExitMotion.js';
+	import { onMount, tick } from 'svelte';
+	import { get } from 'svelte/store';
+	import { adminReturnTo, go } from '../router/index.js';
+	import { createAdminExitMotion, playAdminExitOnce } from '../lib/fx/adminExitMotion.js';
 	import {
 		frames,
 		stickers,
@@ -313,19 +373,24 @@
 		setShowSeedFrames,
 		setShowSeedStickers,
 		addFrame,
-		addSticker,
+		addStickers,
 		updateAsset,
 		removeCustomAsset,
 		exportCatalog,
 		importCatalog,
+		uploadLocalCustomsToCloud,
+		isCloudAssetsEnabled,
 		verifyAdminPin,
 		getAdminPin,
 		setAdminPin,
 		fileToDataUrl,
 		isPngFile
 	} from '../lib/assets/assetStore.js';
+	import { getAdminAuth, setAdminAuth } from '../lib/assets/adminAuth.js';
+	import { listRecentCaptures } from '../lib/assets/assetApi.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
+	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 	import FrameSlotEditor from '../lib/components/FrameSlotEditor.svelte';
 	import FrameCropEditor from '../lib/components/FrameCropEditor.svelte';
 
@@ -336,6 +401,20 @@
 		typeof window !== 'undefined' &&
 			window.matchMedia('(prefers-reduced-motion: reduce)').matches
 	);
+
+	let recent = $state(/** @type {import('../lib/assets/assetApi.js').RecentCapture[]} */ ([]));
+	let recentError = $state('');
+
+	async function refreshRecent() {
+		if (!isCloudAssetsEnabled()) return;
+		try {
+			recent = await listRecentCaptures();
+			recentError = '';
+		} catch (e) {
+			recentError = e instanceof Error ? e.message : 'Failed to load recent captures';
+			recent = [];
+		}
+	}
 
 	/**
 	 * @typedef {{ id: string; x: number; y: number; w: number; h: number }} FrameSlot
@@ -354,6 +433,7 @@
 
 	let unlocked = $state(false);
 	let pinInput = $state('');
+	let authInput = $state(getAdminAuth());
 	let pinError = $state('');
 	let tab = $state(/** @type {'frames' | 'stickers'} */ ('frames'));
 	let status = $state('');
@@ -372,27 +452,53 @@
 	let editorError = $state('');
 
 	function tryUnlock() {
-		if (verifyAdminPin(pinInput.trim())) {
-			unlocked = true;
-			pinError = '';
-			pinInput = '';
-			status = '';
-		} else {
+		if (!verifyAdminPin(pinInput.trim())) {
 			pinError = 'Wrong PIN. Default seed: olympus';
+			return;
 		}
+		if (cloudEnabled) {
+			const auth = authInput.trim();
+			if (!auth) {
+				pinError = 'API Auth required for cloud forge writes.';
+				return;
+			}
+			setAdminAuth(auth);
+		}
+		unlocked = true;
+		pinError = '';
+		pinInput = '';
+		status = '';
+		refreshRecent();
 	}
+
+	/** @type {null | ReturnType<typeof createAdminExitMotion>} */
+	let exitMotion = null;
+
+	onMount(() => {
+		let disposed = false;
+		(async () => {
+			await tick();
+			if (disposed || !rootEl) return;
+			exitMotion = createAdminExitMotion(rootEl, { reduced });
+		})();
+		return () => {
+			disposed = true;
+			exitMotion?.dispose();
+			exitMotion = null;
+		};
+	});
 
 	async function goBack() {
 		if (exiting) return;
 		exiting = true;
-		unlocked = false;
-		pinInput = '';
-		pinError = '';
-		status = '';
-		frameDraft = null;
-		editorError = '';
-		await playViewExit(rootEl, { reduced, direction: 'right' });
-		go('landing');
+
+		await new Promise((resolve) => {
+			if (exitMotion) exitMotion.playExit(resolve);
+			else playAdminExitOnce(rootEl, { reduced }).then(resolve);
+		});
+
+		const returnTo = get(adminReturnTo);
+		go(returnTo);
 	}
 
 	function triggerUpload() {
@@ -494,19 +600,20 @@
 	/** @param {Event} e */
 	async function onFileChosen(e) {
 		const input = /** @type {HTMLInputElement} */ (e.currentTarget);
-		const file = input.files?.[0];
+		const files = Array.from(input.files ?? []);
 		input.value = '';
-		if (!file) return;
+		if (!files.length) return;
 
-		if (!isPngFile(file)) {
-			status = 'Frames and stickers must be PNG with transparency.';
-			return;
-		}
+		if (tab === 'frames') {
+			const file = files[0];
+			if (!isPngFile(file)) {
+				status = 'Frames and stickers must be PNG with transparency.';
+				return;
+			}
 
-		busy = true;
-		status = tab === 'frames' ? 'Loading frame…' : 'Uploading…';
-		try {
-			if (tab === 'frames') {
+			busy = true;
+			status = 'Loading frame…';
+			try {
 				const src = await fileToDataUrl(file);
 				editorError = '';
 				frameDraft = {
@@ -518,14 +625,39 @@
 					slots: []
 				};
 				status = 'Crop your frame, then place photo canvases.';
-			} else {
-				await addSticker({
-					name: uploadName || file.name.replace(/\.[^.]+$/, ''),
-					file
-				});
-				status = 'Sticker added.';
-				uploadName = '';
+			} catch (err) {
+				status = err instanceof Error ? err.message : 'Upload failed';
+			} finally {
+				busy = false;
 			}
+			return;
+		}
+
+		const valid = files.filter((file) => isPngFile(file));
+		const skipped = files.length - valid.length;
+		if (!valid.length) {
+			status = 'Stickers must be PNG with transparency.';
+			return;
+		}
+
+		busy = true;
+		status = valid.length > 1 ? `Uploading ${valid.length} stickers…` : 'Uploading…';
+		try {
+			const items = valid.map((file) => ({
+				name:
+					valid.length === 1 && uploadName.trim()
+						? uploadName.trim()
+						: file.name.replace(/\.[^.]+$/, ''),
+				file
+			}));
+			await addStickers(items);
+			status =
+				skipped > 0
+					? `Added ${valid.length} sticker(s). ${skipped} skipped (not PNG).`
+					: valid.length > 1
+						? `Added ${valid.length} stickers.`
+						: 'Sticker added.';
+			uploadName = '';
 		} catch (err) {
 			status = err instanceof Error ? err.message : 'Upload failed';
 		} finally {
@@ -622,7 +754,21 @@
 		status = 'PIN updated.';
 	}
 
+	const cloudEnabled = isCloudAssetsEnabled();
 	const list = $derived(tab === 'frames' ? $frames : $stickers);
+
+	async function onUploadLocalToCloud() {
+		if (!confirm('Upload IndexedDB customs to Photobooth? Skips name+kind already on the server.')) return;
+		busy = true;
+		try {
+			const { uploaded, skipped } = await uploadLocalCustomsToCloud();
+			status = `Cloud sync: ${uploaded} uploaded, ${skipped} skipped.`;
+		} catch (err) {
+			status = err instanceof Error ? err.message : 'Cloud upload failed';
+		} finally {
+			busy = false;
+		}
+	}
 </script>
 
 <style>
@@ -642,130 +788,27 @@
 		background: var(--sky-top);
 	}
 
-	.sky-wash {
+	.admin-view.exiting {
+		pointer-events: none;
+		overflow: hidden;
+	}
+
+	.back-veil {
 		position: absolute;
 		inset: 0;
-		z-index: -4;
+		z-index: 3;
+		pointer-events: none;
+		opacity: 0;
 		background:
-			linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 18%),
-			linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 55%, var(--sky-low) 140%);
-		pointer-events: none;
-	}
-
-	.stars {
-		position: absolute;
-		inset: 0;
-		z-index: -3;
-		pointer-events: none;
-	}
-
-	.stars i {
-		position: absolute;
-		width: 3px;
-		height: 3px;
-		background: #fff4bd;
-		box-shadow:
-			3px 0 #fff4bd,
-			0 3px #fff4bd,
-			3px 3px #fff4bd;
-		animation: star-twinkle 2.8s steps(2) infinite;
-	}
-
-	.stars i:nth-child(1) {
-		left: 8%;
-		top: 12%;
-	}
-	.stars i:nth-child(2) {
-		left: 22%;
-		top: 28%;
-		transform: scale(0.65);
-		animation-delay: 0.4s;
-	}
-	.stars i:nth-child(3) {
-		left: 38%;
-		top: 9%;
-		transform: scale(0.7);
-		animation-delay: 1.1s;
-	}
-	.stars i:nth-child(4) {
-		right: 34%;
-		top: 18%;
-		animation-delay: 0.7s;
-	}
-	.stars i:nth-child(5) {
-		right: 18%;
-		top: 8%;
-		transform: scale(0.6);
-		animation-delay: 1.6s;
-	}
-	.stars i:nth-child(6) {
-		right: 7%;
-		top: 26%;
-		transform: scale(0.8);
-		animation-delay: 0.2s;
-	}
-	.stars i:nth-child(7) {
-		right: 12%;
-		top: 42%;
-		transform: scale(0.55);
-		animation-delay: 2s;
-	}
-
-	.mountains {
-		position: absolute;
-		right: -5%;
-		bottom: -1px;
-		left: -5%;
-		z-index: -2;
-		height: 38%;
-		clip-path: polygon(
-			0 72%,
-			8% 48%,
-			15% 62%,
-			25% 25%,
-			36% 58%,
-			47% 35%,
-			58% 67%,
-			70% 30%,
-			80% 56%,
-			91% 22%,
-			100% 61%,
-			100% 100%,
-			0 100%
-		);
-		background: #102f56;
-		pointer-events: none;
-	}
-
-	.mountains-far {
-		bottom: 5%;
-		opacity: 0.78;
-		background: #31577a;
-	}
-
-	.mountains-near {
-		z-index: -1;
-		height: 28%;
-		clip-path: polygon(
-			0 62%,
-			13% 37%,
-			24% 71%,
-			39% 27%,
-			52% 65%,
-			67% 38%,
-			81% 74%,
-			93% 40%,
-			100% 58%,
-			100% 100%,
-			0 100%
-		);
+			radial-gradient(ellipse at 50% 72%, rgba(255, 176, 96, 0.35), transparent 58%),
+			linear-gradient(180deg, #071936 0%, #0d2748 55%, #1a3a5c 100%);
 	}
 
 	.forge-glow {
 		position: absolute;
 		left: 50%;
 		bottom: 0;
-		z-index: -1;
+		z-index: 1;
 		width: min(90%, 640px);
 		height: 28%;
 		translate: -50% 0;
@@ -780,7 +823,7 @@
 
 	.content {
 		position: relative;
-		z-index: 1;
+		z-index: 2;
 		display: flex;
 		flex-direction: column;
 		gap: 0.95rem;
@@ -1064,6 +1107,53 @@
 		margin: 0;
 	}
 
+	.recent-panel {
+		gap: 0.75rem;
+	}
+
+	.recent-panel .hint {
+		text-align: left;
+		text-shadow: none;
+		color: color-mix(in srgb, var(--cream-ink) 72%, transparent);
+	}
+
+	.recent-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+		gap: 0.65rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.recent-grid li {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		background: #fffdf8;
+		padding: 0.45rem;
+		box-shadow:
+			0 0 0 2px #0f172a,
+			3px 3px 0 var(--primary);
+	}
+
+	.recent-grid img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: contain;
+		background: linear-gradient(135deg, #e8eef6 0%, #d6dde8 100%);
+		box-shadow: inset 0 0 0 2px #0f172a;
+	}
+
+	.recent-grid span {
+		font-size: 0.32rem;
+		letter-spacing: 0.04em;
+		line-height: 1.4;
+		color: color-mix(in srgb, var(--cream-ink) 78%, transparent);
+		word-break: break-all;
+	}
+
 	.seed-panel {
 		display: grid;
 		gap: 0.65rem;
@@ -1191,16 +1281,6 @@
 		opacity: 0.9;
 	}
 
-	@keyframes star-twinkle {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.35;
-		}
-	}
-
 	@keyframes forge-breathe {
 		from {
 			opacity: 0.55;
@@ -1246,7 +1326,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.stars i,
 		.forge-glow,
 		.content,
 		.forge-panel,

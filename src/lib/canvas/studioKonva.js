@@ -3,6 +3,7 @@
  * Inspired by https://konvajs.org/docs/sandbox/Canvas_Editor.html
  */
 import Konva from 'konva';
+import { loadImageForCanvas as loadImage } from '../utils/loadImageForCanvas.js';
 
 export const STICKER_BASE = 64;
 const MIN_SCALE = 0.35;
@@ -60,31 +61,50 @@ function applyStickerToNode(node, sticker) {
 	node.rotation(sticker.rotation ?? 0);
 }
 
-/**
- * @param {string} src
- * @returns {Promise<HTMLImageElement>}
- */
-function loadImage(src) {
-	return new Promise((resolve, reject) => {
-		const img = new Image();
-		img.onload = () => resolve(img);
-		img.onerror = () => reject(new Error('Sticker image load failed'));
-		img.src = src;
-	});
-}
-
 /** Fixed screen-pixel chrome — Konva Transformer ignores parent stage scale by design. */
 const TRANSFORMER_ANCHOR_PX = 16;
 const TRANSFORMER_ROTATE_OFFSET_PX = 32;
+const TRANSFORMER_ANCHOR_PX_COARSE = 28;
+const TRANSFORMER_ROTATE_OFFSET_PX_COARSE = 46;
+
+/** @returns {boolean} */
+function prefersCoarsePointer() {
+	if (typeof window === 'undefined') return false;
+	return window.matchMedia('(pointer: coarse)').matches;
+}
+
+/**
+ * @param {TouchList | Touch[]} touches
+ */
+function touchSpan(touches) {
+	const a = touches[0];
+	const b = touches[1];
+	if (!a || !b) return 0;
+	return Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+}
+
+/**
+ * @param {TouchList | Touch[]} touches
+ * @returns {number} degrees
+ */
+function touchAngleDeg(touches) {
+	const a = touches[0];
+	const b = touches[1];
+	if (!a || !b) return 0;
+	return (Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX) * 180) / Math.PI;
+}
 
 /**
  * @param {Konva.Transformer} transformer
+ * @param {boolean} [coarse]
  */
-function applyTransformerChrome(transformer) {
-	transformer.anchorSize(TRANSFORMER_ANCHOR_PX);
-	transformer.rotateAnchorOffset(TRANSFORMER_ROTATE_OFFSET_PX);
-	transformer.borderStrokeWidth(2);
-	transformer.anchorStrokeWidth(1.5);
+function applyTransformerChrome(transformer, coarse = prefersCoarsePointer()) {
+	transformer.anchorSize(coarse ? TRANSFORMER_ANCHOR_PX_COARSE : TRANSFORMER_ANCHOR_PX);
+	transformer.rotateAnchorOffset(
+		coarse ? TRANSFORMER_ROTATE_OFFSET_PX_COARSE : TRANSFORMER_ROTATE_OFFSET_PX
+	);
+	transformer.borderStrokeWidth(coarse ? 2.5 : 2);
+	transformer.anchorStrokeWidth(coarse ? 2 : 1.5);
 	transformer.forceUpdate();
 }
 
@@ -282,6 +302,61 @@ export async function createStudioEditor(opts) {
 
 	window.addEventListener('keydown', onKeyDown);
 
+	/** Two-finger pinch (scale) + rotate on the selected sticker — mobile studio flow. */
+	/** @type {{ active: boolean; dist: number; angle: number }} */
+	let pinch = { active: false, dist: 0, angle: 0 };
+
+	/** @param {TouchEvent} e */
+	function onTouchStart(e) {
+		if (e.touches.length !== 2 || !selectedId) return;
+		const node = nodes.get(selectedId);
+		if (!node) return;
+		pinch.active = true;
+		pinch.dist = touchSpan(e.touches);
+		pinch.angle = touchAngleDeg(e.touches);
+		node.draggable(false);
+		e.preventDefault();
+	}
+
+	/** @param {TouchEvent} e */
+	function onTouchMove(e) {
+		if (!pinch.active || e.touches.length !== 2 || !selectedId) return;
+		const node = nodes.get(selectedId);
+		if (!node) return;
+
+		const dist = touchSpan(e.touches);
+		const angle = touchAngleDeg(e.touches);
+		if (pinch.dist > 0) {
+			const ratio = dist / pinch.dist;
+			let next = node.scaleX() * ratio;
+			next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
+			node.scaleX(next);
+			node.scaleY(next);
+		}
+		node.rotation(node.rotation() + (angle - pinch.angle));
+		pinch.dist = dist;
+		pinch.angle = angle;
+		transformer.forceUpdate();
+		stickerLayer.batchDraw();
+		uiLayer.batchDraw();
+		e.preventDefault();
+	}
+
+	/** @param {TouchEvent} e */
+	function onTouchEnd(e) {
+		if (e.touches.length >= 2) return;
+		if (!pinch.active) return;
+		pinch.active = false;
+		const node = selectedId ? nodes.get(selectedId) : null;
+		if (node) node.draggable(true);
+		emitStickers();
+	}
+
+	container.addEventListener('touchstart', onTouchStart, { passive: false });
+	container.addEventListener('touchmove', onTouchMove, { passive: false });
+	container.addEventListener('touchcancel', onTouchEnd, { passive: true });
+	container.addEventListener('touchend', onTouchEnd, { passive: true });
+
 	return {
 		stage,
 		frameW,
@@ -381,6 +456,10 @@ export async function createStudioEditor(opts) {
 
 		destroy() {
 			window.removeEventListener('keydown', onKeyDown);
+			container.removeEventListener('touchstart', onTouchStart);
+			container.removeEventListener('touchmove', onTouchMove);
+			container.removeEventListener('touchcancel', onTouchEnd);
+			container.removeEventListener('touchend', onTouchEnd);
 			stage.destroy();
 		}
 	};

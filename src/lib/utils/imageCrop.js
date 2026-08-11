@@ -2,6 +2,8 @@
  * Measure and crop frame images (normalized 0–1 rects).
  */
 
+import { isCrossOriginImageSrc, loadImageForCanvas } from './loadImageForCanvas.js';
+
 const MIN_PX = 32;
 
 /**
@@ -15,6 +17,9 @@ const MIN_PX = 32;
 export function measureImage(src) {
 	return new Promise((resolve, reject) => {
 		const img = new Image();
+		if (isCrossOriginImageSrc(src)) {
+			img.crossOrigin = 'anonymous';
+		}
 		img.onload = () => {
 			const w = img.naturalWidth || img.width;
 			const h = img.naturalHeight || img.height;
@@ -62,8 +67,8 @@ function clampRectToPixels(rect, imgW, imgH) {
  */
 export function cropImageToDataUrl(src, rect) {
 	return new Promise((resolve, reject) => {
-		const img = new Image();
-		img.onload = () => {
+		loadImageForCanvas(src)
+			.then((img) => {
 			const imgW = img.naturalWidth || img.width;
 			const imgH = img.naturalHeight || img.height;
 			if (!imgW || !imgH) {
@@ -81,8 +86,7 @@ export function cropImageToDataUrl(src, rect) {
 			}
 			ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
 			resolve({ src: canvas.toDataURL('image/png'), w: sw, h: sh });
-		};
-		img.onerror = () => reject(new Error('Image load failed'));
-		img.src = src;
+		})
+			.catch(() => reject(new Error('Image load failed')));
 	});
 }

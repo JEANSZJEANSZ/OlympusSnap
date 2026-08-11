@@ -6,12 +6,7 @@
 	class:review-open={reviewOpen}
 	class:exiting
 >
-	<div class="sky-wash" aria-hidden="true"></div>
-	<div class="stars" aria-hidden="true">
-		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-	</div>
-	<div class="mountains mountains-far" aria-hidden="true"></div>
-	<div class="mountains mountains-near" aria-hidden="true"></div>
+	<BoothOlympusBackdrop />
 
 	<main class="stage">
 		<aside class="dock-column">
@@ -32,6 +27,7 @@
 					class:connecting={cameraStatus === 'connecting'}
 					bind:this={dockEl}
 					style:--frame-ar={frameAspect}
+					style:--frame-ar-num={frameAspectNum}
 					data-frame-handoff-target
 					data-camera-handoff-target
 				>
@@ -87,35 +83,37 @@
 		</aside>
 
 		<div class="ritual-panel">
-			<header class="head">
-				<p class="eyebrow">THE MORTAL LENS AWAITS</p>
-				<h1>CAMERA TEMPLE</h1>
-				<p class="sub">{frameName}</p>
-			</header>
+			<div class="ritual-copy">
+				<header class="head">
+					<p class="eyebrow">THE MORTAL LENS AWAITS</p>
+					<h1>CAMERA TEMPLE</h1>
+					<p class="sub">{frameName}</p>
+				</header>
 
-			<p class="progress">
-				{#if snapTotal > 1}
-					SNAP {Math.min(slotIndex + 1, snapTotal)} / {snapTotal}
-				{:else}
-					SINGLE RELIC CAPTURE
-				{/if}
-			</p>
+				<p class="progress">
+					{#if snapTotal > 1}
+						SNAP {Math.min(slotIndex + 1, snapTotal)} / {snapTotal}
+					{:else}
+						SINGLE RELIC CAPTURE
+					{/if}
+				</p>
 
-			<DialogBox
-				speaker={reviewOpen ? 'REVIEW' : 'POSE CHALLENGE'}
-				text={reviewOpen ? reviewText : poseText}
-				typewriter={false}
-			/>
+				<DialogBox
+					speaker={reviewOpen ? 'REVIEW' : 'POSE CHALLENGE'}
+					text={reviewOpen ? reviewText : poseText}
+					typewriter={false}
+				/>
+			</div>
 
 			<div class="actions">
 				{#if reviewOpen}
 					<PixelButton label="RETAKE" variant="ghost" disabled={exiting || ritualOpen} onclick={retakeShot} />
 					{#if isLastCanvas}
 						<PixelButton
-							label="STUDIO"
+							label="REVEAL"
 							variant="gold"
 							disabled={exiting || ritualOpen}
-							onclick={goStudioFromReview}
+							onclick={goRevealFromReview}
 						/>
 					{:else}
 						<RitualShutterButton
@@ -138,10 +136,10 @@
 					/>
 					{#if !useSlots}
 						<PixelButton
-							label="SKIP → STUDIO"
+							label="SKIP → REVEAL"
 							variant="gold"
 							disabled={ritualOpen || exiting}
-							onclick={skipToStudio}
+							onclick={skipToReveal}
 						/>
 					{/if}
 				{/if}
@@ -171,6 +169,7 @@
 	import { onMount, tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import {
+		activeStickers,
 		setCaptureAt,
 		capturedImageData,
 		capturedPhotos,
@@ -193,6 +192,7 @@
 	import FilterGallery from '../lib/components/FilterGallery.svelte';
 	import CameraSnapOverlay from '../lib/components/CameraSnapOverlay.svelte';
 	import RitualShutterButton from '../lib/components/RitualShutterButton.svelte';
+	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 	import { frameHandoffBusy } from '../lib/fx/frameHandoff.js';
 
 	/** @type {HTMLElement | undefined} */
@@ -245,6 +245,7 @@
 	const frameSrc = $derived(frame?.src ?? '');
 	const frameName = $derived(frame?.name ?? $selectedFrameId ?? 'none');
 	const frameAspect = $derived(`${frameNatW} / ${frameNatH}`);
+	const frameAspectNum = $derived(frameNatH > 0 ? frameNatW / frameNatH : 3 / 4);
 
 	const poseText = $derived(
 		useSlots
@@ -263,7 +264,7 @@
 
 	const reviewText = $derived(
 		isLastCanvas
-			? 'Last canvas locked. RETAKE for another shot, or head to STUDIO.'
+			? 'Last canvas locked. RETAKE for another shot, or crack the marble on REVEAL.'
 			: `Canvas ${slotIndex + 1} of ${snapTotal} locked. SNAP starts the next canvas ritual, or RETAKE this one.`
 	);
 
@@ -389,13 +390,14 @@
 		go('frame');
 	}
 
-	async function skipToStudio() {
+	async function skipToReveal() {
 		if (exiting || ritualOpen || reviewOpen) return;
 		stopLivePreview();
 		stopCamera();
 		clearCaptures();
+		activeStickers.set([]);
 		await playViewExit(rootEl, { reduced, direction: 'left' });
-		go('studio');
+		go('reveal');
 	}
 
 	async function finishSession() {
@@ -404,6 +406,7 @@
 		reviewOpen = false;
 		stopLivePreview();
 		stopCamera();
+		activeStickers.set([]);
 		const list = get(capturedPhotos);
 		const frameId = get(selectedFrameId);
 		let preview = list[0] || null;
@@ -420,11 +423,11 @@
 			beginImageHandoff({
 				src: preview,
 				fromEl,
-				targetSel: '[data-studio-handoff-target]',
+				targetSel: '[data-reveal-handoff-target]',
 				reduced
 			});
 		}
-		go('studio');
+		go('reveal');
 	}
 
 	function beginRitual() {
@@ -469,7 +472,7 @@
 		beginRitual();
 	}
 
-	async function goStudioFromReview() {
+	async function goRevealFromReview() {
 		if (!reviewOpen || exiting || ritualOpen || !isLastCanvas) return;
 		await finishSession();
 	}
@@ -488,61 +491,6 @@
 		padding: clamp(0.65rem, 1.5vh, 1rem) clamp(0.75rem, 2vw, 1.25rem);
 		color: #fff8df;
 		background: var(--sky-top);
-	}
-
-	.sky-wash {
-		position: absolute;
-		inset: 0;
-		z-index: -4;
-		background:
-			linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 18%),
-			linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 58%, var(--sky-low) 130%);
-	}
-
-	.stars {
-		position: absolute;
-		inset: 0;
-		z-index: -3;
-		pointer-events: none;
-	}
-
-	.stars i {
-		position: absolute;
-		width: 3px;
-		height: 3px;
-		background: #fff4bd;
-		box-shadow: 3px 0 #fff4bd, 0 3px #fff4bd, 3px 3px #fff4bd;
-	}
-
-	.stars i:nth-child(1) { left: 8%; top: 15%; }
-	.stars i:nth-child(2) { left: 21%; top: 34%; transform: scale(0.65); }
-	.stars i:nth-child(3) { left: 36%; top: 12%; transform: scale(0.7); }
-	.stars i:nth-child(4) { right: 36%; top: 23%; }
-	.stars i:nth-child(5) { right: 21%; top: 11%; transform: scale(0.6); }
-	.stars i:nth-child(6) { right: 8%; top: 29%; transform: scale(0.8); }
-	.stars i:nth-child(7) { right: 14%; top: 51%; transform: scale(0.55); }
-
-	.mountains {
-		position: absolute;
-		right: -5%;
-		bottom: -1px;
-		left: -5%;
-		z-index: -2;
-		height: 46%;
-		clip-path: polygon(0 72%, 8% 48%, 15% 62%, 25% 25%, 36% 58%, 47% 35%, 58% 67%, 70% 30%, 80% 56%, 91% 22%, 100% 61%, 100% 100%, 0 100%);
-		background: #102f56;
-	}
-
-	.mountains-far {
-		opacity: 0.55;
-		transform: scale(1.08);
-		filter: brightness(0.85);
-	}
-
-	.mountains-near {
-		height: 38%;
-		background: #31577a;
-		clip-path: polygon(0 100%, 0 68%, 12% 52%, 22% 72%, 34% 40%, 48% 64%, 60% 34%, 72% 58%, 84% 28%, 100% 55%, 100% 100%);
 	}
 
 	.stage {
@@ -568,7 +516,7 @@
 
 	.frame-dock {
 		position: relative;
-		width: min(100cqw, calc(100cqh * var(--frame-ar)), 520px);
+		width: min(100cqw, calc(100cqh * var(--frame-ar-num, 0.75)), 520px);
 		max-height: 100cqh;
 		aspect-ratio: var(--frame-ar);
 		background: transparent;
@@ -686,6 +634,13 @@
 		justify-self: center;
 	}
 
+	.ritual-copy {
+		display: flex;
+		flex-direction: column;
+		gap: 0.85rem;
+		min-width: 0;
+	}
+
 	.head .eyebrow {
 		font-size: var(--booth-text-xs);
 		color: var(--gold-bright);
@@ -762,18 +717,180 @@
 			align-items: start;
 		}
 
+		/*
+		 * size containment + auto height collapses the dock to 0 layout height
+		 * (children are ignored for sizing), so copy/filters paint over the frame.
+		 */
+		.dock-column {
+			container-type: normal;
+			height: auto;
+			min-height: 0;
+			justify-content: center;
+		}
+
 		.frame-dock {
-			width: min(78vw, calc(min(52dvh, 560px) * var(--frame-ar)));
+			width: min(78vw, calc(min(52dvh, 560px) * var(--frame-ar-num, 0.75)));
 			max-height: min(52dvh, 560px);
 			margin: 0 auto;
 		}
 
+		.ritual-panel {
+			max-width: none;
+		}
+	}
+
+	/* Phone-as-booth — portrait phones running the full capture flow */
+	@media (max-width: 640px) {
+		.camera-view {
+			padding:
+				max(0.35rem, env(safe-area-inset-top))
+				max(0.5rem, env(safe-area-inset-right))
+				0
+				max(0.5rem, env(safe-area-inset-left));
+			overflow: hidden;
+			touch-action: manipulation;
+		}
+
+		.stage {
+			display: flex;
+			flex-direction: column;
+			height: 100%;
+			min-height: 0;
+			overflow: hidden;
+			gap: 0.4rem;
+		}
+
+		/* Grows so leftover viewport sits around the frame, not as empty sky under SNAP */
 		.dock-column {
+			order: 1;
+			flex: 1 1 0;
+			width: 100%;
+			height: auto;
+			min-height: 0;
+			align-items: center;
 			justify-content: center;
+			padding: 0.15rem 0;
+			container-type: normal;
+			overflow: hidden;
+		}
+
+		.frame-dock {
+			width: min(92vw, calc(min(48dvh, 100%) * var(--frame-ar-num, 0.75)));
+			max-width: 100%;
+			max-height: 100%;
+			height: auto;
+			margin: 0 auto;
 		}
 
 		.ritual-panel {
+			display: contents;
+		}
+
+		.ritual-copy {
+			order: 2;
+			flex: 0 0 auto;
+			min-height: 0;
+			overflow: visible;
+			gap: 0.3rem;
+		}
+
+		.head .eyebrow,
+		.head h1 {
+			display: none;
+		}
+
+		.head .sub {
+			margin: 0;
+			font-size: var(--booth-text-xs);
+			line-height: 1.35;
+		}
+
+		.progress {
+			font-size: var(--booth-text-xs);
+			padding: 0.28rem 0.45rem;
+		}
+
+		.ritual-copy :global(.dialog) {
 			max-width: none;
+			padding: 0.55rem 0.65rem 0.6rem;
+			box-shadow:
+				0 0 0 3px var(--text),
+				0 0 0 5px var(--gold),
+				4px 4px 0 var(--primary);
+		}
+
+		.ritual-copy :global(.dialog .speaker) {
+			font-size: var(--booth-text-xs);
+			margin-bottom: 0.2rem;
+		}
+
+		.ritual-copy :global(.dialog .body) {
+			font-size: var(--booth-text-xs);
+			line-height: 1.4;
+		}
+
+		.stage :global(.filter-rail) {
+			order: 3;
+			flex: 0 0 auto;
+			width: 100%;
+			max-width: none;
+			max-height: none;
+		}
+
+		.stage :global(.filter-rail .rail-title) {
+			display: none;
+		}
+
+		.actions {
+			order: 4;
+			flex: 0 0 auto;
+			width: 100%;
+			display: grid;
+			grid-template-columns: minmax(5.5rem, 0.9fr) minmax(0, 1.25fr);
+			gap: 0.45rem;
+			align-items: stretch;
+			padding:
+				0.4rem 0
+				max(0.4rem, env(safe-area-inset-bottom));
+			background: #071936;
+			border-top: 1px solid color-mix(in srgb, var(--gold) 35%, transparent);
+		}
+
+		.actions :global(.pixel-btn) {
+			min-height: max(48px, var(--booth-touch));
+			padding: 0.65rem 0.5rem;
+			font-size: clamp(0.55rem, 2.6vw, var(--booth-text-sm));
+		}
+
+		.actions :global(.pixel-btn:last-child) {
+			grid-column: auto;
+		}
+	}
+
+	@media (max-width: 640px) and (max-height: 580px) {
+		.frame-dock {
+			width: min(88vw, calc(min(40dvh, 100%) * var(--frame-ar-num, 0.75)));
+		}
+
+		.head .sub {
+			display: none;
+		}
+
+		.ritual-copy :global(.dialog .body) {
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			overflow: hidden;
+		}
+	}
+
+	@media (max-width: 640px) and (max-height: 430px) {
+		.frame-dock {
+			width: min(84vw, calc(min(34dvh, 100%) * var(--frame-ar-num, 0.75)));
+		}
+
+		.stage {
+			gap: 0.25rem;
 		}
 	}
 </style>

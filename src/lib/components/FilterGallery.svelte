@@ -11,6 +11,8 @@
 				class:disabled={disabled}
 				role="option"
 				aria-selected={selectedId === preset.id}
+				aria-label={preset.label}
+				title={preset.label}
 				disabled={disabled}
 				onclick={() => onSelect?.(preset.id)}
 			>
@@ -148,6 +150,57 @@
 
 		.label {
 			-webkit-line-clamp: 2;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.filter-rail {
+			gap: 0.25rem;
+			max-height: none;
+		}
+
+		.rail-hint {
+			display: none;
+		}
+
+		.rail-title {
+			font-size: var(--booth-text-xs, 0.55rem);
+			margin-bottom: 0;
+		}
+
+		.gallery {
+			flex-direction: row;
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			overflow-y: hidden;
+			gap: 0.4rem;
+			padding-bottom: 0.1rem;
+			-webkit-overflow-scrolling: touch;
+			scroll-snap-type: x proximity;
+		}
+
+		.tile {
+			flex: 0 0 auto;
+			width: auto;
+			min-width: 0;
+			height: auto;
+			min-height: 0;
+			max-height: none;
+			grid-template-columns: 1fr;
+			grid-template-rows: auto;
+			gap: 0;
+			padding: 0.35rem;
+			scroll-snap-align: start;
+		}
+
+		.swatch {
+			width: var(--booth-filter-swatch, 3.25rem);
+			height: var(--booth-filter-swatch, 3.25rem);
+		}
+
+		/* Swatches only — names via aria-label / title for a11y + long-press hint */
+		.label {
+			display: none;
 		}
 	}
 </style>

@@ -6,12 +6,15 @@
 	import { frames } from '../lib/assets/assetStore.js';
 	import { createFrameSelectMotion } from '../lib/fx/frameSelectMotion.js';
 	import { beginFrameHandoff } from '../lib/fx/frameHandoff.js';
+	import { preloadFrameImage } from '../lib/utils/loadImageForCanvas.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
+	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 
 	let index = $state(0);
 	let reduced = $state(false);
 	let exiting = $state(false);
+	let frameArtReady = $state(false);
 	let rootEl;
 	/** @type {Record<string, { w: number; h: number }>} */
 	let measuredDims = $state({});
@@ -39,18 +42,38 @@
 
 	$effect(() => {
 		const f = frame;
-		if (!f?.src || (f.w && f.h)) return;
-		if (measuredDims[f.id]) return;
-		const img = new Image();
-		img.onload = () => {
-			if (img.naturalWidth && img.naturalHeight) {
+		if (!f?.src) {
+			frameArtReady = false;
+			return;
+		}
+		const id = f.id;
+		const src = f.src;
+		let cancelled = false;
+		frameArtReady = false;
+
+		preloadFrameImage(src).then((img) => {
+			if (cancelled || frame?.id !== id) return;
+			frameArtReady = true;
+			if (img?.naturalWidth && img.naturalHeight && !(f.w && f.h)) {
 				measuredDims = {
 					...measuredDims,
-					[f.id]: { w: img.naturalWidth, h: img.naturalHeight }
+					[id]: { w: img.naturalWidth, h: img.naturalHeight }
 				};
 			}
+		});
+
+		return () => {
+			cancelled = true;
 		};
-		img.src = f.src;
+	});
+
+	/** Warm the next/prev relic so carousel swaps do not flash empty slots. */
+	$effect(() => {
+		if (list.length < 2) return;
+		const prev = list[(index - 1 + list.length) % list.length];
+		const next = list[(index + 1) % list.length];
+		if (prev?.src) preloadFrameImage(prev.src);
+		if (next?.src) preloadFrameImage(next.src);
 	});
 
 	/** Unitless w/h for CSS aspect-ratio + width cap calc. */
@@ -127,7 +150,11 @@
 		};
 
 		if (motion && !reduced) {
-			motion.playSwap(direction, apply);
+			const targetFrame = list[nextIndex];
+			preloadFrameImage(targetFrame?.src).then(() => {
+				if (exiting) return;
+				motion.playSwap(direction, apply);
+			});
 		} else {
 			apply();
 		}
@@ -177,12 +204,7 @@
 </script>
 
 <section class="frame-view" class:exiting {@attach attachRoot}>
-	<div class="sky-wash" aria-hidden="true"></div>
-	<div class="stars" aria-hidden="true">
-		<i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-	</div>
-	<div class="mountains mountains-far" aria-hidden="true"></div>
-	<div class="mountains mountains-near" aria-hidden="true"></div>
+	<BoothOlympusBackdrop />
 	<div class="back-veil" aria-hidden="true"></div>
 
 	<header class="head">
@@ -251,6 +273,7 @@
 				<button
 					type="button"
 					class="frame-body"
+					class:art-ready={frameArtReady}
 					style:--frame-ar={frameAr}
 					data-motif={frame?.id ?? 'none'}
 					data-frame-select-handoff-target
@@ -274,7 +297,17 @@
 						{/each}
 					</div>
 					{#if frame?.src}
-						<img class="frame-art" src={frame.src} alt="" draggable="false" />
+						{#key frame.id}
+							<img
+								class="frame-art"
+								src={frame.src}
+								alt=""
+								draggable="false"
+								onload={() => {
+									frameArtReady = true;
+								}}
+							/>
+						{/key}
 					{/if}
 				</button>
 			</div>
@@ -292,7 +325,7 @@
 				? reduced
 					? `${frame.name} hangs ready. Tap the strip to proceed.`
 					: `${frame.name} hangs ready. Pull hard, hold if you wish, then release to drop.`
-				: 'The courier bears no relic. Open Admin to add a frame.'}
+				: 'The courier bears no relic. Open Admin to forge a frame.'}
 			typewriter={false}
 		/>
 		<div class="actions">
@@ -332,7 +365,7 @@
 		transition: opacity 280ms steps(4);
 	}
 
-	.frame-view.exiting:not(.backing) .sky-wash {
+	.frame-view.exiting:not(.backing) :global(.booth-olympus) {
 		filter: brightness(0.72);
 		transition: filter 320ms steps(4);
 	}
@@ -348,62 +381,9 @@
 			linear-gradient(180deg, #071936 0%, #0d2748 55%, #1a3a5c 100%);
 	}
 
-	.sky-wash {
-		position: absolute;
-		inset: 0;
-		z-index: -4;
-		background:
-			linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 18%),
-			linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 58%, var(--sky-low) 130%);
-	}
-
-	.stars {
-		position: absolute;
-		inset: 0;
-		z-index: -3;
-		pointer-events: none;
-	}
-
-	.stars i {
-		position: absolute;
-		width: 3px;
-		height: 3px;
-		background: #fff4bd;
-		box-shadow: 3px 0 #fff4bd, 0 3px #fff4bd, 3px 3px #fff4bd;
-	}
-
-	.stars i:nth-child(1) { left: 8%; top: 15%; }
-	.stars i:nth-child(2) { left: 21%; top: 34%; transform: scale(0.65); }
-	.stars i:nth-child(3) { left: 36%; top: 12%; transform: scale(0.7); }
-	.stars i:nth-child(4) { right: 36%; top: 23%; }
-	.stars i:nth-child(5) { right: 21%; top: 11%; transform: scale(0.6); }
-	.stars i:nth-child(6) { right: 8%; top: 29%; transform: scale(0.8); }
-	.stars i:nth-child(7) { right: 14%; top: 51%; transform: scale(0.55); }
-
-	.mountains {
-		position: absolute;
-		right: -5%;
-		bottom: -1px;
-		left: -5%;
-		z-index: -2;
-		height: 46%;
-		clip-path: polygon(0 72%, 8% 48%, 15% 62%, 25% 25%, 36% 58%, 47% 35%, 58% 67%, 70% 30%, 80% 56%, 91% 22%, 100% 61%, 100% 100%, 0 100%);
-		background: #102f56;
-	}
-
-	.mountains-far {
-		bottom: 6%;
-		opacity: 0.78;
-		background: #31577a;
-	}
-
-	.mountains-near {
-		z-index: -1;
-		height: 35%;
-		clip-path: polygon(0 62%, 13% 37%, 24% 71%, 39% 27%, 52% 65%, 67% 38%, 81% 74%, 93% 40%, 100% 58%, 100% 100%, 0 100%);
-	}
-
 	.head {
+		position: relative;
+		z-index: 1;
 		width: min(100%, 760px);
 		margin: 0 auto;
 		text-align: center;
@@ -452,16 +432,18 @@
 		display: grid;
 		grid-template-columns: minmax(44px, 3.25rem) minmax(0, 1fr) minmax(44px, 3.25rem);
 		gap: clamp(0.35rem, 2vw, 1rem);
-		align-items: center;
+		align-items: start;
 		justify-self: center;
 		max-width: 780px;
 		width: 100%;
 		margin: 0 auto;
 		height: 100%;
 		min-height: 0;
+		padding-top: clamp(0.15rem, 0.8vh, 0.45rem);
 	}
 
 	.nav {
+		align-self: center;
 		position: relative;
 		z-index: 1;
 		display: grid;
@@ -514,10 +496,11 @@
 		z-index: 2;
 		width: 100%;
 		height: 100%;
-		max-height: min(62dvh, 400px);
+		max-height: min(62dvh, 360px);
 		min-height: 260px;
 		margin: 0 auto;
 		overflow: visible;
+		--rig-lift: clamp(-20px, -3vh, -8px);
 	}
 
 	.bird-rig,
@@ -529,7 +512,7 @@
 
 	.bird-rig {
 		z-index: 3;
-		top: 0;
+		top: var(--rig-lift);
 		width: clamp(150px, 20vw, 180px);
 		translate: -50% 0;
 		transform-origin: center 35%;
@@ -556,6 +539,7 @@
 		transform-origin: left center;
 	}
 
+
 	.rope-physics {
 		position: absolute;
 		inset: 0;
@@ -578,7 +562,7 @@
 
 	.snap-spark {
 		z-index: 5;
-		top: clamp(66px, 10vh, 78px);
+		top: clamp(32px, 5vh, 44px);
 		width: 24px;
 		height: 24px;
 		transform: translate(-50%, -50%);
@@ -616,7 +600,7 @@
 		--frame-ar: 3 / 4;
 		position: relative;
 		display: block;
-		width: min(58vw, 300px, calc(min(48dvh, 340px) * var(--frame-ar)));
+		width: min(58vw, 280px, calc(min(37dvh, 230px) * var(--frame-ar)));
 		height: auto;
 		aspect-ratio: var(--frame-ar);
 		padding: 0;
@@ -655,6 +639,16 @@
 		background:
 			linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, transparent 42%),
 			#1a1c1f;
+		opacity: 0;
+		transition: opacity 160ms steps(3);
+	}
+
+	.frame-body.art-ready .frame-slot {
+		opacity: 1;
+	}
+
+	.frame-body:not(.art-ready) {
+		background: rgba(12, 18, 28, 0.28);
 	}
 
 	.frame-art {
@@ -667,6 +661,12 @@
 		object-fit: contain;
 		pointer-events: none;
 		-webkit-user-drag: none;
+		opacity: 0;
+		transition: opacity 180ms steps(3);
+	}
+
+	.frame-body.art-ready .frame-art {
+		opacity: 1;
 	}
 
 	.pager {
@@ -724,6 +724,8 @@
 	}
 
 	.footer {
+		position: relative;
+		z-index: 1;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		gap: clamp(0.45rem, 1.6vw, 0.9rem);
@@ -781,7 +783,7 @@
 		}
 
 		.bird-rig {
-			scale: 0.86;
+			scale: 0.78;
 			transform-origin: top center;
 		}
 
