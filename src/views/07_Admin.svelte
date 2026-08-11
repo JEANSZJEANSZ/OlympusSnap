@@ -18,7 +18,9 @@
 			<div class="gate forge-panel">
 				<DialogBox
 					speaker="CERBERUS"
-					text="Enter the Admin PIN to forge new relics. Default: olympus"
+					text={cloudEnabled
+						? 'Enter PIN + Photobooth Auth to forge relics. Default PIN: olympus'
+						: 'Enter the Admin PIN to forge new relics. Default: olympus'}
 					typewriter={false}
 				/>
 				<label class="field">
@@ -30,6 +32,18 @@
 						onkeydown={(e) => e.key === 'Enter' && tryUnlock()}
 					/>
 				</label>
+				{#if cloudEnabled}
+					<label class="field">
+						<span>API AUTH</span>
+						<input
+							type="password"
+							bind:value={authInput}
+							autocomplete="off"
+							placeholder="Auth header for Photobooth"
+							onkeydown={(e) => e.key === 'Enter' && tryUnlock()}
+						/>
+					</label>
+				{/if}
 				{#if pinError}
 					<p class="err">{pinError}</p>
 				{/if}
@@ -372,6 +386,7 @@
 		fileToDataUrl,
 		isPngFile
 	} from '../lib/assets/assetStore.js';
+	import { getAdminAuth, setAdminAuth } from '../lib/assets/adminAuth.js';
 	import { listRecentCaptures } from '../lib/assets/assetApi.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
@@ -418,6 +433,7 @@
 
 	let unlocked = $state(false);
 	let pinInput = $state('');
+	let authInput = $state(getAdminAuth());
 	let pinError = $state('');
 	let tab = $state(/** @type {'frames' | 'stickers'} */ ('frames'));
 	let status = $state('');
@@ -436,14 +452,23 @@
 	let editorError = $state('');
 
 	function tryUnlock() {
-		if (verifyAdminPin(pinInput.trim())) {
-			unlocked = true;
-			pinError = '';
-			pinInput = '';
-			status = '';
-		} else {
+		if (!verifyAdminPin(pinInput.trim())) {
 			pinError = 'Wrong PIN. Default seed: olympus';
+			return;
 		}
+		if (cloudEnabled) {
+			const auth = authInput.trim();
+			if (!auth) {
+				pinError = 'API Auth required for cloud forge writes.';
+				return;
+			}
+			setAdminAuth(auth);
+		}
+		unlocked = true;
+		pinError = '';
+		pinInput = '';
+		status = '';
+		refreshRecent();
 	}
 
 	/** @type {null | ReturnType<typeof createAdminExitMotion>} */
@@ -456,7 +481,6 @@
 			if (disposed || !rootEl) return;
 			exitMotion = createAdminExitMotion(rootEl, { reduced });
 		})();
-		refreshRecent();
 		return () => {
 			disposed = true;
 			exitMotion?.dispose();
