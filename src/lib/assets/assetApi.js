@@ -49,9 +49,6 @@ export function adminHeaders(extra = {}) {
 	return headers;
 }
 
-/** @deprecated Prefer adminHeaders — kept until sessionClient Photobooth rewrite. */
-export const boothHeaders = adminHeaders;
-
 /**
  * @param {string} path
  */

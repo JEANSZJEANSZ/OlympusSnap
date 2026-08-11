@@ -47,14 +47,3 @@ export async function stubLoadCapture(id, key) {
 	}
 	return { imageDataUrl: record.imageDataUrl, frameId: record.frameId };
 }
-
-/**
- * @deprecated Removed in Task 4 — sessionClient still imports until Task 5.
- * Offline consume-by-id alone is unsupported; use stubLoadCapture(id, key).
- * @param {string} _sessionId
- */
-export async function stubConsumeSession(_sessionId) {
-	const err = new Error('stubConsumeSession removed — use stubLoadCapture(id, key) (Task 5)');
-	err.code = 'NOT_FOUND';
-	throw err;
-}
