@@ -21,11 +21,11 @@
 	{:else if sessionError}
 		<div class="session-empty">
 			<p class="session-empty-title">
-				{sessionError === 'consumed' ? 'LINK ALREADY USED' : 'LINK NOT FOUND'}
+				{sessionError === 'forbidden' ? 'LINK FORBIDDEN' : 'LINK NOT FOUND'}
 			</p>
 			<p class="session-empty-sub">
-				{sessionError === 'consumed'
-					? 'This studio link was already opened. Scan a fresh QR at the booth.'
+				{sessionError === 'forbidden'
+					? 'This studio link is not valid. Scan the QR on the booth screen.'
 					: 'This link is invalid or expired. Scan the QR on the booth screen.'}
 			</p>
 		</div>
@@ -124,7 +124,7 @@
 	import { getLiveFrameById } from '../lib/assets/assetStore.js';
 	import { stickers } from '../lib/assets/assetStore.js';
 	import { go } from '../router/index.js';
-	import { consumeSession, getSessionIdFromUrl } from '../lib/session/sessionClient.js';
+	import { getSessionFromUrl, loadCapture } from '../lib/session/sessionClient.js';
 	import { imageHandoffBusy } from '../lib/fx/imageHandoff.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
@@ -142,7 +142,7 @@
 	let saving = $state(false);
 	let mobileSession = $state(false);
 	let sessionLoading = $state(false);
-	/** @type {'consumed' | 'not_found' | null} */
+	/** @type {'forbidden' | 'not_found' | null} */
 	let sessionError = $state(null);
 	/** @type {Record<string, { w: number; h: number }>} */
 	let measuredDims = $state({});
@@ -199,15 +199,15 @@
 		activeStickers.set([]);
 		selectedId = null;
 
-		const sessionId = getSessionIdFromUrl();
-		if (sessionId) {
+		const parts = getSessionFromUrl();
+		if (parts) {
 			mobileSession = true;
 			sessionLoading = true;
 			entryBusy = true;
 
 			(async () => {
 				try {
-					const payload = await consumeSession(sessionId);
+					const payload = await loadCapture(parts.id, parts.key);
 					capturedImageData.set(payload.imageDataUrl);
 					if (payload.frameId) selectedFrameId.set(payload.frameId);
 					activeStickers.set([]);
@@ -217,7 +217,7 @@
 				} catch (err) {
 					/* Same-device booth click: image may already live in the store. */
 					const existing = get(capturedImageData);
-					if (existing && err?.code !== 'CONSUMED') {
+					if (existing && err?.code !== 'FORBIDDEN') {
 						activeStickers.set([]);
 						measureComposite(existing);
 						sessionLoading = false;
@@ -226,7 +226,7 @@
 					}
 					sessionLoading = false;
 					entryBusy = false;
-					sessionError = err?.code === 'CONSUMED' ? 'consumed' : 'not_found';
+					sessionError = err?.code === 'FORBIDDEN' ? 'forbidden' : 'not_found';
 				}
 			})();
 

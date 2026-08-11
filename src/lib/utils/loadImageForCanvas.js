@@ -1,6 +1,6 @@
 /**
  * Load images for canvas compositing without tainting the canvas.
- * Cross-origin URLs (e.g. Cloudflare Worker asset files) require
+ * Cross-origin URLs (e.g. Photobooth asset files) require
  * crossOrigin="anonymous" and CORS headers on the response.
  */
 

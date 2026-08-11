@@ -7,10 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "worker:dev": "npm run dev --prefix worker",
-    "worker:deploy": "npm run deploy --prefix worker",
-    "worker:db:local": "npm run db:migrate:local --prefix worker",
-    "worker:db:remote": "npm run db:migrate:remote --prefix worker"
+    "test": "node --test src/**/*.test.js"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

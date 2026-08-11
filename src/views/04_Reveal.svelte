@@ -117,6 +117,7 @@
 		buildStudioSessionUrl,
 		createSession
 	} from '../lib/session/sessionClient.js';
+	import { encodeSes } from '../lib/session/sesCodec.js';
 	import { imageHandoffBusy } from '../lib/fx/imageHandoff.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
@@ -131,6 +132,7 @@
 	let giftImage = $state(/** @type {string | null} */ (null));
 	let qrDataUrl = $state(/** @type {string | null} */ (null));
 	let sessionId = $state(/** @type {string | null} */ (null));
+	let sessionKey = $state(/** @type {string | null} */ (null));
 	let reduced = $state(false);
 	let showMarbleHint = $state(true);
 	let marbleSeed = $state(/** @type {number | null} */ (null));
@@ -221,8 +223,9 @@
 					frameId: get(selectedFrameId)
 				});
 				if (!cancelled) {
-					sessionId = created.sessionId;
-					await renderQr(buildStudioSessionUrl(created.sessionId));
+					sessionId = created.id;
+					sessionKey = created.key;
+					await renderQr(buildStudioSessionUrl({ id: created.id, key: created.key }));
 				}
 			} catch (err) {
 				console.warn('[reveal] session create failed', err);
@@ -242,8 +245,8 @@
 
 	/** Same-device / booth test — click QR instead of scanning. */
 	function openStudioFromQr() {
-		if (!sessionId) return;
-		go('studio', `?s=${encodeURIComponent(sessionId)}`);
+		if (!sessionId || !sessionKey) return;
+		go('studio', `?ses=${encodeURIComponent(encodeSes({ id: sessionId, key: sessionKey }))}`);
 	}
 
 	function restart() {
@@ -255,6 +258,7 @@
 		marbleSeed = null;
 		qrDataUrl = null;
 		sessionId = null;
+		sessionKey = null;
 		go('landing');
 	}
 </script>
