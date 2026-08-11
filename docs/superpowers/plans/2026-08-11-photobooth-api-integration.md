@@ -685,7 +685,7 @@ VITE_PUBLIC_ORIGIN=
 
 # Local Backend example:
 # VITE_API_BASE=http://localhost:6101
-# VITE_ADMIN_AUTH=SFOpenAdmin@1!#
+# VITE_ADMIN_AUTH=<ask-backend-owner>
 # VITE_PUBLIC_ORIGIN=http://localhost:5173
 ```
 
