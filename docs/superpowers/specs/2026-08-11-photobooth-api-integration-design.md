@@ -56,13 +56,14 @@ Booth tablet / Admin                Guest phone (Studio)
 
 | Variable | Required (cloud) | Purpose |
 |----------|------------------|---------|
-| `VITE_API_BASE` | yes | e.g. `https://sfapi.smartfactory.forum` or `http://localhost:6101` |
-| `VITE_ADMIN_AUTH` | yes for Admin writes / recent | Exact value for `Auth` header |
-| `VITE_PUBLIC_ORIGIN` | yes for guest QR | Public origin used in QR links |
+| *(vite default)* | yes | `vite.config.js` sets `VITE_API_BASE`: dev → `http://localhost:6101`, build → `https://sfapi.smartfactory.forum` |
+| `VITE_API_BASE` | optional override | Shell / `.env` if you need a non-default host |
+| `VITE_ADMIN_AUTH` | optional fallback | Prefer Admin gate entry; only used if no runtime Auth is set |
+| `VITE_PUBLIC_ORIGIN` | optional | QR origin; falls back to `location.origin` |
 
 Remove `VITE_BOOTH_KEY` (Worker-era).
 
-Do not hardcode the admin Auth value in source. Do not send `Auth` from guest Studio capture downloads.
+Do not hardcode the admin Auth value in source or `.env` for day-to-day booth use. Enter it on the Admin unlock gate (stored in session for the tab). Optional `VITE_ADMIN_AUTH` remains a fallback only. Do not send `Auth` from guest Studio capture downloads.
 
 ---
 

@@ -4,31 +4,31 @@ Cloud mode talks to **OpenHouse Photobooth** (`/api/photobooth` on SFOpenHouseAP
 
 ## Environment
 
-Copy `.env.example` → `.env` and set:
+**Defaults are in `vite.config.js`** — no `.env` required:
 
-| Variable | Purpose |
-|----------|---------|
-| `VITE_API_BASE` | API host, e.g. `https://sfapi.smartfactory.forum` or `http://localhost:6101` |
-| `VITE_ADMIN_AUTH` | Shared `Auth` header for Admin writes + recent captures |
-| `VITE_PUBLIC_ORIGIN` | Public origin guests open from QR (not localhost in production) |
+| Mode | API base |
+|------|----------|
+| `npm run dev` | `http://localhost:6101` |
+| `npm run build` / production | `https://sfapi.smartfactory.forum` |
 
-Leave `VITE_API_BASE` empty for **offline** mode: IndexedDB customs + in-memory capture stub.
+Optional override: set `VITE_API_BASE` in the shell or a local `.env`.
 
-Do not commit real Auth secrets. Ask the backend owner for `VITE_ADMIN_AUTH`.
+**Admin Auth (runtime):** Unlock Admin with PIN + Photobooth `Auth` header value (session storage). Not configured via env.
+
+**QR origin:** Uses `location.origin` unless you set optional `VITE_PUBLIC_ORIGIN` (needed when the booth URL guests scan must differ from the tablet’s origin).
 
 **Security notes**
 
-- `VITE_ADMIN_AUTH` is baked into the Vite booth bundle at build time. Do **not** ship Admin Auth on guest-only builds if you ever split booth vs guest bundles.
-- Production booth/guest origins must be on the API CORS allowlist (`Startup.cs`).
+- Production booth/guest origins must be on the API CORS allowlist.
 - Capture responses expose `X-Frame-Id`; the API CORS policy must use `WithExposedHeaders("X-Frame-Id")` so Studio can read frame context cross-origin.
 
 ## Local vs production
 
 | Mode | `VITE_API_BASE` | Notes |
 |------|-----------------|-------|
-| Production | `https://sfapi.smartfactory.forum` | Booth tablet + guest phones use live API |
-| Local API | `http://localhost:6101` | Run SFOpenHouseAPI locally; Vite proxies `/api` → `:6101` |
-| Offline | *(empty)* | No network; same-tab Studio via stub `ses` |
+| Production build | *(default sfapi)* | From `vite.config.js` when `mode !== 'development'` |
+| Local `npm run dev` | *(default :6101)* | From `vite.config.js`; run SFOpenHouseAPI locally |
+| Override | set `VITE_API_BASE` | Shell or optional `.env` |
 
 ```bash
 npm install

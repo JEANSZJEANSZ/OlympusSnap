@@ -1,6 +1,7 @@
 /**
  * OpenHouse Photobooth transport for custom frames/stickers.
  */
+import { getAdminAuth } from './adminAuth.js';
 
 /**
  * @typedef {{ id: string; x: number; y: number; w: number; h: number }} FrameSlot
@@ -44,7 +45,7 @@ export function isCloudAssetsEnabled() {
 export function adminHeaders(extra = {}) {
 	/** @type {Record<string, string>} */
 	const headers = { ...extra };
-	const auth = import.meta.env.VITE_ADMIN_AUTH;
+	const auth = getAdminAuth();
 	if (auth) headers['Auth'] = auth;
 	return headers;
 }
@@ -62,7 +63,7 @@ function photobooth(path) {
 async function readError(res) {
 	const authHint =
 		res.status === 401
-			? 'Admin Auth missing/invalid — check VITE_ADMIN_AUTH'
+			? 'Admin Auth missing/invalid — re-enter Auth on the Admin gate'
 			: null;
 	try {
 		const text = await res.text();
