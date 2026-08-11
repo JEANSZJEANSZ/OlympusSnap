@@ -513,11 +513,11 @@ export async function importCatalog(payload) {
 	if (isCloudAssetsEnabled()) {
 		const existing = await listCustoms();
 		for (const asset of existing) {
-			await apiDeleteAsset(asset.id);
+			const kind = asset.kind === 'sticker' ? 'sticker' : 'frame';
+			await apiDeleteAsset(asset.id, kind);
 		}
 		for (const row of cleaned) {
 			await apiCreateAsset({
-				id: row.id,
 				kind: row.kind,
 				name: row.name,
 				motif: row.motif,

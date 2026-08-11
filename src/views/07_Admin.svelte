@@ -288,6 +288,33 @@
 				</div>
 			</div>
 
+			{#if cloudEnabled}
+				<div class="recent-panel forge-panel">
+					<p class="panel-kicker">RECENT CAPTURES</p>
+					{#if recentError}
+						<p class="hint">{recentError}</p>
+					{:else if !recent?.length}
+						<p class="hint">No recent captures (or API restarted).</p>
+					{:else}
+						<ul class="recent-grid">
+							{#each recent as item}
+								<li>
+									{#if item.previewBase64}
+										<img
+											src={`data:image/png;base64,${item.previewBase64}`}
+											alt=""
+										/>
+									{/if}
+									<span>{item.frameId}</span>
+									<span>{item.createdAt}</span>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					<PixelButton label="REFRESH" variant="ghost" onclick={refreshRecent} />
+				</div>
+			{/if}
+
 			<div class="footer-actions">
 				{#if cloudEnabled}
 					<PixelButton
@@ -311,7 +338,7 @@
 			</div>
 			<p class="hint">
 				Seeds = shipped defaults (read-only). Customs live in {cloudEnabled
-					? 'Cloudflare R2 + D1 when VITE_API_BASE is set'
+					? 'OpenHouse Photobooth API when VITE_API_BASE is set'
 					: 'this tablet’s IndexedDB'}. Seed toggles persist on this device and travel with
 				EXPORT/IMPORT.
 			</p>
@@ -345,6 +372,7 @@
 		fileToDataUrl,
 		isPngFile
 	} from '../lib/assets/assetStore.js';
+	import { listRecentCaptures } from '../lib/assets/assetApi.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
@@ -358,6 +386,20 @@
 		typeof window !== 'undefined' &&
 			window.matchMedia('(prefers-reduced-motion: reduce)').matches
 	);
+
+	let recent = $state(/** @type {import('../lib/assets/assetApi.js').RecentCapture[]} */ ([]));
+	let recentError = $state('');
+
+	async function refreshRecent() {
+		if (!isCloudAssetsEnabled()) return;
+		try {
+			recent = await listRecentCaptures();
+			recentError = '';
+		} catch (e) {
+			recentError = e instanceof Error ? e.message : 'Failed to load recent captures';
+			recent = [];
+		}
+	}
 
 	/**
 	 * @typedef {{ id: string; x: number; y: number; w: number; h: number }} FrameSlot
@@ -414,6 +456,7 @@
 			if (disposed || !rootEl) return;
 			exitMotion = createAdminExitMotion(rootEl, { reduced });
 		})();
+		refreshRecent();
 		return () => {
 			disposed = true;
 			exitMotion?.dispose();
@@ -1038,6 +1081,53 @@
 		text-align: center;
 		text-shadow: 2px 2px 0 #06152d;
 		margin: 0;
+	}
+
+	.recent-panel {
+		gap: 0.75rem;
+	}
+
+	.recent-panel .hint {
+		text-align: left;
+		text-shadow: none;
+		color: color-mix(in srgb, var(--cream-ink) 72%, transparent);
+	}
+
+	.recent-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+		gap: 0.65rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.recent-grid li {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		background: #fffdf8;
+		padding: 0.45rem;
+		box-shadow:
+			0 0 0 2px #0f172a,
+			3px 3px 0 var(--primary);
+	}
+
+	.recent-grid img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: contain;
+		background: linear-gradient(135deg, #e8eef6 0%, #d6dde8 100%);
+		box-shadow: inset 0 0 0 2px #0f172a;
+	}
+
+	.recent-grid span {
+		font-size: 0.32rem;
+		letter-spacing: 0.04em;
+		line-height: 1.4;
+		color: color-mix(in srgb, var(--cream-ink) 78%, transparent);
+		word-break: break-all;
 	}
 
 	.seed-panel {
