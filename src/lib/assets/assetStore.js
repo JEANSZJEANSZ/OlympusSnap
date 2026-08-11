@@ -416,6 +416,14 @@ export async function uploadLocalCustomsToCloud() {
 	const local = await idbListAll();
 	if (!local.length) return { uploaded: 0, skipped: 0 };
 
+	const missingSlots = local.filter(
+		(row) => row.kind === 'frame' && !normalizeSlots(row.slots)?.length
+	);
+	if (missingSlots.length) {
+		const names = missingSlots.map((r) => r.name).join(', ');
+		throw new Error(`Cannot upload: frame(s) missing slots — ${names}`);
+	}
+
 	const cloud = await listCustoms();
 
 	let uploaded = 0;
@@ -426,16 +434,24 @@ export async function uploadLocalCustomsToCloud() {
 			skipped++;
 			continue;
 		}
-		await apiCreateAsset({
-			kind: row.kind,
-			name: row.name,
-			motif: row.motif,
-			src: row.src,
-			w: row.w,
-			h: row.h,
-			slots: row.slots
-		});
-		uploaded++;
+		try {
+			await apiCreateAsset({
+				kind: row.kind,
+				name: row.name,
+				motif: row.motif,
+				src: row.src,
+				w: row.w,
+				h: row.h,
+				slots: row.slots
+			});
+			uploaded++;
+		} catch (err) {
+			rebuildStores(await loadCustoms());
+			const detail = err instanceof Error ? err.message : String(err);
+			throw new Error(
+				`Upload stopped after ${uploaded} uploaded, ${skipped} skipped (failed on "${row.name}"): ${detail}`
+			);
+		}
 	}
 
 	rebuildStores(await loadCustoms());
@@ -511,6 +527,16 @@ export async function importCatalog(payload) {
 	const cleaned = parseImportAssets(payload);
 
 	if (isCloudAssetsEnabled()) {
+		const missingSlots = cleaned.filter(
+			(row) => row.kind === 'frame' && !normalizeSlots(row.slots)?.length
+		);
+		if (missingSlots.length) {
+			const names = missingSlots.map((r) => r.name).join(', ');
+			throw new Error(
+				`Import aborted: frame(s) missing slots — ${names}. Remote catalog was not deleted.`
+			);
+		}
+
 		const existing = await listCustoms();
 		for (const asset of existing) {
 			const kind = asset.kind === 'sticker' ? 'sticker' : 'frame';

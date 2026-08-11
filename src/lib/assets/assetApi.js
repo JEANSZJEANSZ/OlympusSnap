@@ -60,18 +60,24 @@ function photobooth(path) {
  * @param {Response} res
  */
 async function readError(res) {
+	const authHint =
+		res.status === 401
+			? 'Admin Auth missing/invalid — check VITE_ADMIN_AUTH'
+			: null;
 	try {
 		const text = await res.text();
-		if (!text) return `HTTP ${res.status}`;
+		if (!text) return authHint || `HTTP ${res.status}`;
 		try {
 			const json = JSON.parse(text);
-			if (json && typeof json.message === 'string' && json.message) return json.message;
+			if (json && typeof json.message === 'string' && json.message) {
+				return authHint ? `${authHint}: ${json.message}` : json.message;
+			}
 		} catch {
 			/* not JSON */
 		}
-		return text;
+		return authHint ? `${authHint}: ${text}` : text;
 	} catch {
-		return `HTTP ${res.status}`;
+		return authHint || `HTTP ${res.status}`;
 	}
 }
 

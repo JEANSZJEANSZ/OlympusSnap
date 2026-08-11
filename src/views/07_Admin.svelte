@@ -734,7 +734,7 @@
 	const list = $derived(tab === 'frames' ? $frames : $stickers);
 
 	async function onUploadLocalToCloud() {
-		if (!confirm('Upload IndexedDB customs to Photobooth? Skips ids already on the server.')) return;
+		if (!confirm('Upload IndexedDB customs to Photobooth? Skips name+kind already on the server.')) return;
 		busy = true;
 		try {
 			const { uploaded, skipped } = await uploadLocalCustomsToCloud();

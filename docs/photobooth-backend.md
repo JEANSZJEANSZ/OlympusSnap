@@ -14,7 +14,13 @@ Copy `.env.example` → `.env` and set:
 
 Leave `VITE_API_BASE` empty for **offline** mode: IndexedDB customs + in-memory capture stub.
 
-Do not commit real Auth secrets. The local example in `.env.example` comments matches the partner reference only.
+Do not commit real Auth secrets. Ask the backend owner for `VITE_ADMIN_AUTH`.
+
+**Security notes**
+
+- `VITE_ADMIN_AUTH` is baked into the Vite booth bundle at build time. Do **not** ship Admin Auth on guest-only builds if you ever split booth vs guest bundles.
+- Production booth/guest origins must be on the API CORS allowlist (`Startup.cs`).
+- Capture responses expose `X-Frame-Id`; the API CORS policy must use `WithExposedHeaders("X-Frame-Id")` so Studio can read frame context cross-origin.
 
 ## Local vs production
 
