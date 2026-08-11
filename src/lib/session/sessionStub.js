@@ -1,76 +1,20 @@
 /**
- * Dev stub — one-time session handoff until Cloudflare Workers + R2.
- *
- * Primary store is an in-memory Map so full PNG data-URLs work on the same
- * booth tab (localStorage quota (~5MB) cannot hold photobooth composites).
- * A tiny localStorage index tracks consumed IDs for same-origin refresh UX.
+ * Dev stub — in-memory capture handoff until Photobooth API (Task 5 wires sessionClient).
+ * Same-tab Map store holds full PNG data-URLs (localStorage quota cannot).
  */
-const INDEX_KEY = 'olympus-snap-session-index';
+/** @typedef {{ imageDataUrl: string; frameId: string | null; key: string; createdAt: number }} StubCapture */
 
-/**
- * @typedef {{
- *   imageDataUrl: string;
- *   frameId: string | null;
- *   createdAt: number;
- *   consumed: boolean;
- * }} SessionRecord
- */
-
-/** @type {Map<string, SessionRecord>} */
+/** @type {Map<string, StubCapture>} */
 const memory = new Map();
 
-/** @type {Set<string>} */
-const consumedIds = new Set();
-
-/** @returns {Storage | null} */
-function store() {
-	try {
-		return localStorage;
-	} catch {
-		return null;
-	}
-}
-
-/**
- * Lightweight index — ids + consumed flags only (no image payloads).
- * @returns {Record<string, { createdAt: number; consumed: boolean }>}
- */
-function readIndex() {
-	const s = store();
-	if (!s) return {};
-	try {
-		const raw = s.getItem(INDEX_KEY);
-		return raw ? JSON.parse(raw) : {};
-	} catch {
-		return {};
-	}
-}
-
-/** @param {Record<string, { createdAt: number; consumed: boolean }>} index */
-function writeIndex(index) {
-	const s = store();
-	if (!s) return;
-	try {
-		s.setItem(INDEX_KEY, JSON.stringify(index));
-	} catch {
-		/* quota / private mode */
-	}
-}
-
-/**
- * @param {string} sessionId
- * @param {{ createdAt: number; consumed: boolean }} meta
- */
-function markIndex(sessionId, meta) {
-	if (meta.consumed) consumedIds.add(sessionId);
-	const index = readIndex();
-	index[sessionId] = meta;
-	writeIndex(index);
+function randomKey() {
+	const bytes = crypto.getRandomValues(new Uint8Array(16));
+	return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
  * @param {{ imageDataUrl: string; frameId: string | null }} payload
- * @returns {Promise<{ sessionId: string }>}
+ * @returns {Promise<{ id: string; key: string; frameId: string | null }>}
  */
 export async function stubCreateSession({ imageDataUrl, frameId }) {
 	if (!imageDataUrl) {
@@ -78,46 +22,39 @@ export async function stubCreateSession({ imageDataUrl, frameId }) {
 		err.code = 'NOT_FOUND';
 		throw err;
 	}
-	const sessionId = crypto.randomUUID();
-	const record = {
-		imageDataUrl,
-		frameId,
-		createdAt: Date.now(),
-		consumed: false
-	};
-	memory.set(sessionId, record);
-	markIndex(sessionId, { createdAt: record.createdAt, consumed: false });
-	return { sessionId };
+	const id = crypto.randomUUID();
+	const key = randomKey();
+	memory.set(id, { imageDataUrl, frameId, key, createdAt: Date.now() });
+	return { id, key, frameId };
 }
 
 /**
- * @param {string} sessionId
+ * @param {string} id
+ * @param {string} key
  * @returns {Promise<{ imageDataUrl: string; frameId: string | null }>}
  */
-export async function stubConsumeSession(sessionId) {
-	const record = memory.get(sessionId);
-	const index = readIndex();
-	const alreadyUsed = consumedIds.has(sessionId) || !!index[sessionId]?.consumed;
-
+export async function stubLoadCapture(id, key) {
+	const record = memory.get(id);
 	if (!record) {
-		if (alreadyUsed) {
-			const err = new Error('Session already used');
-			err.code = 'CONSUMED';
-			throw err;
-		}
 		const err = new Error('Session not found');
 		err.code = 'NOT_FOUND';
 		throw err;
 	}
-	if (record.consumed || alreadyUsed) {
-		const err = new Error('Session already used');
-		err.code = 'CONSUMED';
+	if (record.key !== key) {
+		const err = new Error('Forbidden');
+		err.code = 'FORBIDDEN';
 		throw err;
 	}
-
-	record.consumed = true;
-	memory.delete(sessionId);
-	markIndex(sessionId, { createdAt: record.createdAt, consumed: true });
-
 	return { imageDataUrl: record.imageDataUrl, frameId: record.frameId };
+}
+
+/**
+ * @deprecated Removed in Task 4 — sessionClient still imports until Task 5.
+ * Offline consume-by-id alone is unsupported; use stubLoadCapture(id, key).
+ * @param {string} _sessionId
+ */
+export async function stubConsumeSession(_sessionId) {
+	const err = new Error('stubConsumeSession removed — use stubLoadCapture(id, key) (Task 5)');
+	err.code = 'NOT_FOUND';
+	throw err;
 }
