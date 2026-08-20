@@ -16,10 +16,14 @@
 	</header>
 
 	<main class="stage">
-		{#key $currentRoute.path}
-			{@const View = $currentRoute.component}
-			<View />
-		{/key}
+		{#if showBoothGate}
+			<BoothLogin />
+		{:else}
+			{#key $currentRoute.path}
+				{@const View = $currentRoute.component}
+				<View />
+			{/key}
+		{/if}
 		<FrameHandoffOverlay />
 		<ImageHandoffOverlay />
 	</main>
@@ -29,16 +33,20 @@
 <script>
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { adminReturnTo, currentRoute, go } from './router/index.js';
+	import { adminReturnTo, currentRoute, go, route } from './router/index.js';
 	import { initAssets } from './lib/assets/assetStore.js';
+	import { boothUnlocked, isBoothPublicRoute } from './lib/assets/boothSession.js';
 	import FrameHandoffOverlay from './lib/components/FrameHandoffOverlay.svelte';
 	import ImageHandoffOverlay from './lib/components/ImageHandoffOverlay.svelte';
 	import BoothCursor from './lib/components/BoothCursor.svelte';
+	import BoothLogin from './lib/components/BoothLogin.svelte';
 
 	/** @type {ReturnType<typeof setTimeout> | null} */
 	let pressTimer = null;
 	/** After long-press opens Admin, ignore the click that follows pointerup. */
 	let suppressClick = false;
+
+	const showBoothGate = $derived(!$boothUnlocked && !isBoothPublicRoute($route));
 
 	onMount(() => {
 		initAssets();

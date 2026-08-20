@@ -1,6 +1,7 @@
 <script>
 	import { animate } from 'animejs';
 	import { frameHandoff, clearFrameHandoff } from '../fx/frameHandoff.js';
+	import { resolveCachedFrameSrc } from '../utils/loadImageForCanvas.js';
 
 	/** @type {HTMLImageElement | undefined} */
 	let flyerEl = $state();
@@ -138,7 +139,7 @@
 		<img
 			bind:this={flyerEl}
 			class="flyer"
-			src={$frameHandoff.src}
+			src={resolveCachedFrameSrc($frameHandoff.src)}
 			alt=""
 			draggable="false"
 		/>

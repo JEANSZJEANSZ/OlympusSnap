@@ -31,10 +31,11 @@ const IDLE_SWAY_X = 6;
 
 /**
  * @param {HTMLElement} root
- * @param {{ reduced?: boolean }} [opts]
+ * @param {{ reduced?: boolean; pullEnabled?: boolean }} [opts]
  */
 export function createFrameSelectMotion(root, opts = {}) {
 	const reduced = !!opts.reduced;
+	const pullEnabledInit = opts.pullEnabled !== false;
 	const stage = /** @type {HTMLElement | null} */ (root.querySelector('.flight-stage'));
 	const birdRig = /** @type {HTMLElement | null} */ (root.querySelector('.bird-rig'));
 	const wings = root.querySelectorAll('.bird .wing');
@@ -49,7 +50,9 @@ export function createFrameSelectMotion(root, opts = {}) {
 
 	if (!stage || !hangGroup || !frameBodyEl || !ropeLine) {
 		return {
-			playSwap() {},
+			playSwap() {
+				return Promise.resolve();
+			},
 			/** @param {() => void} onDone */
 			playConfirm(onDone) {
 				onDone();
@@ -59,6 +62,7 @@ export function createFrameSelectMotion(root, opts = {}) {
 				onDone();
 			},
 			setSelectHandlers() {},
+			setPullEnabled() {},
 			dispose() {}
 		};
 	}
@@ -665,7 +669,7 @@ export function createFrameSelectMotion(root, opts = {}) {
 	}
 
 	buildWorld(0);
-	if (!reduced) bindPull();
+	if (!reduced && pullEnabledInit) bindPull();
 	if (!reduced && wings.length) {
 		wingLoop = animate(wings, {
 			scaleY: [1, 0.58, 1],
@@ -708,99 +712,120 @@ export function createFrameSelectMotion(root, opts = {}) {
 	/**
 	 * @param {number} direction
 	 * @param {() => void} [onMidFlight]
+	 * @param {{ outMs?: number; inMs?: number }} [timing]
+	 * @returns {Promise<void>}
 	 */
-	function playSwap(direction, onMidFlight) {
-		if (confirming || mode === 'swapping' || mode === 'dragging' || snapped) return;
+	function playSwap(direction, onMidFlight, timing = {}) {
+		const outMs = timing.outMs ?? FLY_OUT_MS;
+		const inMs = timing.inMs ?? FLY_IN_MS;
 
-		if (reduced) {
-			onMidFlight?.();
-			return;
-		}
+		return new Promise((resolve) => {
+			if (confirming || mode === 'swapping' || mode === 'dragging' || snapped) {
+				resolve();
+				return;
+			}
 
-		mode = 'swapping';
-		flyAnim?.pause();
-		detachHand();
-		const dir = direction < 0 ? -1 : 1;
-		const face = dir;
-		birdScaleX = face;
-		syncBirdTransform();
-		lockToAnchor();
-		setFlightOpacity(1);
-
-		const exitX = dir * stageWidth * FLY_TRAVEL;
-		const enterX = -dir * stageWidth * FLY_TRAVEL;
-		const startX = driveX;
-		const startY = driveY;
-
-		flyAssembly({
-			fromX: startX,
-			toX: exitX,
-			fromY: startY,
-			toY: -FLY_ARC_PX,
-			fromOpacity: 1,
-			toOpacity: 0,
-			duration: FLY_OUT_MS,
-			ease: 'inCubic',
-			onDone: () => {
-				if (disposed || confirming) {
-					mode = 'idle';
-					setFlightOpacity(1);
-					return;
-				}
+			if (reduced) {
 				onMidFlight?.();
-				requestAnimationFrame(() => {
-					requestAnimationFrame(() => {
-						if (disposed || confirming) {
-							mode = 'idle';
-							setFlightOpacity(1);
-							return;
-						}
-						birdScaleX = face;
-						buildWorld(enterX);
-						birdScaleX = face;
-						driveY = -FLY_ARC_PX;
-						syncBirdTransform();
-						lockToAnchor();
-						mode = 'swapping';
-						setFlightOpacity(0);
+				resolve();
+				return;
+			}
 
-						flyAssembly({
-							fromX: enterX,
-							toX: 0,
-							fromY: -FLY_ARC_PX,
-							toY: 0,
-							fromOpacity: 0,
-							toOpacity: 1,
-							duration: FLY_IN_MS,
-							ease: 'outCubic',
-							onDone: () => {
-								if (disposed || confirming) {
-									mode = 'idle';
-									setFlightOpacity(1);
-									return;
-								}
-								driveX = 0;
-								driveY = 0;
-								birdScaleX = face;
-								setFlightOpacity(1);
-								syncBirdTransform();
-								lockDx = 0;
-								lockDy = restRopePx + frameHeight / 2;
-								lockRot = 0;
-								lockLinkOffsets = linkBodies.map((_, i) => ({
-									x: 0,
-									y: SEG_H * (i + 0.5)
-								}));
-								unlockHang();
+			mode = 'swapping';
+			flyAnim?.pause();
+			detachHand();
+			const dir = direction < 0 ? -1 : 1;
+			const face = dir;
+			birdScaleX = face;
+			syncBirdTransform();
+			lockToAnchor();
+			setFlightOpacity(1);
+
+			const exitX = dir * stageWidth * FLY_TRAVEL;
+			const enterX = -dir * stageWidth * FLY_TRAVEL;
+			const startX = driveX;
+			const startY = driveY;
+
+			flyAssembly({
+				fromX: startX,
+				toX: exitX,
+				fromY: startY,
+				toY: -FLY_ARC_PX,
+				fromOpacity: 1,
+				toOpacity: 0,
+				duration: outMs,
+				ease: 'inCubic',
+				onDone: () => {
+					if (disposed || confirming) {
+						mode = 'idle';
+						setFlightOpacity(1);
+						resolve();
+						return;
+					}
+					onMidFlight?.();
+					requestAnimationFrame(() => {
+						requestAnimationFrame(() => {
+							if (disposed || confirming) {
 								mode = 'idle';
-								startTime = performance.now();
-								render();
+								setFlightOpacity(1);
+								resolve();
+								return;
 							}
+							birdScaleX = face;
+							buildWorld(enterX);
+							birdScaleX = face;
+							driveY = -FLY_ARC_PX;
+							syncBirdTransform();
+							lockToAnchor();
+							mode = 'swapping';
+							setFlightOpacity(0);
+
+							flyAssembly({
+								fromX: enterX,
+								toX: 0,
+								fromY: -FLY_ARC_PX,
+								toY: 0,
+								fromOpacity: 0,
+								toOpacity: 1,
+								duration: inMs,
+								ease: 'outCubic',
+								onDone: () => {
+									if (disposed || confirming) {
+										mode = 'idle';
+										setFlightOpacity(1);
+										resolve();
+										return;
+									}
+									driveX = 0;
+									driveY = 0;
+									birdScaleX = face;
+									setFlightOpacity(1);
+									syncBirdTransform();
+									lockDx = 0;
+									lockDy = restRopePx + frameHeight / 2;
+									lockRot = 0;
+									lockLinkOffsets = linkBodies.map((_, i) => ({
+										x: 0,
+										y: SEG_H * (i + 0.5)
+									}));
+									unlockHang();
+									mode = 'idle';
+									startTime = performance.now();
+									render();
+									resolve();
+								}
+							});
 						});
 					});
-				});
-			}
+				}
+			});
 		});
+	}
+
+	/** @param {boolean} on */
+	function setPullEnabled(on) {
+		if (on && !reduced) bindPull();
+		else unbindPull();
 	}
 
 	/** @param {() => void} onDone */
@@ -927,5 +952,12 @@ export function createFrameSelectMotion(root, opts = {}) {
 		root.classList.remove('physics-ready', 'confirming', 'pulling', 'backing');
 	}
 
-	return { playSwap, playConfirm, playBackToLanding, setSelectHandlers, dispose };
+	return {
+		playSwap,
+		playConfirm,
+		playBackToLanding,
+		setSelectHandlers,
+		setPullEnabled,
+		dispose
+	};
 }

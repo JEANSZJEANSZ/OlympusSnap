@@ -14,45 +14,6 @@
 			</p>
 		</header>
 
-		{#if !unlocked}
-			<div class="gate forge-panel">
-				<DialogBox
-					speaker="CERBERUS"
-					text={cloudEnabled
-						? 'Enter PIN + Photobooth Auth to forge relics. Default PIN: olympus'
-						: 'Enter the Admin PIN to forge new relics. Default: olympus'}
-					typewriter={false}
-				/>
-				<label class="field">
-					<span>PIN</span>
-					<input
-						type="password"
-						bind:value={pinInput}
-						autocomplete="off"
-						onkeydown={(e) => e.key === 'Enter' && tryUnlock()}
-					/>
-				</label>
-				{#if cloudEnabled}
-					<label class="field">
-						<span>API AUTH</span>
-						<input
-							type="password"
-							bind:value={authInput}
-							autocomplete="off"
-							placeholder="Auth header for Photobooth"
-							onkeydown={(e) => e.key === 'Enter' && tryUnlock()}
-						/>
-					</label>
-				{/if}
-				{#if pinError}
-					<p class="err">{pinError}</p>
-				{/if}
-				<div class="actions">
-					<PixelButton label="UNLOCK" variant="gold" onclick={tryUnlock} />
-					<PixelButton label="BACK" variant="ghost" onclick={goBack} />
-				</div>
-			</div>
-		{:else}
 			<div class="tabs" role="tablist" aria-label="Asset type">
 				<button
 					type="button"
@@ -302,6 +263,94 @@
 				</div>
 			</div>
 
+			<div class="seed-panel forge-panel">
+				<p class="panel-kicker">BOOTH FLOW</p>
+				<p class="seed-copy">
+					Random Frame skips pull-to-select. Pythia chooses a relic on the Delphi altar.
+					Shuffle length and Random Frame persist for this browser tab session.
+				</p>
+				<div class="seed-toggles">
+					<button
+						type="button"
+						class="seed-toggle"
+						class:on={$randomFrame}
+						aria-pressed={$randomFrame}
+						onclick={() => {
+							const next = !$randomFrame;
+							setRandomFrame(next);
+							status = next
+								? 'Random Frame ON — guests get an oracle pick.'
+								: 'Random Frame OFF — guests pull to select.';
+						}}
+					>
+						<span class="seed-toggle-label">RANDOM FRAME</span>
+						<span class="seed-toggle-state">{$randomFrame ? 'ON' : 'OFF'}</span>
+					</button>
+				</div>
+				<label class="shuffle-slider">
+					<span class="shuffle-slider-head">
+						<span>SHUFFLE</span>
+						<span class="shuffle-slider-val">{($oracleShuffleMs / 1000).toFixed(1)}s</span>
+					</span>
+					<input
+						type="range"
+						min={ORACLE_SHUFFLE_MIN_MS}
+						max={ORACLE_SHUFFLE_MAX_MS}
+						step="100"
+						value={$oracleShuffleMs}
+						aria-valuemin={ORACLE_SHUFFLE_MIN_MS}
+						aria-valuemax={ORACLE_SHUFFLE_MAX_MS}
+						aria-valuenow={$oracleShuffleMs}
+						aria-label="Oracle shuffle duration"
+						oninput={(e) => {
+							const next = Number(/** @type {HTMLInputElement} */ (e.currentTarget).value);
+							setOracleShuffleMs(next);
+							status = `Oracle shuffle set to ${(next / 1000).toFixed(1)}s.`;
+						}}
+					/>
+					<span class="shuffle-slider-ends" aria-hidden="true">
+						<span>FAST</span>
+						<span>SLOW</span>
+					</span>
+				</label>
+			</div>
+
+			<div class="seed-panel forge-panel">
+				<p class="panel-kicker">BOOTH SESSION</p>
+				<p class="seed-copy">
+					{cloudEnabled
+						? 'Photobooth Auth is verified with the forge and kept for this tab. Log out to seal the booth again.'
+						: 'This tablet is unlocked with the Admin PIN for this tab. Log out to seal the booth again.'}
+				</p>
+				{#if cloudEnabled}
+					<label class="field">
+						<span>API AUTH</span>
+						<input
+							type="password"
+							bind:value={authInput}
+							autocomplete="off"
+							placeholder="Update Auth header"
+						/>
+					</label>
+					{#if authError}
+						<p class="err">{authError}</p>
+					{/if}
+					<div class="actions">
+						<PixelButton
+							label={authBusy ? 'CHECKING…' : 'SAVE AUTH'}
+							variant="gold"
+							disabled={authBusy}
+							onclick={saveAuth}
+						/>
+						<PixelButton label="LOG OUT" variant="ghost" onclick={onLogout} />
+					</div>
+				{:else}
+					<div class="actions">
+						<PixelButton label="LOG OUT" variant="ghost" onclick={onLogout} />
+					</div>
+				{/if}
+			</div>
+
 			{#if cloudEnabled}
 				<div class="recent-panel forge-panel">
 					<p class="panel-kicker">RECENT CAPTURES</p>
@@ -311,7 +360,7 @@
 						<p class="hint">No recent captures (or API restarted).</p>
 					{:else}
 						<ul class="recent-grid">
-							{#each recent as item}
+							{#each recent as item (item.id)}
 								<li>
 									{#if item.previewBase64}
 										<img
@@ -343,11 +392,13 @@
 					IMPORT JSON
 					<input type="file" accept="application/json,.json" hidden onchange={onImport} />
 				</label>
-				<PixelButton
-					label="CHANGE PIN"
-					variant="ghost"
-					onclick={() => (showPinChange = true)}
-				/>
+				{#if !cloudEnabled}
+					<PixelButton
+						label="CHANGE PIN"
+						variant="ghost"
+						onclick={() => (showPinChange = true)}
+					/>
+				{/if}
 				<PixelButton label="EXIT ADMIN" variant="primary" onclick={goBack} />
 			</div>
 			<p class="hint">
@@ -356,7 +407,6 @@
 					: 'this tablet’s IndexedDB'}. Seed toggles persist on this device and travel with
 				EXPORT/IMPORT.
 			</p>
-		{/if}
 	</div>
 </section>
 
@@ -370,8 +420,14 @@
 		stickers,
 		showSeedFrames,
 		showSeedStickers,
+		randomFrame,
+		oracleShuffleMs,
+		ORACLE_SHUFFLE_MIN_MS,
+		ORACLE_SHUFFLE_MAX_MS,
 		setShowSeedFrames,
 		setShowSeedStickers,
+		setRandomFrame,
+		setOracleShuffleMs,
 		addFrame,
 		addStickers,
 		updateAsset,
@@ -380,16 +436,15 @@
 		importCatalog,
 		uploadLocalCustomsToCloud,
 		isCloudAssetsEnabled,
-		verifyAdminPin,
 		getAdminPin,
 		setAdminPin,
 		fileToDataUrl,
 		isPngFile
 	} from '../lib/assets/assetStore.js';
 	import { getAdminAuth, setAdminAuth } from '../lib/assets/adminAuth.js';
-	import { listRecentCaptures } from '../lib/assets/assetApi.js';
+	import { listRecentCaptures, verifyAdminAuth } from '../lib/assets/assetApi.js';
+	import { lockBooth } from '../lib/assets/boothSession.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
-	import DialogBox from '../lib/components/DialogBox.svelte';
 	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 	import FrameSlotEditor from '../lib/components/FrameSlotEditor.svelte';
 	import FrameCropEditor from '../lib/components/FrameCropEditor.svelte';
@@ -431,10 +486,9 @@
 	 * }} FrameDraft
 	 */
 
-	let unlocked = $state(false);
-	let pinInput = $state('');
 	let authInput = $state(getAdminAuth());
-	let pinError = $state('');
+	let authError = $state('');
+	let authBusy = $state(false);
 	let tab = $state(/** @type {'frames' | 'stickers'} */ ('frames'));
 	let status = $state('');
 	let busy = $state(false);
@@ -451,30 +505,44 @@
 	let frameDraft = $state(null);
 	let editorError = $state('');
 
-	function tryUnlock() {
-		if (!verifyAdminPin(pinInput.trim())) {
-			pinError = 'Wrong PIN. Default seed: olympus';
+	async function saveAuth() {
+		if (authBusy) return;
+		const auth = authInput.trim();
+		if (!auth) {
+			authError = 'API Auth required for cloud forge writes.';
 			return;
 		}
-		if (cloudEnabled) {
-			const auth = authInput.trim();
-			if (!auth) {
-				pinError = 'API Auth required for cloud forge writes.';
+		authBusy = true;
+		authError = '';
+		const prev = getAdminAuth();
+		setAdminAuth(auth);
+		try {
+			const ok = await verifyAdminAuth();
+			if (!ok) {
+				setAdminAuth(prev);
+				authError = 'Auth rejected by the forge.';
+				status = '';
 				return;
 			}
-			setAdminAuth(auth);
+			status = 'Photobooth Auth saved for this tab.';
+		} catch (e) {
+			setAdminAuth(prev);
+			authError = e instanceof Error ? e.message : 'Could not verify Auth.';
+		} finally {
+			authBusy = false;
 		}
-		unlocked = true;
-		pinError = '';
-		pinInput = '';
-		status = '';
-		refreshRecent();
+	}
+
+	function onLogout() {
+		lockBooth();
+		go('landing');
 	}
 
 	/** @type {null | ReturnType<typeof createAdminExitMotion>} */
 	let exitMotion = null;
 
 	onMount(() => {
+		void refreshRecent();
 		let disposed = false;
 		(async () => {
 			await tick();
@@ -878,12 +946,6 @@
 		animation: panel-stamp 0.45s var(--ease-expo) both;
 	}
 
-	.gate {
-		max-width: 28rem;
-		margin: 0.35rem auto 0;
-		width: 100%;
-	}
-
 	.panel-kicker {
 		margin: 0;
 		font-size: clamp(0.42rem, 1.1vw, 0.52rem);
@@ -1226,6 +1288,68 @@
 	.seed-toggle.on .seed-toggle-state {
 		background: #07152d;
 		color: #7dffb0;
+	}
+
+	.shuffle-slider {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		font-size: 0.42rem;
+		letter-spacing: 0.08em;
+	}
+
+	.shuffle-slider-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		color: var(--cream-ink);
+	}
+
+	.shuffle-slider-val {
+		font-size: 0.48rem;
+		letter-spacing: 0.1em;
+		color: #8e2f36;
+		font-weight: 700;
+	}
+
+	.shuffle-slider input[type='range'] {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 100%;
+		height: 14px;
+		margin: 0;
+		background: #07152d;
+		border: 3px solid #0f172a;
+		box-shadow: inset 2px 2px 0 #1a2a44;
+		cursor: pointer;
+	}
+
+	.shuffle-slider input[type='range']::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 22px;
+		height: 22px;
+		background: var(--gold-bright, #f0c14a);
+		border: 3px solid #0f172a;
+		box-shadow: 2px 2px 0 var(--primary);
+		cursor: grab;
+	}
+
+	.shuffle-slider input[type='range']::-moz-range-thumb {
+		width: 22px;
+		height: 22px;
+		background: var(--gold-bright, #f0c14a);
+		border: 3px solid #0f172a;
+		box-shadow: 2px 2px 0 var(--primary);
+		cursor: grab;
+	}
+
+	.shuffle-slider-ends {
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.34rem;
+		letter-spacing: 0.12em;
+		opacity: 0.7;
 	}
 
 	.footer-actions {
