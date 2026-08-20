@@ -28,7 +28,20 @@ import { getAdminAuth } from './adminAuth.js';
  * @returns {string}
  */
 export function getApiBase() {
-	return (import.meta.env.VITE_API_BASE || '').replace(/\/+$/, '');
+	return forceHttpsIfSecurePage((import.meta.env.VITE_API_BASE || '').replace(/\/+$/, ''));
+}
+
+/**
+ * When the SPA is on HTTPS, upgrade plain http:// URLs so the browser
+ * does not block Mixed Content (API sometimes returns http://sfapi…).
+ * @param {string} url
+ * @returns {string}
+ */
+export function forceHttpsIfSecurePage(url) {
+	if (!url || typeof url !== 'string') return url;
+	if (typeof location === 'undefined' || location.protocol !== 'https:') return url;
+	if (/^http:\/\//i.test(url)) return `https://${url.slice('http://'.length)}`;
+	return url;
 }
 
 /**
@@ -40,13 +53,14 @@ export function isCloudAssetsEnabled() {
 
 /**
  * Prefix relative Photobooth file paths with the API host.
- * Absolute / data / blob URLs are left unchanged.
+ * Absolute / data / blob URLs are left unchanged (except http→https on HTTPS pages).
  * @param {string} src
  * @returns {string}
  */
 export function resolveCloudAssetSrc(src) {
 	if (!src || typeof src !== 'string') return src;
-	if (/^(https?:|data:|blob:)/i.test(src)) return src;
+	if (/^(data:|blob:)/i.test(src)) return src;
+	if (/^https?:\/\//i.test(src)) return forceHttpsIfSecurePage(src);
 	if (src.startsWith('//')) {
 		const proto =
 			typeof location !== 'undefined' && location.protocol ? location.protocol : 'https:';
