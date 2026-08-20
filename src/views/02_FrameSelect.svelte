@@ -3,7 +3,7 @@
 	import { get } from 'svelte/store';
 	import { selectedFrameId } from '../lib/stores/stores.js';
 	import { go } from '../router/index.js';
-	import { frames, randomFrame, oracleShuffleMs } from '../lib/assets/assetStore.js';
+	import { assetsReady, frames, randomFrame, oracleShuffleMs } from '../lib/assets/assetStore.js';
 	import { createFrameSelectMotion } from '../lib/fx/frameSelectMotion.js';
 	import { playOracleRite } from '../lib/fx/oracleRite.js';
 	import { beginFrameHandoff } from '../lib/fx/frameHandoff.js';
@@ -23,7 +23,7 @@
 	let reduced = $state(false);
 	let exiting = $state(false);
 	let artRetryId = $state(/** @type {string | null} */ (null));
-	/** @type {'idle' | 'weigh' | 'spin' | 'spoken' | 'drop'} */
+	/** @type {'idle' | 'warming' | 'weigh' | 'spin' | 'spoken' | 'drop'} */
 	let oraclePhase = $state('idle');
 	let oracleStarted = $state(false);
 	/** @type {HTMLElement | undefined} */
@@ -53,6 +53,9 @@
 			return reduced
 				? `${frame.name} hangs ready. Tap the strip to proceed.`
 				: `${frame.name} hangs ready. Pull hard, hold if you wish, then release to drop.`;
+		}
+		if (oraclePhase === 'warming' || oraclePhase === 'idle') {
+			return 'The Fates gather the relics…';
 		}
 		if (oraclePhase === 'weigh') return 'The Fates weigh the relics…';
 		if (oraclePhase === 'spin') return 'Olympus spins the lots…';
@@ -148,25 +151,59 @@
 		go('camera');
 	}
 
-	async function startOracleRite() {
-		if (oracleStarted || exiting || !oracleMode || !list.length || !rootEl) return;
+	/**
+	 * @param {typeof list} items
+	 */
+	function listFullyCached(items) {
+		return items.every((f) => !f.src || isFrameImageCached(f.src));
+	}
+
+	/**
+	 * Warm catalog art and require every src in the blob cache before the rite.
+	 * @param {typeof list} items
+	 * @param {{ cancelled: boolean }} signal
+	 */
+	async function waitForOracleArt(items, signal) {
+		const srcs = items.map((f) => f.src);
+		await warmFrameImages(srcs);
+		if (signal.cancelled || exiting) return false;
+		if (listFullyCached(items)) return true;
+
+		await warmFrameImages(srcs);
+		if (signal.cancelled || exiting) return false;
+		if (listFullyCached(items)) return true;
+
+		await new Promise((resolve) => window.setTimeout(resolve, 400));
+		if (signal.cancelled || exiting) return false;
+		await warmFrameImages(srcs);
+		return !signal.cancelled && !exiting && listFullyCached(items);
+	}
+
+	/**
+	 * @param {typeof list} items
+	 * @param {{ cancelled: boolean }} signal
+	 */
+	async function startOracleRite(items, signal) {
+		if (oracleStarted || exiting || !oracleMode || !items.length || !rootEl) return;
+		if (signal.cancelled) return;
+
+		oraclePhase = 'warming';
+		const artReady = await waitForOracleArt(items, signal);
+		if (!artReady || signal.cancelled || exiting || !rootEl) return;
+
 		oracleStarted = true;
-		oracleSignal = { cancelled: false };
 		oraclePhase = 'weigh';
 
-		await warmFrameImages(list.map((f) => f.src));
-		if (exiting || oracleSignal.cancelled || !rootEl) return;
-
-		const startIndex = Math.min(index, list.length - 1);
-		const targetIndex = Math.floor(Math.random() * list.length);
+		const startIndex = Math.min(index, Math.max(0, items.length - 1));
+		const targetIndex = Math.floor(Math.random() * items.length);
 
 		await playOracleRite(rootEl, {
-			listLength: list.length,
+			listLength: items.length,
 			startIndex,
 			targetIndex,
 			shuffleMs: get(oracleShuffleMs),
 			reduced,
-			signal: oracleSignal,
+			signal,
 			onStep: (i) => {
 				index = i;
 			},
@@ -174,8 +211,9 @@
 				oraclePhase = phase;
 			},
 			onDone: () => {
+				if (signal.cancelled) return;
 				exiting = true;
-				const f = list[Math.min(index, Math.max(0, list.length - 1))];
+				const f = items[Math.min(index, Math.max(0, items.length - 1))];
 				commitFrameToCamera(f);
 			}
 		});
@@ -229,8 +267,29 @@
 	});
 
 	$effect(() => {
-		if (!oracleMode || !rootEl || !list.length || oracleStarted || exiting) return;
-		void startOracleRite();
+		const ready = $assetsReady;
+		const mode = oracleMode;
+		const el = rootEl;
+		const items = list;
+		const gone = exiting;
+
+		if (!mode || !ready || !el || !items.length || gone) return;
+
+		const fingerprint = items.map((f) => f.id).join('|');
+		oracleSignal.cancelled = true;
+		const signal = { cancelled: false };
+		oracleSignal = signal;
+
+		const timer = window.setTimeout(() => {
+			if (signal.cancelled) return;
+			if (fingerprint !== list.map((f) => f.id).join('|')) return;
+			void startOracleRite(items, signal);
+		}, 350);
+
+		return () => {
+			window.clearTimeout(timer);
+			if (!oracleStarted) signal.cancelled = true;
+		};
 	});
 
 	function selectFrame(target, direction) {
