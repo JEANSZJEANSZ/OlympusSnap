@@ -56,92 +56,104 @@
 					</div>
 				</aside>
 
-				{#if mobileSession}
-					<div class="sticker-controls" aria-label="Sticker size and rotation">
-						<PixelButton
-							label="SIZE −"
-							variant="ghost"
-							ariaLabel="Smaller"
-							disabled={!selectedId || entryBusy || exiting || saving}
-							onclick={() => editorRef?.nudgeScale(1 / 1.15)}
-						/>
-						<PixelButton
-							label="SIZE +"
-							variant="ghost"
-							ariaLabel="Bigger"
-							disabled={!selectedId || entryBusy || exiting || saving}
-							onclick={() => editorRef?.nudgeScale(1.15)}
-						/>
-						<PixelButton
-							label="ROTATE ↺"
-							variant="ghost"
-							ariaLabel="Rotate left"
-							disabled={!selectedId || entryBusy || exiting || saving}
-							onclick={() => editorRef?.nudgeRotate(-15)}
-						/>
-						<PixelButton
-							label="ROTATE ↻"
-							variant="ghost"
-							ariaLabel="Rotate right"
-							disabled={!selectedId || entryBusy || exiting || saving}
-							onclick={() => editorRef?.nudgeRotate(15)}
-						/>
-					</div>
-				{/if}
+				{#if !mobileSession}
+					<aside class="sticker-rail" aria-label="Sticker tray">
+						<div class="gallery">
+							{#each $stickers as item (item.id)}
+								<button
+									type="button"
+									class="tile"
+									disabled={entryBusy || exiting || saving}
+									onclick={() => addSticker(item)}
+								>
+									<span class="swatch">
+										<img src={item.src} alt="" draggable="false" />
+									</span>
+									<span class="label">{item.name}</span>
+								</button>
+							{/each}
+						</div>
 
-				<aside class="sticker-rail" aria-label="Sticker tray">
-					{#if mobileSession}
-						<header class="mobile-head">
-							<p class="eyebrow">MOBILE STUDIO</p>
-							<h1>DECORATE YOUR RELIC</h1>
-							<p class="mobile-hint">
-								Tap a sticker · drag to move · pinch to resize · twist to rotate · or use SIZE /
-								ROTATE
-							</p>
-						</header>
-					{/if}
+						<DialogBox speaker="DIONYSUS" text={dialogText} typewriter={false} />
 
-					<div class="gallery">
-						{#each $stickers as item (item.id)}
+						<div class="actions">
+							<PixelButton
+								label="REMOVE"
+								variant="ghost"
+								disabled={!selectedId || entryBusy || exiting || saving}
+								onclick={removeSelected}
+							/>
+							<PixelButton
+								label="CLEAR"
+								variant="ghost"
+								disabled={entryBusy || exiting || saving}
+								onclick={clearStickers}
+							/>
+						</div>
+					</aside>
+				{:else}
+					<aside class="sticker-rail" aria-label="Sticker tray">
+						<div class="gallery">
+							{#each $stickers as item (item.id)}
+								<button
+									type="button"
+									class="tile"
+									disabled={entryBusy || exiting || saving}
+									onclick={() => addSticker(item)}
+									aria-label={item.name}
+								>
+									<span class="swatch">
+										<img src={item.src} alt="" draggable="false" />
+									</span>
+								</button>
+							{/each}
+						</div>
+						<div class="tray-icons">
 							<button
 								type="button"
-								class="tile"
-								disabled={entryBusy || exiting || saving}
-								onclick={() => addSticker(item)}
+								class="icon-btn"
+								aria-label="Remove selected sticker"
+								disabled={!selectedId || entryBusy || exiting || saving}
+								onclick={removeSelected}
 							>
-								<span class="swatch">
-									<img src={item.src} alt="" draggable="false" />
-								</span>
-								<span class="label">{item.name}</span>
+								<svg viewBox="0 0 24 24" aria-hidden="true">
+									<path
+										fill="currentColor"
+										d="M9 3h6v2h5v2H4V5h5V3zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM6 7h12v14H6V7z"
+									/>
+								</svg>
 							</button>
-						{/each}
-					</div>
-
-					<DialogBox speaker="DIONYSUS" text={dialogText} typewriter={false} />
-
-					<div class="actions">
-						<PixelButton
-							label="REMOVE"
-							variant="ghost"
-							disabled={!selectedId || entryBusy || exiting || saving}
-							onclick={removeSelected}
-						/>
-						<PixelButton
-							label="CLEAR"
-							variant="ghost"
-							disabled={entryBusy || exiting || saving}
-							onclick={clearStickers}
-						/>
-						{#if mobileSession}
-							<PixelButton
-								label="SAVE MY SNAP"
-								variant="gold"
+							<button
+								type="button"
+								class="icon-btn"
+								aria-label="Clear stickers"
+								disabled={entryBusy || exiting || saving}
+								onclick={clearStickers}
+							>
+								<svg viewBox="0 0 24 24" aria-hidden="true">
+									<path
+										fill="currentColor"
+										d="M5 5h14v2H5V5zm2 4h10v10H7V9zm2 2v6h2v-6H9zm4 0v6h2v-6h-2z"
+									/>
+								</svg>
+							</button>
+							<button
+								type="button"
+								class="icon-btn icon-save"
+								aria-label={saving ? 'Saving' : 'Download snap'}
 								disabled={entryBusy || exiting || saving || !$capturedImageData}
 								onclick={saveMySnap}
-							/>
-						{/if}
-					</div>
-				</aside>
+							>
+								<svg viewBox="0 0 24 24" aria-hidden="true">
+									<path
+										fill="currentColor"
+										d="M11 3h2v10h3l-4 5-4-5h3V3zm-7 16h16v2H4v-2z"
+									/>
+								</svg>
+							</button>
+						</div>
+					</aside>
+				{/if}
 			</main>
 		</div>
 	{/if}
@@ -208,11 +220,7 @@
 
 	const touchMode = $derived(mobileSession || coarsePointer);
 
-	const dialogText = $derived(
-		mobileSession
-			? 'Tap a sticker to add it. Drag to move. Pinch to resize, twist to rotate — or use SIZE and ROTATE.'
-			: 'Scan the QR at the booth to open mobile studio.'
-	);
+	const dialogText = $derived('Scan the QR at the booth to open mobile studio.');
 
 	async function initEditorEntry() {
 		await tick();
@@ -388,14 +396,10 @@
 		flex-direction: column;
 		flex: 1 1 auto;
 		width: 100%;
-		max-width: var(--mobile-col-max);
+		max-width: none;
 		min-height: 0;
-		margin-inline: auto;
-		padding:
-			max(0.4rem, env(safe-area-inset-top))
-			max(0.65rem, env(safe-area-inset-right))
-			0
-			max(0.65rem, env(safe-area-inset-left));
+		margin-inline: 0;
+		padding: 0;
 	}
 
 	.mobile-session .stage {
@@ -415,10 +419,10 @@
 
 	.mobile-session .dock-column {
 		flex: 1 1 0;
-		min-height: 12rem;
+		min-height: 0;
 		max-height: none;
 		height: auto;
-		padding: 0.5rem 0.35rem;
+		padding: 0;
 		background: #071936;
 		touch-action: none;
 		overscroll-behavior: contain;
@@ -443,51 +447,35 @@
 
 	.mobile-session .editor-shell,
 	.mobile-session .editor-shell.is-narrow {
-		/* Fit dock: height-first, keep frame aspect, never overflow */
 		width: min(100%, calc(100cqh * var(--frame-ar)));
 		height: auto;
 		max-width: 100%;
 		max-height: 100%;
 		aspect-ratio: var(--frame-ar);
 		margin: 0 auto;
-		filter: drop-shadow(0 8px 16px rgba(3, 12, 27, 0.45));
+		filter: none;
 		background: #0a1220;
-	}
-
-	.mobile-session .sticker-controls {
-		flex: 0 0 auto;
-		display: grid;
-		grid-template-columns: 1fr 1fr 1fr 1fr;
-		gap: 0.4rem;
-		padding: 0.45rem 0.75rem 0.35rem;
-		background: #102f56;
-		border-top: 2px solid color-mix(in srgb, var(--gold) 35%, transparent);
-	}
-
-	.mobile-session .sticker-controls :global(.pixel-btn) {
-		min-width: 0;
-		width: 100%;
-		min-height: max(44px, var(--booth-touch));
-		padding: 0.5rem 0.2rem;
-		font-size: clamp(0.42rem, 2.4vw, 0.52rem);
-		letter-spacing: 0.02em;
+		border-radius: 0;
+		box-shadow: none;
+		transform: none;
 	}
 
 	.mobile-session .sticker-rail {
 		flex: 0 0 auto;
-		height: auto;
+		height: calc(4.6rem + var(--sheet-pad));
 		max-height: none;
 		min-height: 0;
-		overflow: visible;
+		overflow: hidden;
 		display: flex;
-		flex-direction: column;
-		gap: 0.55rem;
+		flex-direction: row;
+		align-items: center;
+		gap: 0.4rem;
 		padding:
-			0.65rem 0.75rem
+			0.4rem 0.45rem
 			var(--sheet-pad);
-		background: linear-gradient(180deg, #102f56 0%, #071936 100%);
-		border-top: 2px solid color-mix(in srgb, var(--gold) 45%, transparent);
-		box-shadow: 0 -8px 24px rgba(3, 12, 27, 0.35);
+		background: color-mix(in srgb, #071936 88%, #000);
+		border-top: 1px solid color-mix(in srgb, var(--gold) 28%, transparent);
+		box-shadow: none;
 	}
 
 	.mobile-session .gallery {
@@ -495,46 +483,75 @@
 		flex-direction: row;
 		overflow-x: auto;
 		overflow-y: hidden;
-		gap: 0.55rem;
-		padding-bottom: 0.25rem;
-		flex: 0 0 auto;
-		min-height: calc(var(--booth-swatch) + var(--booth-sticker-label-h) + 1.1rem);
+		gap: 0.4rem;
+		padding: 0;
+		flex: 1 1 auto;
+		min-height: 0;
+		min-width: 0;
 		-webkit-overflow-scrolling: touch;
 		scroll-snap-type: x proximity;
+		scrollbar-width: none;
+	}
+
+	.mobile-session .gallery::-webkit-scrollbar {
+		display: none;
 	}
 
 	.mobile-session .tile {
 		flex: 0 0 auto;
-		width: 4.75rem;
+		width: 3.15rem;
+		height: 3.15rem;
+		padding: 0.2rem;
 		scroll-snap-align: start;
+		min-width: 3.15rem;
+		min-height: 3.15rem;
 	}
 
-	.mobile-session .actions {
-		position: relative;
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.5rem;
-		flex-shrink: 0;
-		padding: 0.15rem 0 0;
-		background: transparent;
-	}
-
-	.mobile-session .actions :global(.pixel-btn) {
-		flex: unset;
-		min-width: 0;
+	.mobile-session .tile .swatch {
 		width: 100%;
-		min-height: max(44px, var(--booth-touch));
-		justify-content: center;
-		padding: 0.65rem 0.5rem;
-		font-size: clamp(0.55rem, 2.8vw, var(--booth-text-sm));
+		height: 100%;
+		flex: 1;
 	}
 
-	.mobile-session .actions :global(.pixel-btn:last-child) {
-		grid-column: 1 / -1;
+	.mobile-session .tray-icons {
+		flex: 0 0 auto;
+		display: flex;
+		align-items: center;
+		gap: 0.2rem;
 	}
 
-	.mobile-session .sticker-rail :global(.dialog) {
-		display: none;
+	.icon-btn {
+		display: grid;
+		place-items: center;
+		width: 2.6rem;
+		height: 2.6rem;
+		padding: 0;
+		border: 2px solid color-mix(in srgb, var(--gold) 40%, transparent);
+		background: #102f56;
+		color: #fff8df;
+		box-shadow: 2px 2px 0 #041018;
+		cursor: pointer;
+	}
+
+	.icon-btn svg {
+		width: 1.15rem;
+		height: 1.15rem;
+	}
+
+	.icon-btn:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
+	}
+
+	.icon-btn.icon-save {
+		background: var(--gold, #d4a017);
+		color: #071936;
+		border-color: #fff4c2;
+	}
+
+	.icon-btn:active:not(:disabled) {
+		transform: translate(1px, 1px);
+		box-shadow: 1px 1px 0 #041018;
 	}
 
 	.sky-wash {
@@ -717,30 +734,6 @@
 		overflow: visible;
 		padding: 0.5rem 0.35rem 0.65rem 0.65rem;
 		box-sizing: border-box;
-	}
-
-	.mobile-head {
-		flex-shrink: 0;
-	}
-
-	.mobile-head .eyebrow {
-		font-size: var(--booth-text-xs);
-		color: var(--gold-bright);
-		letter-spacing: 0.08em;
-		margin-bottom: 0.25rem;
-	}
-
-	.mobile-head h1 {
-		font-size: var(--booth-text-sm);
-		color: #fff8df;
-	}
-
-	.mobile-hint {
-		margin: 0.35rem 0 0;
-		font-size: clamp(0.38rem, 2.6vw, 0.48rem);
-		line-height: 1.65;
-		color: color-mix(in srgb, #fff8df 78%, transparent);
-		text-wrap: pretty;
 	}
 
 	.gallery {
