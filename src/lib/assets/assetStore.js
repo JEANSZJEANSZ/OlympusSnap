@@ -8,22 +8,32 @@ import {
 	fetchAsDataUrl,
 	isCloudAssetsEnabled,
 	listCustoms,
-	patchAsset as apiPatchAsset
+	patchAsset as apiPatchAsset,
+	resolveCloudAssetSrc
 } from './assetApi.js';
 import { FRAMES as SEED_FRAMES, STICKERS as SEED_STICKERS } from './catalog.js';
 import { idbDelete, idbListAll, idbPut, idbReplaceAllCustoms } from './idb.js';
 import { measureImage } from '../utils/imageCrop.js';
+import { warmFrameImages } from '../utils/loadImageForCanvas.js';
 
 const PIN_KEY = 'olympus-snap-admin-pin';
 const DEFAULT_PIN = 'olympus';
 const SEED_FRAMES_KEY = 'olympus-snap-show-seed-frames';
 const SEED_STICKERS_KEY = 'olympus-snap-show-seed-stickers';
+const RANDOM_FRAME_KEY = 'olympus-snap-random-frame';
+const ORACLE_SHUFFLE_KEY = 'olympus-snap-oracle-shuffle';
+const ORACLE_SHUFFLE_MS_KEY = 'olympus-snap-oracle-shuffle-ms';
 
-/**
- * @typedef {{ id: string; x: number; y: number; w: number; h: number }} FrameSlot
- * @typedef {{ id: string; name: string; src: string; motif?: string; thumb?: string; w?: number; h?: number; slots?: FrameSlot[]; custom?: boolean }} FrameAsset
- * @typedef {{ id: string; name: string; src: string; custom?: boolean }} StickerAsset
- */
+export const ORACLE_SHUFFLE_MIN_MS = 800;
+export const ORACLE_SHUFFLE_MAX_MS = 5000;
+export const ORACLE_SHUFFLE_DEFAULT_MS = 2600;
+
+/** Legacy preset → ms (one-time migrate). */
+const ORACLE_SHUFFLE_PRESET_MS = /** @type {const} */ ({
+	short: 1400,
+	medium: 2600,
+	long: 4200
+});
 
 /** @param {string} key @param {boolean} fallback */
 function readFlag(key, fallback = true) {
@@ -45,6 +55,59 @@ function writeFlag(key, on) {
 	}
 }
 
+/** @param {string} key @param {boolean} fallback */
+function readSessionFlag(key, fallback = false) {
+	try {
+		const v = sessionStorage.getItem(key);
+		if (v === null) return fallback;
+		return v === '1' || v === 'true';
+	} catch {
+		return fallback;
+	}
+}
+
+/** @param {string} key @param {boolean} on */
+function writeSessionFlag(key, on) {
+	try {
+		sessionStorage.setItem(key, on ? '1' : '0');
+	} catch {
+		/* ignore quota / private mode */
+	}
+}
+
+/** @param {number} ms */
+function clampShuffleMs(ms) {
+	const n = Math.round(Number(ms) || ORACLE_SHUFFLE_DEFAULT_MS);
+	const stepped = Math.round(n / 100) * 100;
+	return Math.min(ORACLE_SHUFFLE_MAX_MS, Math.max(ORACLE_SHUFFLE_MIN_MS, stepped));
+}
+
+/** @returns {number} */
+function readOracleShuffleMs() {
+	try {
+		const raw = sessionStorage.getItem(ORACLE_SHUFFLE_MS_KEY);
+		if (raw != null && raw !== '') {
+			const n = Number(raw);
+			if (Number.isFinite(n)) return clampShuffleMs(n);
+		}
+		const legacy = sessionStorage.getItem(ORACLE_SHUFFLE_KEY);
+		if (legacy === 'short' || legacy === 'medium' || legacy === 'long') {
+			const migrated = ORACLE_SHUFFLE_PRESET_MS[legacy];
+			sessionStorage.setItem(ORACLE_SHUFFLE_MS_KEY, String(migrated));
+			return migrated;
+		}
+	} catch {
+		/* ignore */
+	}
+	return ORACLE_SHUFFLE_DEFAULT_MS;
+}
+
+/**
+ * @typedef {{ id: string; x: number; y: number; w: number; h: number }} FrameSlot
+ * @typedef {{ id: string; name: string; src: string; motif?: string; thumb?: string; w?: number; h?: number; slots?: FrameSlot[]; custom?: boolean }} FrameAsset
+ * @typedef {{ id: string; name: string; src: string; custom?: boolean }} StickerAsset
+ */
+
 /** @type {import('svelte/store').Writable<FrameAsset[]>} */
 export const frames = writable(SEED_FRAMES.map((f) => ({ ...f, custom: false })));
 
@@ -58,6 +121,17 @@ export const showSeedFrames = writable(readFlag(SEED_FRAMES_KEY, true));
 /** When false, seed stickers are hidden from guests (customs only). */
 /** @type {import('svelte/store').Writable<boolean>} */
 export const showSeedStickers = writable(readFlag(SEED_STICKERS_KEY, true));
+
+/**
+ * When true, Frame Select runs a Pythia oracle pick instead of pull-to-select.
+ * Session-scoped (survives refresh, clears when the tab closes).
+ */
+/** @type {import('svelte/store').Writable<boolean>} */
+export const randomFrame = writable(readSessionFlag(RANDOM_FRAME_KEY, false));
+
+/** Oracle lot-spin duration in ms. Session-scoped. */
+/** @type {import('svelte/store').Writable<number>} */
+export const oracleShuffleMs = writable(readOracleShuffleMs());
 
 /** @type {import('svelte/store').Writable<boolean>} */
 export const assetsReady = writable(false);
@@ -112,7 +186,7 @@ function cloudToCustom(asset) {
 		kind: asset.kind,
 		name: asset.name,
 		motif: asset.motif,
-		src: asset.src,
+		src: resolveCloudAssetSrc(asset.src),
 		w: asset.w,
 		h: asset.h,
 		slots: asset.slots,
@@ -138,23 +212,26 @@ function rebuildStores(customs) {
 	cachedCustoms = customs;
 	const customFrames = customs
 		.filter((a) => a.kind === 'frame')
-		.map((a) => ({
-			id: a.id,
-			name: a.name,
-			src: a.src,
-			motif: a.motif,
-			thumb: a.src,
-			w: a.w,
-			h: a.h,
-			slots: normalizeSlots(a.slots),
-			custom: true
-		}));
+		.map((a) => {
+			const src = resolveCloudAssetSrc(a.src);
+			return {
+				id: a.id,
+				name: a.name,
+				src,
+				motif: a.motif,
+				thumb: src,
+				w: a.w,
+				h: a.h,
+				slots: normalizeSlots(a.slots),
+				custom: true
+			};
+		});
 	const customStickers = customs
 		.filter((a) => a.kind === 'sticker')
 		.map((a) => ({
 			id: a.id,
 			name: a.name,
-			src: a.src,
+			src: resolveCloudAssetSrc(a.src),
 			custom: true
 		}));
 
@@ -162,7 +239,17 @@ function rebuildStores(customs) {
 	const includeStickers = get(showSeedStickers);
 	frames.set([...(includeFrames ? seedFrames() : []), ...customFrames]);
 	stickers.set([...(includeStickers ? seedStickers() : []), ...customStickers]);
+	warmCatalogImages();
 }
+
+function warmCatalogImages() {
+	void warmFrameImages([
+		...get(frames).map((f) => f.src),
+		...get(stickers).map((s) => s.src)
+	]);
+}
+
+warmCatalogImages();
 
 /** @param {boolean} on */
 export function setShowSeedFrames(on) {
@@ -176,6 +263,23 @@ export function setShowSeedStickers(on) {
 	showSeedStickers.set(!!on);
 	writeFlag(SEED_STICKERS_KEY, !!on);
 	rebuildStores(cachedCustoms);
+}
+
+/** @param {boolean} on */
+export function setRandomFrame(on) {
+	randomFrame.set(!!on);
+	writeSessionFlag(RANDOM_FRAME_KEY, !!on);
+}
+
+/** @param {number} ms */
+export function setOracleShuffleMs(ms) {
+	const next = clampShuffleMs(ms);
+	oracleShuffleMs.set(next);
+	try {
+		sessionStorage.setItem(ORACLE_SHUFFLE_MS_KEY, String(next));
+	} catch {
+		/* ignore */
+	}
 }
 
 /** Load customs from cloud or IndexedDB and merge with seeds. */

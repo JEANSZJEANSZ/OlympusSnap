@@ -96,15 +96,39 @@ function touchAngleDeg(touches) {
 
 /**
  * @param {Konva.Transformer} transformer
- * @param {boolean} [coarse]
+ * @param {boolean} touchMode
  */
-function applyTransformerChrome(transformer, coarse = prefersCoarsePointer()) {
-	transformer.anchorSize(coarse ? TRANSFORMER_ANCHOR_PX_COARSE : TRANSFORMER_ANCHOR_PX);
-	transformer.rotateAnchorOffset(
-		coarse ? TRANSFORMER_ROTATE_OFFSET_PX_COARSE : TRANSFORMER_ROTATE_OFFSET_PX
-	);
-	transformer.borderStrokeWidth(coarse ? 2.5 : 2);
-	transformer.anchorStrokeWidth(coarse ? 2 : 1.5);
+function applyTransformerChrome(transformer, touchMode) {
+	const coarse = prefersCoarsePointer();
+	if (touchMode) {
+		transformer.enabledAnchors([]);
+		transformer.rotateEnabled(false);
+		transformer.borderEnabled(true);
+		transformer.padding(10);
+		transformer.shouldOverdrawWholeArea(true);
+		transformer.borderStrokeWidth(3);
+		transformer.anchorSize(1);
+		transformer.rotateAnchorOffset(0);
+		transformer.rotateLineVisible(false);
+	} else {
+		transformer.enabledAnchors(['top-left', 'top-right', 'bottom-left', 'bottom-right']);
+		transformer.rotateEnabled(true);
+		transformer.borderEnabled(true);
+		transformer.padding(0);
+		transformer.shouldOverdrawWholeArea(false);
+		transformer.anchorSize(coarse ? TRANSFORMER_ANCHOR_PX_COARSE : TRANSFORMER_ANCHOR_PX);
+		transformer.rotateAnchorOffset(
+			coarse ? TRANSFORMER_ROTATE_OFFSET_PX_COARSE : TRANSFORMER_ROTATE_OFFSET_PX
+		);
+		transformer.borderStrokeWidth(coarse ? 2.5 : 2);
+		transformer.anchorStrokeWidth(coarse ? 2 : 1.5);
+		transformer.rotateLineVisible(true);
+		for (const anchor of transformer.find('._anchor')) {
+			if (typeof anchor.hitStrokeWidth === 'function') {
+				anchor.hitStrokeWidth(18);
+			}
+		}
+	}
 	transformer.forceUpdate();
 }
 
@@ -116,10 +140,12 @@ function applyTransformerChrome(transformer, coarse = prefersCoarsePointer()) {
  *   selectedId?: string | null;
  *   onStickersChange?: (stickers: StudioSticker[]) => void;
  *   onSelect?: (id: string | null) => void;
+ *   touchMode?: boolean;
  * }} opts
  */
 export async function createStudioEditor(opts) {
 	const { container, compositeDataUrl } = opts;
+	let touchMode = !!opts.touchMode;
 	const bgImg = await loadImage(compositeDataUrl);
 	const frameW = bgImg.naturalWidth || bgImg.width || 600;
 	const frameH = bgImg.naturalHeight || bgImg.height || 800;
@@ -168,6 +194,7 @@ export async function createStudioEditor(opts) {
 			return newBox;
 		}
 	});
+	applyTransformerChrome(transformer, touchMode);
 
 	uiLayer.add(transformer);
 	stage.add(bgLayer);
@@ -181,7 +208,7 @@ export async function createStudioEditor(opts) {
 		stage.width(frameW * scale);
 		stage.height(frameH * scale);
 		stage.scale({ x: scale, y: scale });
-		applyTransformerChrome(transformer);
+		applyTransformerChrome(transformer, touchMode);
 		uiLayer.moveToTop();
 		stage.batchDraw();
 	}
@@ -206,7 +233,7 @@ export async function createStudioEditor(opts) {
 	function selectNode(/** @type {Konva.Image | null} */ node) {
 		if (node) {
 			transformer.nodes([node]);
-			applyTransformerChrome(transformer);
+			applyTransformerChrome(transformer, touchMode);
 			selectedId = node.id();
 			uiLayer.moveToTop();
 			transformer.moveToTop();
@@ -426,6 +453,49 @@ export async function createStudioEditor(opts) {
 
 		removeSticker,
 
+		/**
+		 * @param {boolean} on
+		 */
+		setTouchMode(on) {
+			touchMode = !!on;
+			applyTransformerChrome(transformer, touchMode);
+			uiLayer.batchDraw();
+		},
+
+		/**
+		 * @param {number} factor
+		 * @returns {boolean}
+		 */
+		nudgeScale(factor) {
+			if (!selectedId || !Number.isFinite(factor) || factor <= 0) return false;
+			const node = nodes.get(selectedId);
+			if (!node) return false;
+			const next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, node.scaleX() * factor));
+			node.scaleX(next);
+			node.scaleY(next);
+			transformer.forceUpdate();
+			stickerLayer.batchDraw();
+			uiLayer.batchDraw();
+			emitStickers();
+			return true;
+		},
+
+		/**
+		 * @param {number} degrees
+		 * @returns {boolean}
+		 */
+		nudgeRotate(degrees) {
+			if (!selectedId || !Number.isFinite(degrees)) return false;
+			const node = nodes.get(selectedId);
+			if (!node) return false;
+			node.rotation(node.rotation() + degrees);
+			transformer.forceUpdate();
+			stickerLayer.batchDraw();
+			uiLayer.batchDraw();
+			emitStickers();
+			return true;
+		},
+
 		/** @returns {string} */
 		exportDataUrl() {
 			transformer.nodes([]);
@@ -446,7 +516,7 @@ export async function createStudioEditor(opts) {
 			stage.scale({ x: prevScale, y: prevScale });
 			stage.width(prevW);
 			stage.height(prevH);
-			applyTransformerChrome(transformer);
+			applyTransformerChrome(transformer, touchMode);
 			uiLayer.moveToTop();
 			stickerLayer.batchDraw();
 			uiLayer.batchDraw();

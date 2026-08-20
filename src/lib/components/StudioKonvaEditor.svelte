@@ -1,6 +1,7 @@
 <div bind:this={containerEl} class="konva-mount"></div>
 
 <script>
+	import { untrack } from 'svelte';
 	import { createStudioEditor } from '../canvas/studioKonva.js';
 
 	/** @type {HTMLDivElement | undefined} */
@@ -13,6 +14,7 @@
 		compositeUrl = '',
 		stickers = [],
 		selectedId = null,
+		touchMode = false,
 		onStickersChange = undefined,
 		onSelect = undefined
 	} = $props();
@@ -34,6 +36,7 @@
 				compositeDataUrl: url,
 				stickers: [],
 				selectedId: null,
+				touchMode: untrack(() => touchMode),
 				onStickersChange: (list) => onStickersChange?.(list),
 				onSelect: (id) => onSelect?.(id)
 			});
@@ -77,6 +80,12 @@
 		inst.setSelectedId(id);
 	});
 
+	$effect(() => {
+		const inst = editor;
+		if (!inst) return;
+		inst.setTouchMode(touchMode);
+	});
+
 	/**
 	 * @param {{ id: string; src: string }} item
 	 */
@@ -99,6 +108,22 @@
 	/** @returns {string | null} */
 	export function exportDataUrl() {
 		return editor?.exportDataUrl() ?? null;
+	}
+
+	/**
+	 * @param {number} factor
+	 * @returns {boolean}
+	 */
+	export function nudgeScale(factor) {
+		return editor?.nudgeScale(factor) ?? false;
+	}
+
+	/**
+	 * @param {number} degrees
+	 * @returns {boolean}
+	 */
+	export function nudgeRotate(degrees) {
+		return editor?.nudgeRotate(degrees) ?? false;
 	}
 </script>
 

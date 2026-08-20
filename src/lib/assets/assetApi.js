@@ -39,6 +39,27 @@ export function isCloudAssetsEnabled() {
 }
 
 /**
+ * Prefix relative Photobooth file paths with the API host.
+ * Absolute / data / blob URLs are left unchanged.
+ * @param {string} src
+ * @returns {string}
+ */
+export function resolveCloudAssetSrc(src) {
+	if (!src || typeof src !== 'string') return src;
+	if (/^(https?:|data:|blob:)/i.test(src)) return src;
+	if (src.startsWith('//')) {
+		const proto =
+			typeof location !== 'undefined' && location.protocol ? location.protocol : 'https:';
+		return `${proto}${src}`;
+	}
+	if (src.startsWith('/')) {
+		const base = getApiBase();
+		return base ? `${base}${src}` : src;
+	}
+	return src;
+}
+
+/**
  * @param {Record<string, string>} [extra]
  * @returns {Record<string, string>}
  */
@@ -174,6 +195,16 @@ export async function deleteAsset(id, kind) {
 	const path = kind === 'frame' ? `/frames/${encodeURIComponent(id)}` : `/stickers/${encodeURIComponent(id)}`;
 	const res = await fetch(photobooth(path), { method: 'DELETE', headers: adminHeaders() });
 	if (!res.ok && res.status !== 204) throw new Error(await readError(res));
+}
+
+/**
+ * @returns {Promise<boolean>} true if Auth is accepted
+ */
+export async function verifyAdminAuth() {
+	const res = await fetch(photobooth('/admin/captures/recent'), { headers: adminHeaders() });
+	if (res.status === 401 || res.status === 403) return false;
+	if (!res.ok) throw new Error(await readError(res));
+	return true;
 }
 
 /**

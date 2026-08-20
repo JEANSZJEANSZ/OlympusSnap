@@ -47,6 +47,7 @@
 									compositeUrl={$capturedImageData}
 									stickers={$activeStickers}
 									{selectedId}
+									{touchMode}
 									onStickersChange={onStickersChange}
 									onSelect={onStickerSelect}
 								/>
@@ -55,14 +56,47 @@
 					</div>
 				</aside>
 
+				{#if mobileSession}
+					<div class="sticker-controls" aria-label="Sticker size and rotation">
+						<PixelButton
+							label="SIZE −"
+							variant="ghost"
+							ariaLabel="Smaller"
+							disabled={!selectedId || entryBusy || exiting || saving}
+							onclick={() => editorRef?.nudgeScale(1 / 1.15)}
+						/>
+						<PixelButton
+							label="SIZE +"
+							variant="ghost"
+							ariaLabel="Bigger"
+							disabled={!selectedId || entryBusy || exiting || saving}
+							onclick={() => editorRef?.nudgeScale(1.15)}
+						/>
+						<PixelButton
+							label="ROTATE ↺"
+							variant="ghost"
+							ariaLabel="Rotate left"
+							disabled={!selectedId || entryBusy || exiting || saving}
+							onclick={() => editorRef?.nudgeRotate(-15)}
+						/>
+						<PixelButton
+							label="ROTATE ↻"
+							variant="ghost"
+							ariaLabel="Rotate right"
+							disabled={!selectedId || entryBusy || exiting || saving}
+							onclick={() => editorRef?.nudgeRotate(15)}
+						/>
+					</div>
+				{/if}
+
 				<aside class="sticker-rail" aria-label="Sticker tray">
 					{#if mobileSession}
 						<header class="mobile-head">
 							<p class="eyebrow">MOBILE STUDIO</p>
 							<h1>DECORATE YOUR RELIC</h1>
 							<p class="mobile-hint">
-								Tap stickers below · drag to move · pinch or twist with two fingers to resize &amp;
-								rotate
+								Tap a sticker · drag to move · pinch to resize · twist to rotate · or use SIZE /
+								ROTATE
 							</p>
 						</header>
 					{/if}
@@ -141,6 +175,7 @@
 	let exiting = $state(false);
 	let saving = $state(false);
 	let mobileSession = $state(false);
+	let coarsePointer = $state(false);
 	let sessionLoading = $state(false);
 	/** @type {'forbidden' | 'not_found' | null} */
 	let sessionError = $state(null);
@@ -171,9 +206,11 @@
 		return 3 / 4;
 	});
 
+	const touchMode = $derived(mobileSession || coarsePointer);
+
 	const dialogText = $derived(
 		mobileSession
-			? 'Tap a sticker to add it. Drag to move. Pinch or spread with two fingers to resize; twist to rotate.'
+			? 'Tap a sticker to add it. Drag to move. Pinch to resize, twist to rotate — or use SIZE and ROTATE.'
 			: 'Scan the QR at the booth to open mobile studio.'
 	);
 
@@ -196,6 +233,7 @@
 
 	onMount(() => {
 		reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 		activeStickers.set([]);
 		selectedId = null;
 
@@ -414,6 +452,25 @@
 		margin: 0 auto;
 		filter: drop-shadow(0 8px 16px rgba(3, 12, 27, 0.45));
 		background: #0a1220;
+	}
+
+	.mobile-session .sticker-controls {
+		flex: 0 0 auto;
+		display: grid;
+		grid-template-columns: 1fr 1fr 1fr 1fr;
+		gap: 0.4rem;
+		padding: 0.45rem 0.75rem 0.35rem;
+		background: #102f56;
+		border-top: 2px solid color-mix(in srgb, var(--gold) 35%, transparent);
+	}
+
+	.mobile-session .sticker-controls :global(.pixel-btn) {
+		min-width: 0;
+		width: 100%;
+		min-height: max(44px, var(--booth-touch));
+		padding: 0.5rem 0.2rem;
+		font-size: clamp(0.42rem, 2.4vw, 0.52rem);
+		letter-spacing: 0.02em;
 	}
 
 	.mobile-session .sticker-rail {

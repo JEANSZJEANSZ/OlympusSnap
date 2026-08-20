@@ -21,7 +21,7 @@
 					<p class="hint">Grant webcam access or check your external camera connection.</p>
 					<PixelButton label="RETRY" variant="gold" onclick={retryCamera} />
 				</div>
-			{:else if frameSrc || !useSlots}
+			{:else if frame || !useSlots}
 				<div
 					class="frame-dock"
 					class:connecting={cameraStatus === 'connecting'}
@@ -31,8 +31,10 @@
 					data-frame-handoff-target
 					data-camera-handoff-target
 				>
-					{#if useSlots && frameSrc}
-						<img class="frame-art" src={frameSrc} alt="" draggable="false" />
+					{#if useSlots}
+						{#if frameSrc}
+							<img class="frame-art" src={frameSrc} alt="" draggable="false" />
+						{/if}
 						<div class="content-layer">
 							{#each slots as slot, i (slot.id)}
 								<div
@@ -194,6 +196,12 @@
 	import RitualShutterButton from '../lib/components/RitualShutterButton.svelte';
 	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 	import { frameHandoffBusy } from '../lib/fx/frameHandoff.js';
+	import {
+		frameImageCacheTick,
+		isFrameImageCached,
+		preloadFrameImage,
+		resolveCachedFrameSrc
+	} from '../lib/utils/loadImageForCanvas.js';
 
 	/** @type {HTMLElement | undefined} */
 	let rootEl = $state();
@@ -242,7 +250,12 @@
 	const slots = $derived(frame?.slots?.length ? frame.slots : []);
 	const useSlots = $derived(slots.length > 0);
 	const snapTotal = $derived(useSlots ? slots.length : 1);
-	const frameSrc = $derived(frame?.src ?? '');
+	const frameSrc = $derived.by(() => {
+		$frameImageCacheTick;
+		const raw = frame?.src ?? '';
+		if (!raw || !isFrameImageCached(raw)) return '';
+		return resolveCachedFrameSrc(raw);
+	});
 	const frameName = $derived(frame?.name ?? $selectedFrameId ?? 'none');
 	const frameAspect = $derived(`${frameNatW} / ${frameNatH}`);
 	const frameAspectNum = $derived(frameNatH > 0 ? frameNatW / frameNatH : 3 / 4);
@@ -284,6 +297,11 @@
 			frameNatW = frame.w;
 			frameNatH = frame.h;
 		}
+	});
+
+	$effect(() => {
+		const src = frame?.src;
+		if (src) void preloadFrameImage(src);
 	});
 
 	$effect(() => {
