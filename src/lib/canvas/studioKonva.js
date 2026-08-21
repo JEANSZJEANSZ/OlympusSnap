@@ -95,6 +95,25 @@ function touchAngleDeg(touches) {
 }
 
 /**
+ * @param {Konva.KonvaEventObject<PointerEvent | TouchEvent | MouseEvent>} e
+ * @returns {{ clientX: number; clientY: number }}
+ */
+function pointerClient(e) {
+	const evt = e?.evt;
+	if (evt && typeof evt.clientX === 'number' && typeof evt.clientY === 'number') {
+		return { clientX: evt.clientX, clientY: evt.clientY };
+	}
+	const t =
+		evt && 'changedTouches' in evt
+			? evt.changedTouches?.[0]
+			: evt && 'touches' in evt
+				? evt.touches?.[0]
+				: null;
+	if (t) return { clientX: t.clientX, clientY: t.clientY };
+	return { clientX: 0, clientY: 0 };
+}
+
+/**
  * @param {Konva.Transformer} transformer
  * @param {boolean} touchMode
  */
@@ -140,6 +159,9 @@ function applyTransformerChrome(transformer, touchMode) {
  *   selectedId?: string | null;
  *   onStickersChange?: (stickers: StudioSticker[]) => void;
  *   onSelect?: (id: string | null) => void;
+ *   onDragActive?: (active: boolean) => void;
+ *   onDragMove?: (pos: { id: string; clientX: number; clientY: number }) => void;
+ *   onDragEnd?: (pos: { id: string; clientX: number; clientY: number }) => boolean | void;
  *   touchMode?: boolean;
  * }} opts
  */
@@ -266,7 +288,34 @@ export async function createStudioEditor(opts) {
 
 		applyStickerToNode(node, sticker);
 
-		node.on('dragend transformend', () => emitStickers());
+		node.on('dragstart', () => {
+			if (!touchMode) return;
+			opts.onDragActive?.(true);
+		});
+		node.on('dragmove', (e) => {
+			if (!touchMode) return;
+			const pos = pointerClient(e);
+			opts.onDragMove?.({ id: node.id(), clientX: pos.clientX, clientY: pos.clientY });
+		});
+		node.on('dragend', (e) => {
+			const pos = pointerClient(e);
+			let dropped = false;
+			if (touchMode) {
+				dropped = !!opts.onDragEnd?.({
+					id: node.id(),
+					clientX: pos.clientX,
+					clientY: pos.clientY
+				});
+				opts.onDragActive?.(false);
+			}
+			if (dropped) {
+				const id = node.id();
+				requestAnimationFrame(() => removeSticker(id));
+			} else {
+				emitStickers();
+			}
+		});
+		node.on('transformend', () => emitStickers());
 		node.on('pointerdown', (e) => {
 			e.cancelBubble = true;
 			selectNode(node);
