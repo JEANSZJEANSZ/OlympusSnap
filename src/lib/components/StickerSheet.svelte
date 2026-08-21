@@ -16,9 +16,6 @@
 				/>
 			</svg>
 			<input
-				{@attach (el) => {
-					el.focus();
-				}}
 				bind:value={query}
 				type="search"
 				placeholder="Search"

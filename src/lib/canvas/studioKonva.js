@@ -7,7 +7,6 @@ import { loadImageForCanvas as loadImage } from '../utils/loadImageForCanvas.js'
 
 export const STICKER_BASE = 64;
 const MIN_SCALE = 0.35;
-const MAX_SCALE = 4;
 
 /**
  * @typedef {{
@@ -19,6 +18,21 @@ const MAX_SCALE = 4;
  *   rotation: number;
  * }} StudioSticker
  */
+
+/**
+ * Fit natural image so the longest side equals STICKER_BASE at scale 1 (preserves aspect).
+ * @param {CanvasImageSource & { naturalWidth?: number; naturalHeight?: number; width?: number; height?: number }} img
+ * @returns {{ w: number; h: number }}
+ */
+function baseSizeFromImage(img) {
+	const nw = Number(img?.naturalWidth || img?.width) || STICKER_BASE;
+	const nh = Number(img?.naturalHeight || img?.height) || STICKER_BASE;
+	const longest = Math.max(nw, nh, 1);
+	return {
+		w: (nw / longest) * STICKER_BASE,
+		h: (nh / longest) * STICKER_BASE
+	};
+}
 
 /**
  * @param {Konva.Image} node
@@ -39,7 +53,7 @@ function nodeToSticker(node) {
 		src,
 		x: cx - w / 2,
 		y: cy - h / 2,
-		scale: w / STICKER_BASE,
+		scale: node.scaleX(),
 		rotation: node.rotation()
 	};
 }
@@ -49,15 +63,20 @@ function nodeToSticker(node) {
  * @param {StudioSticker} sticker
  */
 function applyStickerToNode(node, sticker) {
-	const size = STICKER_BASE * sticker.scale;
-	node.width(STICKER_BASE);
-	node.height(STICKER_BASE);
+	const img = node.image();
+	const { w: baseW, h: baseH } = baseSizeFromImage(
+		/** @type {HTMLImageElement} */ (img || { naturalWidth: STICKER_BASE, naturalHeight: STICKER_BASE })
+	);
+	const dispW = baseW * sticker.scale;
+	const dispH = baseH * sticker.scale;
+	node.width(baseW);
+	node.height(baseH);
 	node.scaleX(sticker.scale);
 	node.scaleY(sticker.scale);
-	node.offsetX(STICKER_BASE / 2);
-	node.offsetY(STICKER_BASE / 2);
-	node.x(sticker.x + size / 2);
-	node.y(sticker.y + size / 2);
+	node.offsetX(baseW / 2);
+	node.offsetY(baseH / 2);
+	node.x(sticker.x + dispW / 2);
+	node.y(sticker.y + dispH / 2);
 	node.rotation(sticker.rotation ?? 0);
 }
 
@@ -470,8 +489,7 @@ export async function createStudioEditor(opts) {
 		const angle = touchAngleDeg(e.touches);
 		if (pinch.dist > 0) {
 			const ratio = dist / pinch.dist;
-			let next = node.scaleX() * ratio;
-			next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
+			const next = Math.max(MIN_SCALE, node.scaleX() * ratio);
 			node.scaleX(next);
 			node.scaleY(next);
 		}
@@ -590,7 +608,7 @@ export async function createStudioEditor(opts) {
 			if (!selectedId || !Number.isFinite(factor) || factor <= 0) return false;
 			const node = nodes.get(selectedId);
 			if (!node) return false;
-			const next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, node.scaleX() * factor));
+			const next = Math.max(MIN_SCALE, node.scaleX() * factor);
 			node.scaleX(next);
 			node.scaleY(next);
 			transformer.forceUpdate();
