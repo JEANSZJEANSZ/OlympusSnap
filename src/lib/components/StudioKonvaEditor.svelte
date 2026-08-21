@@ -16,7 +16,10 @@
 		selectedId = null,
 		touchMode = false,
 		onStickersChange = undefined,
-		onSelect = undefined
+		onSelect = undefined,
+		onDragActive = undefined,
+		onDragMove = undefined,
+		onDragEnd = undefined
 	} = $props();
 
 	/** @type {ResizeObserver | undefined} */
@@ -38,7 +41,10 @@
 				selectedId: null,
 				touchMode: untrack(() => touchMode),
 				onStickersChange: (list) => onStickersChange?.(list),
-				onSelect: (id) => onSelect?.(id)
+				onSelect: (id) => onSelect?.(id),
+				onDragActive: (on) => onDragActive?.(on),
+				onDragMove: (pos) => onDragMove?.(pos),
+				onDragEnd: (pos) => onDragEnd?.(pos)
 			});
 			if (cancelled) {
 				created.destroy();

@@ -50,6 +50,9 @@
 									{touchMode}
 									onStickersChange={onStickersChange}
 									onSelect={onStickerSelect}
+									onDragActive={onStickerDragActive}
+									onDragMove={onStickerDragMove}
+									onDragEnd={onStickerDragEnd}
 								/>
 							{/if}
 						</div>
@@ -91,70 +94,94 @@
 							/>
 						</div>
 					</aside>
-				{:else}
-					<aside class="sticker-rail" aria-label="Sticker tray">
-						<div class="gallery">
-							{#each $stickers as item (item.id)}
-								<button
-									type="button"
-									class="tile"
-									disabled={entryBusy || exiting || saving}
-									onclick={() => addSticker(item)}
-									aria-label={item.name}
-								>
-									<span class="swatch">
-										<img src={item.src} alt="" draggable="false" />
-									</span>
-								</button>
-							{/each}
-						</div>
-						<div class="tray-icons">
-							<button
-								type="button"
-								class="icon-btn"
-								aria-label="Remove selected sticker"
-								disabled={!selectedId || entryBusy || exiting || saving}
-								onclick={removeSelected}
-							>
-								<svg viewBox="0 0 24 24" aria-hidden="true">
-									<path
-										fill="currentColor"
-										d="M9 3h6v2h5v2H4V5h5V3zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM6 7h12v14H6V7z"
-									/>
-								</svg>
-							</button>
-							<button
-								type="button"
-								class="icon-btn"
-								aria-label="Clear stickers"
-								disabled={entryBusy || exiting || saving}
-								onclick={clearStickers}
-							>
-								<svg viewBox="0 0 24 24" aria-hidden="true">
-									<path
-										fill="currentColor"
-										d="M5 5h14v2H5V5zm2 4h10v10H7V9zm2 2v6h2v-6H9zm4 0v6h2v-6h-2z"
-									/>
-								</svg>
-							</button>
-							<button
-								type="button"
-								class="icon-btn icon-save"
-								aria-label={saving ? 'Saving' : 'Download snap'}
-								disabled={entryBusy || exiting || saving || !$capturedImageData}
-								onclick={saveMySnap}
-							>
-								<svg viewBox="0 0 24 24" aria-hidden="true">
-									<path
-										fill="currentColor"
-										d="M11 3h2v10h3l-4 5-4-5h3V3zm-7 16h16v2H4v-2z"
-									/>
-								</svg>
-							</button>
-						</div>
-					</aside>
 				{/if}
 			</main>
+
+			{#if mobileSession}
+				<aside
+					class="story-rail"
+					class:is-hidden={stickerSheetOpen || shareFallbackOpen || dragActive}
+					aria-hidden={stickerSheetOpen || shareFallbackOpen || dragActive}
+					aria-label="Studio tools"
+				>
+					<button
+						type="button"
+						class="story-btn"
+						aria-label={saving ? 'Saving' : 'Download snap'}
+						disabled={busy || !$capturedImageData}
+						onclick={saveMySnap}
+					>
+						<svg viewBox="0 0 24 24" aria-hidden="true">
+							<path
+								fill="currentColor"
+								d="M11 3h2v10h3l-4 5-4-5h3V3zm-7 16h16v2H4v-2z"
+							/>
+						</svg>
+					</button>
+					<button
+						type="button"
+						class="story-btn"
+						aria-label="Stickers"
+						aria-expanded={stickerSheetOpen}
+						disabled={busy}
+						onclick={openStickerSheet}
+					>
+						<svg viewBox="0 0 24 24" aria-hidden="true">
+							<path
+								fill="currentColor"
+								d="M12 3c4.97 0 9 4.03 9 9 0 1.86-.57 3.58-1.53 5.01L12 12.5 4.53 17.01A8.96 8.96 0 013 12c0-4.97 4.03-9 9-9zm-3.2 7.2a1.3 1.3 0 110 2.6 1.3 1.3 0 010-2.6zm6.4 0a1.3 1.3 0 110 2.6 1.3 1.3 0 010-2.6zM8.4 15.4c.86 1.5 2.1 2.4 3.6 2.4s2.74-.9 3.6-2.4c.14-.24-.02-.5-.28-.5H8.68c-.26 0-.42.26-.28.5z"
+							/>
+						</svg>
+					</button>
+					<button
+						type="button"
+						class="story-btn"
+						aria-label={sharing ? 'Sharing' : 'Share snap'}
+						disabled={busy || !$capturedImageData}
+						onclick={shareMySnap}
+					>
+						<svg viewBox="0 0 24 24" aria-hidden="true">
+							<path
+								fill="currentColor"
+								d="M14 4l6 6-6 6v-3.5c-4 0-7 1.2-9 4 1-5 4.5-8 9-8.5V4z"
+							/>
+						</svg>
+					</button>
+				</aside>
+
+				<div
+					bind:this={trashEl}
+					class="trash-target"
+					class:visible={dragActive}
+					class:hot={dragOverTrash}
+					aria-hidden={!dragActive}
+					aria-label="Drop sticker to delete"
+				>
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path
+							fill="currentColor"
+							d="M9 3h6v2h5v2H4V5h5V3zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM6 7h12v14H6V7z"
+						/>
+					</svg>
+				</div>
+
+				{#if stickerSheetOpen}
+					<StickerSheet
+						stickers={$stickers}
+						disabled={busy}
+						onSelect={placeStickerFromSheet}
+						onClose={closeStickerSheet}
+					/>
+				{/if}
+
+				{#if shareFallbackOpen}
+					<ShareFallbackSheet
+						dataUrl={lastExportUrl}
+						onDownload={saveMySnap}
+						onClose={closeShareFallback}
+					/>
+				{/if}
+			{/if}
 		</div>
 	{/if}
 </section>
@@ -175,6 +202,10 @@
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import StudioKonvaEditor from '../lib/components/StudioKonvaEditor.svelte';
+	import StickerSheet from '../lib/components/StickerSheet.svelte';
+	import ShareFallbackSheet from '../lib/components/ShareFallbackSheet.svelte';
+	import { downloadDataUrl, shareCompositeFile } from '../lib/share/shareComposite.js';
+	import { isPointInRect } from '../lib/utils/hitTest.js';
 
 	/** @type {StudioKonvaEditor | undefined} */
 	let editorRef = $state();
@@ -186,9 +217,17 @@
 	let reduced = $state(false);
 	let exiting = $state(false);
 	let saving = $state(false);
+	let sharing = $state(false);
 	let mobileSession = $state(false);
 	let coarsePointer = $state(false);
 	let sessionLoading = $state(false);
+	let stickerSheetOpen = $state(false);
+	let shareFallbackOpen = $state(false);
+	let dragActive = $state(false);
+	let dragOverTrash = $state(false);
+	let lastExportUrl = $state('');
+	/** @type {HTMLDivElement | undefined} */
+	let trashEl = $state();
 	/** @type {'forbidden' | 'not_found' | null} */
 	let sessionError = $state(null);
 	/** @type {Record<string, { w: number; h: number }>} */
@@ -219,6 +258,7 @@
 	});
 
 	const touchMode = $derived(mobileSession || coarsePointer);
+	const busy = $derived(entryBusy || exiting || saving || sharing);
 
 	const dialogText = $derived('Scan the QR at the booth to open mobile studio.');
 
@@ -300,38 +340,102 @@
 
 	/** @param {{ id: string; name: string; src: string }} item */
 	async function addSticker(item) {
-		if (entryBusy || exiting || saving) return;
+		if (busy) return;
 		const id = `${item.id}-${Date.now()}`;
 		await editorRef?.spawnSticker({ id, src: item.src });
 	}
 
+	/** @param {{ id: string; name: string; src: string }} item */
+	async function placeStickerFromSheet(item) {
+		await addSticker(item);
+		stickerSheetOpen = false;
+	}
+
+	function openStickerSheet() {
+		if (busy) return;
+		shareFallbackOpen = false;
+		stickerSheetOpen = true;
+	}
+
+	function closeStickerSheet() {
+		stickerSheetOpen = false;
+	}
+
+	function closeShareFallback() {
+		shareFallbackOpen = false;
+	}
+
+	function hitTrash(clientX, clientY) {
+		return isPointInRect(clientX, clientY, trashEl?.getBoundingClientRect(), 28);
+	}
+
+	/** @param {boolean} on */
+	function onStickerDragActive(on) {
+		dragActive = on;
+		if (!on) dragOverTrash = false;
+		if (on) {
+			stickerSheetOpen = false;
+			shareFallbackOpen = false;
+		}
+	}
+
+	/** @param {{ id: string; clientX: number; clientY: number }} pos */
+	function onStickerDragMove(pos) {
+		dragOverTrash = hitTrash(pos.clientX, pos.clientY);
+	}
+
+	/** @param {{ id: string; clientX: number; clientY: number }} pos */
+	function onStickerDragEnd(pos) {
+		const over = hitTrash(pos.clientX, pos.clientY);
+		dragOverTrash = false;
+		if (over) selectedId = null;
+		return over;
+	}
+
 	function clearStickers() {
-		if (entryBusy || exiting || saving) return;
+		if (busy) return;
 		editorRef?.clearStickers();
 		selectedId = null;
 	}
 
 	function removeSelected() {
-		if (!selectedId || entryBusy || exiting || saving) return;
+		if (!selectedId || busy) return;
 		const removed = editorRef?.removeSticker(selectedId) ?? false;
 		if (removed) selectedId = null;
+	}
+
+	async function exportCurrent() {
+		const url = await editorRef?.exportDataUrl();
+		if (url) lastExportUrl = url;
+		return url;
 	}
 
 	async function saveMySnap() {
 		if (saving || entryBusy || exiting) return;
 		saving = true;
 		try {
-			const url = await editorRef?.exportDataUrl();
+			const url = await exportCurrent();
 			if (!url) return;
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = 'olympus-snap.png';
-			a.rel = 'noopener';
-			document.body.appendChild(a);
-			a.click();
-			a.remove();
+			downloadDataUrl(url);
+			shareFallbackOpen = false;
 		} finally {
 			saving = false;
+		}
+	}
+
+	async function shareMySnap() {
+		if (busy) return;
+		sharing = true;
+		stickerSheetOpen = false;
+		try {
+			const url = await exportCurrent();
+			if (!url) return;
+			const result = await shareCompositeFile(url);
+			if (result === 'unsupported' || result === 'failed') {
+				shareFallbackOpen = true;
+			}
+		} finally {
+			sharing = false;
 		}
 	}
 </script>
@@ -356,8 +460,6 @@
 	}
 
 	.studio-view.mobile-session {
-		--mobile-col-max: min(26.5rem, 100%);
-		--sheet-pad: max(0.75rem, env(safe-area-inset-bottom));
 		padding: 0;
 		height: 100%;
 		min-height: 100%;
@@ -460,98 +562,86 @@
 		transform: none;
 	}
 
-	.mobile-session .sticker-rail {
-		flex: 0 0 auto;
-		height: calc(4.6rem + var(--sheet-pad));
-		max-height: none;
-		min-height: 0;
-		overflow: hidden;
+	.story-rail {
+		position: absolute;
+		top: max(0.85rem, env(safe-area-inset-top));
+		right: max(0.7rem, env(safe-area-inset-right));
+		z-index: 4;
 		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 0.4rem;
-		padding:
-			0.4rem 0.45rem
-			var(--sheet-pad);
-		background: color-mix(in srgb, #071936 88%, #000);
-		border-top: 1px solid color-mix(in srgb, var(--gold) 28%, transparent);
-		box-shadow: none;
+		flex-direction: column;
+		gap: 0.72rem;
+		transition: opacity 160ms ease;
 	}
 
-	.mobile-session .gallery {
-		display: flex;
-		flex-direction: row;
-		overflow-x: auto;
-		overflow-y: hidden;
-		gap: 0.4rem;
-		padding: 0;
-		flex: 1 1 auto;
-		min-height: 0;
-		min-width: 0;
-		-webkit-overflow-scrolling: touch;
-		scroll-snap-type: x proximity;
-		scrollbar-width: none;
+	.story-rail.is-hidden {
+		opacity: 0;
+		pointer-events: none;
 	}
 
-	.mobile-session .gallery::-webkit-scrollbar {
-		display: none;
-	}
-
-	.mobile-session .tile {
-		flex: 0 0 auto;
-		width: 3.15rem;
-		height: 3.15rem;
-		padding: 0.2rem;
-		scroll-snap-align: start;
-		min-width: 3.15rem;
-		min-height: 3.15rem;
-	}
-
-	.mobile-session .tile .swatch {
-		width: 100%;
-		height: 100%;
-		flex: 1;
-	}
-
-	.mobile-session .tray-icons {
-		flex: 0 0 auto;
-		display: flex;
-		align-items: center;
-		gap: 0.2rem;
-	}
-
-	.icon-btn {
+	.story-btn {
 		display: grid;
 		place-items: center;
-		width: 2.6rem;
-		height: 2.6rem;
+		width: 2.75rem;
+		height: 2.75rem;
 		padding: 0;
-		border: 2px solid color-mix(in srgb, var(--gold) 40%, transparent);
-		background: #102f56;
-		color: #fff8df;
-		box-shadow: 2px 2px 0 #041018;
+		border: 0;
+		border-radius: 999px;
+		background: rgba(18, 18, 18, 0.42);
+		color: #fff;
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
 		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
 	}
 
-	.icon-btn svg {
-		width: 1.15rem;
-		height: 1.15rem;
+	.story-btn svg {
+		width: 1.28rem;
+		height: 1.28rem;
 	}
 
-	.icon-btn:disabled {
+	.story-btn:disabled {
 		opacity: 0.35;
 		cursor: not-allowed;
 	}
 
-	.icon-btn.icon-save {
-		background: var(--gold, #d4a017);
-		color: #071936;
-		border-color: #fff4c2;
+	.story-btn:active:not(:disabled) {
+		transform: scale(0.94);
 	}
 
-	.icon-btn:active:not(:disabled) {
-		transform: translate(1px, 1px);
-		box-shadow: 1px 1px 0 #041018;
+	.trash-target {
+		position: absolute;
+		left: 50%;
+		bottom: max(1.35rem, env(safe-area-inset-bottom));
+		z-index: 5;
+		display: grid;
+		place-items: center;
+		width: 3.4rem;
+		height: 3.4rem;
+		border-radius: 999px;
+		background: rgba(18, 18, 18, 0.55);
+		color: #fff;
+		transform: translateX(-50%) scale(0.86);
+		opacity: 0;
+		pointer-events: none;
+		transition:
+			opacity 140ms ease,
+			transform 140ms ease,
+			background 140ms ease;
+	}
+
+	.trash-target svg {
+		width: 1.4rem;
+		height: 1.4rem;
+	}
+
+	.trash-target.visible {
+		opacity: 1;
+		transform: translateX(-50%) scale(1);
+	}
+
+	.trash-target.hot {
+		background: #e24b4b;
+		transform: translateX(-50%) scale(1.14);
 	}
 
 	.sky-wash {
