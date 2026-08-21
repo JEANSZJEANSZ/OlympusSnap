@@ -104,12 +104,17 @@ export function computeExportScale(natW, natH, slots, photoImgs) {
  */
 function drawSticker(ctx, img, sticker, studioW, studioH, canvasW, canvasH, nativeCoords = false) {
 	const BASE = 64;
+	const nw = img.naturalWidth || img.width || BASE;
+	const nh = img.naturalHeight || img.height || BASE;
+	const longest = Math.max(nw, nh, 1);
+	const baseW = (nw / longest) * BASE;
+	const baseH = (nh / longest) * BASE;
 	const sx = nativeCoords ? 1 : canvasW / studioW;
 	const sy = nativeCoords ? 1 : canvasH / studioH;
 	const scaleX = sticker.scale * sx;
 	const scaleY = sticker.scale * sy;
-	const w = BASE * scaleX;
-	const h = BASE * scaleY;
+	const w = baseW * scaleX;
+	const h = baseH * scaleY;
 	const x = sticker.x * sx;
 	const y = sticker.y * sy;
 	const cx = x + w / 2;
