@@ -95,6 +95,18 @@ function touchAngleDeg(touches) {
 }
 
 /**
+ * @param {Event | undefined} evt
+ * @returns {number}
+ */
+function eventTouchCount(evt) {
+	if (!evt || typeof evt !== 'object') return 1;
+	if ('touches' in evt && evt.touches && typeof evt.touches.length === 'number') {
+		return evt.touches.length;
+	}
+	return 1;
+}
+
+/**
  * @param {Konva.KonvaEventObject<PointerEvent | TouchEvent | MouseEvent>} e
  * @returns {{ clientX: number; clientY: number }}
  */
@@ -328,9 +340,19 @@ export async function createStudioEditor(opts) {
 		return node;
 	}
 
-	stage.on('pointerdown', (e) => {
-		if (e.target === stage) selectNode(null);
-	});
+	/** Skip empty-stage deselect after a pinch so lifting fingers does not clear selection. */
+	let ignoreEmptyTap = false;
+	/** @type {{ active: boolean; dist: number; angle: number }} */
+	let pinch = { active: false, dist: 0, angle: 0 };
+
+	function onEmptyStageTap(e) {
+		if (e.target !== stage) return;
+		if (pinch.active || ignoreEmptyTap) return;
+		if (eventTouchCount(e.evt) >= 2) return;
+		selectNode(null);
+	}
+
+	stage.on('click tap', onEmptyStageTap);
 
 	for (const sticker of opts.stickers ?? []) {
 		await addStickerNode(sticker);
@@ -342,9 +364,34 @@ export async function createStudioEditor(opts) {
 		selectNode(null);
 	}
 
-	/** Default scale so stickers feel similar across frame sizes. */
+	/** Default scale so stickers feel similar across frame sizes — sized for Instagram-style first place. */
 	function defaultSpawnScale() {
-		return Math.max(1, Math.min(3, Math.round((Math.min(frameW, frameH) / 420) * 10) / 10));
+		return Math.max(1.7, Math.min(3.5, Math.round((Math.min(frameW, frameH) / 280) * 10) / 10));
+	}
+
+	/**
+	 * Map a client point onto the stage and resolve a sticker node (image or transformer chrome).
+	 * @param {number} clientX
+	 * @param {number} clientY
+	 * @returns {Konva.Image | null}
+	 */
+	function stickerFromClient(clientX, clientY) {
+		const content = stage.getContent();
+		const rect = content.getBoundingClientRect();
+		if (!rect.width || !rect.height) return null;
+		const pos = {
+			x: ((clientX - rect.left) / rect.width) * stage.width(),
+			y: ((clientY - rect.top) / rect.height) * stage.height()
+		};
+		const shape = stage.getIntersection(pos);
+		if (!shape) return null;
+		if (nodes.has(shape.id())) return nodes.get(shape.id()) ?? null;
+		const parent = shape.getParent();
+		if (parent && nodes.has(parent.id())) return nodes.get(parent.id()) ?? null;
+		if (shape.getParent() === transformer || transformer.nodes().includes(shape)) {
+			return transformer.nodes()[0] ?? null;
+		}
+		return null;
 	}
 
 	/**
@@ -378,19 +425,38 @@ export async function createStudioEditor(opts) {
 
 	window.addEventListener('keydown', onKeyDown);
 
-	/** Two-finger pinch (scale) + rotate on the selected sticker — mobile studio flow. */
-	/** @type {{ active: boolean; dist: number; angle: number }} */
-	let pinch = { active: false, dist: 0, angle: 0 };
+	/** Two-finger pinch (scale) + rotate on the selected sticker — Instagram-style, second finger anywhere. */
+	/**
+	 * @param {TouchEvent} e
+	 * @returns {Konva.Image | null}
+	 */
+	function resolvePinchNode(e) {
+		if (selectedId) {
+			const current = nodes.get(selectedId);
+			if (current) return current;
+		}
+		const a = e.touches[0];
+		const b = e.touches[1];
+		const fromA = a ? stickerFromClient(a.clientX, a.clientY) : null;
+		const fromB = b ? stickerFromClient(b.clientX, b.clientY) : null;
+		return fromA || fromB;
+	}
 
 	/** @param {TouchEvent} e */
 	function onTouchStart(e) {
-		if (e.touches.length !== 2 || !selectedId) return;
-		const node = nodes.get(selectedId);
+		if (e.touches.length !== 2) return;
+		const node = resolvePinchNode(e);
 		if (!node) return;
+		if (selectedId !== node.id()) selectNode(node);
+		if (typeof node.isDragging === 'function' && node.isDragging()) {
+			node.stopDrag();
+		}
+		if (touchMode) opts.onDragActive?.(false);
+		node.draggable(false);
 		pinch.active = true;
+		ignoreEmptyTap = true;
 		pinch.dist = touchSpan(e.touches);
 		pinch.angle = touchAngleDeg(e.touches);
-		node.draggable(false);
 		e.preventDefault();
 	}
 
@@ -426,12 +492,17 @@ export async function createStudioEditor(opts) {
 		const node = selectedId ? nodes.get(selectedId) : null;
 		if (node) node.draggable(true);
 		emitStickers();
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				ignoreEmptyTap = false;
+			});
+		});
 	}
 
-	container.addEventListener('touchstart', onTouchStart, { passive: false });
-	container.addEventListener('touchmove', onTouchMove, { passive: false });
-	container.addEventListener('touchcancel', onTouchEnd, { passive: true });
-	container.addEventListener('touchend', onTouchEnd, { passive: true });
+	container.addEventListener('touchstart', onTouchStart, { passive: false, capture: true });
+	container.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+	container.addEventListener('touchcancel', onTouchEnd, { passive: true, capture: true });
+	container.addEventListener('touchend', onTouchEnd, { passive: true, capture: true });
 
 	return {
 		stage,
@@ -575,10 +646,11 @@ export async function createStudioEditor(opts) {
 
 		destroy() {
 			window.removeEventListener('keydown', onKeyDown);
-			container.removeEventListener('touchstart', onTouchStart);
-			container.removeEventListener('touchmove', onTouchMove);
-			container.removeEventListener('touchcancel', onTouchEnd);
-			container.removeEventListener('touchend', onTouchEnd);
+			container.removeEventListener('touchstart', onTouchStart, { capture: true });
+			container.removeEventListener('touchmove', onTouchMove, { capture: true });
+			container.removeEventListener('touchcancel', onTouchEnd, { capture: true });
+			container.removeEventListener('touchend', onTouchEnd, { capture: true });
+			stage.off('click tap', onEmptyStageTap);
 			stage.destroy();
 		}
 	};
