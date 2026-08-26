@@ -130,7 +130,7 @@
 					<input
 						bind:this={fileInput}
 						type="file"
-						accept="image/png,.png"
+						accept="image/png,image/webp,.png,.webp"
 						multiple={tab === 'stickers'}
 						hidden
 						onchange={onFileChosen}
@@ -439,7 +439,7 @@
 		getAdminPin,
 		setAdminPin,
 		fileToDataUrl,
-		isPngFile
+		isAssetImageFile
 	} from '../lib/assets/assetStore.js';
 	import { getAdminAuth, setAdminAuth } from '../lib/assets/adminAuth.js';
 	import { listRecentCaptures, verifyAdminAuth } from '../lib/assets/assetApi.js';
@@ -674,8 +674,8 @@
 
 		if (tab === 'frames') {
 			const file = files[0];
-			if (!isPngFile(file)) {
-				status = 'Frames and stickers must be PNG with transparency.';
+			if (!isAssetImageFile(file)) {
+				status = 'Frames and stickers must be PNG or WebP.';
 				return;
 			}
 
@@ -701,10 +701,10 @@
 			return;
 		}
 
-		const valid = files.filter((file) => isPngFile(file));
+		const valid = files.filter((file) => isAssetImageFile(file));
 		const skipped = files.length - valid.length;
 		if (!valid.length) {
-			status = 'Stickers must be PNG with transparency.';
+			status = 'Stickers must be PNG or WebP.';
 			return;
 		}
 
@@ -721,7 +721,7 @@
 			await addStickers(items);
 			status =
 				skipped > 0
-					? `Added ${valid.length} sticker(s). ${skipped} skipped (not PNG).`
+					? `Added ${valid.length} sticker(s). ${skipped} skipped (not PNG/WebP).`
 					: valid.length > 1
 						? `Added ${valid.length} stickers.`
 						: 'Sticker added.';

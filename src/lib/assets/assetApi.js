@@ -144,6 +144,17 @@ export async function dataUrlToBlob(dataUrl) {
 }
 
 /**
+ * @param {Blob} blob
+ * @param {string} [basename]
+ * @returns {string}
+ */
+function assetUploadFilename(blob, basename = 'asset') {
+	const mime = (blob.type || '').toLowerCase();
+	const ext = mime.includes('webp') ? 'webp' : 'png';
+	return `${basename}.${ext}`;
+}
+
+/**
  * @param {{
  *   kind: 'frame' | 'sticker';
  *   name: string;
@@ -158,7 +169,7 @@ export async function dataUrlToBlob(dataUrl) {
 export async function createAsset(opts) {
 	const blob = await dataUrlToBlob(opts.src);
 	const form = new FormData();
-	form.append('File', blob, `${opts.kind}.png`);
+	form.append('File', blob, assetUploadFilename(blob, opts.kind));
 	form.append('Name', opts.name);
 	if (opts.motif) form.append('Motif', opts.motif);
 	if (opts.kind === 'frame') {
@@ -190,7 +201,7 @@ export async function patchAsset(id, patch, kind) {
 	const form = new FormData();
 	if (patch.src) {
 		const blob = await dataUrlToBlob(patch.src);
-		form.append('File', blob, 'asset.png');
+		form.append('File', blob, assetUploadFilename(blob, 'asset'));
 	}
 	if (patch.name != null) form.append('Name', patch.name);
 	if (patch.motif != null) form.append('Motif', patch.motif);

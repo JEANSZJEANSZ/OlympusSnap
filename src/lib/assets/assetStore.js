@@ -305,21 +305,27 @@ export function getLiveFrameById(id) {
 }
 
 /**
+ * Admin frame/sticker uploads: PNG or WebP (transparency-friendly formats).
  * @param {File} file
  * @returns {boolean}
  */
-export function isPngFile(file) {
-	if (file.type === 'image/png') return true;
-	if (!file.type && /\.png$/i.test(file.name)) return true;
+export function isAssetImageFile(file) {
+	if (file.type === 'image/png' || file.type === 'image/webp') return true;
+	if (!file.type && /\.(png|webp)$/i.test(file.name)) return true;
 	return false;
+}
+
+/** @deprecated Prefer {@link isAssetImageFile} — kept for callers that still use the old name. */
+export function isPngFile(file) {
+	return isAssetImageFile(file);
 }
 
 /**
  * @param {File} file
  */
-function assertPngFile(file) {
-	if (!isPngFile(file)) {
-		throw new Error('Frames and stickers must be PNG with transparency.');
+function assertAssetImageFile(file) {
+	if (!isAssetImageFile(file)) {
+		throw new Error('Frames and stickers must be PNG or WebP.');
 	}
 }
 
@@ -349,7 +355,7 @@ export async function addFrame({ name, motif, file, src: srcIn, slots, w, h }) {
 	let src = srcIn;
 	if (!src) {
 		if (!file) throw new Error('Frame image required');
-		assertPngFile(file);
+		assertAssetImageFile(file);
 		src = await fileToDataUrl(file);
 	}
 	let frameW = w;
@@ -407,7 +413,7 @@ export async function addStickers(items) {
 	if (!items.length) return [];
 
 	for (const { file } of items) {
-		assertPngFile(file);
+		assertAssetImageFile(file);
 	}
 
 	if (isCloudAssetsEnabled()) {
