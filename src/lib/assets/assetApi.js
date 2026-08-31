@@ -219,7 +219,12 @@ export async function patchAsset(id, patch, kind) {
 export async function deleteAsset(id, kind) {
 	const path = kind === 'frame' ? `/frames/${encodeURIComponent(id)}` : `/stickers/${encodeURIComponent(id)}`;
 	const res = await fetch(photobooth(path), { method: 'DELETE', headers: adminHeaders() });
-	if (!res.ok && res.status !== 204) throw new Error(await readError(res));
+	if (!res.ok && res.status !== 204) {
+		const err = new Error(await readError(res));
+		// @ts-expect-error attach HTTP status for retry logic
+		err.status = res.status;
+		throw err;
+	}
 }
 
 /**

@@ -819,7 +819,11 @@
 		if (!confirm(`Delete ${n} custom ${label}?`)) return;
 		busy = true;
 		try {
-			await removeCustomAssets(selectedIds);
+			await removeCustomAssets(selectedIds, {
+				onProgress: ({ index, total, name }) => {
+					status = `Deleting ${index}/${total}: ${name}…`;
+				}
+			});
 			status = `Deleted ${n}.`;
 			exitSelectMode();
 		} catch (err) {
