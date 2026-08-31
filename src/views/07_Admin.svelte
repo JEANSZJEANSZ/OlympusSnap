@@ -291,22 +291,6 @@
 						<span class="seed-toggle-label">FRAMES</span>
 						<span class="seed-toggle-state">{$showSeedFrames ? 'ON' : 'OFF'}</span>
 					</button>
-					<button
-						type="button"
-						class="seed-toggle"
-						class:on={$showSeedStickers}
-						aria-pressed={$showSeedStickers}
-						onclick={() => {
-							const next = !$showSeedStickers;
-							setShowSeedStickers(next);
-							status = next
-								? 'Seed stickers ON — guests can pick blanks.'
-								: 'Seed stickers OFF — guests see custom stickers only.';
-						}}
-					>
-						<span class="seed-toggle-label">STICKERS</span>
-						<span class="seed-toggle-state">{$showSeedStickers ? 'ON' : 'OFF'}</span>
-					</button>
 				</div>
 			</div>
 
@@ -466,13 +450,11 @@
 		frames,
 		stickers,
 		showSeedFrames,
-		showSeedStickers,
 		randomFrame,
 		oracleShuffleMs,
 		ORACLE_SHUFFLE_MIN_MS,
 		ORACLE_SHUFFLE_MAX_MS,
 		setShowSeedFrames,
-		setShowSeedStickers,
 		setRandomFrame,
 		setOracleShuffleMs,
 		addFrame,

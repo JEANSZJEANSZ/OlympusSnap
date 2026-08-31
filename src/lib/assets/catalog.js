@@ -117,17 +117,9 @@ export const FRAMES = [
 	}
 ];
 
+/** Built-in seed stickers removed — custom uploads only via Admin. */
 /** @type {StickerAsset[]} */
-export const STICKERS = [
-	{ id: 'lightning', name: 'ZEUS BOLT', src: assetUrl('assets/stickers/lightning.svg') },
-	{ id: 'laurel', name: 'LAUREL', src: assetUrl('assets/stickers/laurel.svg') },
-	{ id: 'lyre', name: 'LYRE', src: assetUrl('assets/stickers/lyre.svg') },
-	{ id: 'owl', name: 'OWL', src: assetUrl('assets/stickers/owl.svg') },
-	{ id: 'trident', name: 'TRIDENT', src: assetUrl('assets/stickers/trident.svg') },
-	{ id: 'sun', name: 'SOLAR', src: assetUrl('assets/stickers/sun.svg') },
-	{ id: 'star', name: 'STAR', src: assetUrl('assets/stickers/star.svg') },
-	{ id: 'heart', name: 'AEGIS', src: assetUrl('assets/stickers/heart.svg') }
-];
+export const STICKERS = [];
 
 /**
  * @param {string | null} id
