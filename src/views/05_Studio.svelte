@@ -206,6 +206,7 @@
 	import ShareFallbackSheet from '../lib/components/ShareFallbackSheet.svelte';
 	import { downloadDataUrl, shareCompositeFile } from '../lib/share/shareComposite.js';
 	import { isPointInRect } from '../lib/utils/hitTest.js';
+	import { warmFrameImages } from '../lib/utils/loadImageForCanvas.js';
 
 	/** @type {StudioKonvaEditor | undefined} */
 	let editorRef = $state();
@@ -355,6 +356,7 @@
 		if (busy) return;
 		shareFallbackOpen = false;
 		stickerSheetOpen = true;
+		void warmFrameImages(get(stickers).map((s) => s.src));
 	}
 
 	function closeStickerSheet() {

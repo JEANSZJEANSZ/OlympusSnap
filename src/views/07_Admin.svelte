@@ -21,7 +21,7 @@
 					class="tab"
 					class:on={tab === 'frames'}
 					aria-selected={tab === 'frames'}
-					onclick={() => (tab = 'frames')}>FRAMES</button
+					onclick={() => switchTab('frames')}>FRAMES</button
 				>
 				<button
 					type="button"
@@ -29,7 +29,7 @@
 					class="tab"
 					class:on={tab === 'stickers'}
 					aria-selected={tab === 'stickers'}
-					onclick={() => (tab = 'stickers')}>STICKERS</button
+					onclick={() => switchTab('stickers')}>STICKERS</button
 				>
 			</div>
 
@@ -144,21 +144,68 @@
 					/>
 				</div>
 
+				<div class="grid-toolbar">
+					{#if selectMode}
+						<PixelButton
+							label="CANCEL"
+							variant="ghost"
+							disabled={busy}
+							onclick={exitSelectMode}
+						/>
+						{#if selectedIds.length > 0}
+							<PixelButton
+								label={`DELETE SELECTED (${selectedIds.length})`}
+								variant="ghost"
+								disabled={busy}
+								onclick={onDeleteSelected}
+							/>
+						{/if}
+					{:else}
+						<PixelButton
+							label="SELECT"
+							variant="ghost"
+							disabled={busy}
+							onclick={enterSelectMode}
+						/>
+					{/if}
+				</div>
+
 				<div class="grid">
 					{#each list as item, i (item.id)}
 						<article
 							class="card"
 							class:seed={!item.custom}
+							class:selected={selectMode && selectedIds.includes(item.id)}
+							class:selectable={selectMode && item.custom}
 							style:--i={i}
 						>
-							<div class="thumb">
-								<img src={item.src} alt="" />
-							</div>
+							{#if selectMode && item.custom}
+								<button
+									type="button"
+									class="select-hit"
+									aria-pressed={selectedIds.includes(item.id)}
+									aria-label={`Select ${item.name}`}
+									onclick={() => toggleSelect(item.id)}
+								>
+									<span
+										class="select-mark"
+										class:checked={selectedIds.includes(item.id)}
+										aria-hidden="true"
+									>
+										{#if selectedIds.includes(item.id)}✓{/if}
+									</span>
+									<img src={item.src} alt="" />
+								</button>
+							{:else}
+								<div class="thumb">
+									<img src={item.src} alt="" />
+								</div>
+							{/if}
 							<div class="meta">
 								<input
 									class="name-edit"
 									value={item.name}
-									disabled={!item.custom || busy}
+									disabled={!item.custom || busy || selectMode}
 									onchange={(e) => {
 										const v = /** @type {HTMLInputElement} */ (e.currentTarget).value;
 										if (!item.custom) return;
@@ -173,7 +220,7 @@
 								<span class="badge" class:custom={item.custom}
 									>{item.custom ? 'CUSTOM' : 'SEED'}</span
 								>
-								{#if item.custom}
+								{#if item.custom && !selectMode}
 									<div class="card-actions">
 										{#if tab === 'frames'}
 											<button
@@ -432,6 +479,7 @@
 		addStickers,
 		updateAsset,
 		removeCustomAsset,
+		removeCustomAssets,
 		exportCatalog,
 		importCatalog,
 		uploadLocalCustomsToCloud,
@@ -492,6 +540,8 @@
 	let tab = $state(/** @type {'frames' | 'stickers'} */ ('frames'));
 	let status = $state('');
 	let busy = $state(false);
+	let selectMode = $state(false);
+	let selectedIds = $state(/** @type {string[]} */ ([]));
 
 	let uploadName = $state('');
 	let uploadMotif = $state('');
@@ -728,6 +778,52 @@
 			uploadName = '';
 		} catch (err) {
 			status = err instanceof Error ? err.message : 'Upload failed';
+		} finally {
+			busy = false;
+		}
+	}
+
+	/** @param {'frames' | 'stickers'} next */
+	function switchTab(next) {
+		tab = next;
+		exitSelectMode();
+	}
+
+	function enterSelectMode() {
+		selectMode = true;
+		selectedIds = [];
+	}
+
+	function exitSelectMode() {
+		selectMode = false;
+		selectedIds = [];
+	}
+
+	/** @param {string} id */
+	function toggleSelect(id) {
+		if (!selectMode) return;
+		if (selectedIds.includes(id)) {
+			selectedIds = selectedIds.filter((x) => x !== id);
+		} else {
+			selectedIds = [...selectedIds, id];
+		}
+	}
+
+	async function onDeleteSelected() {
+		if (!selectedIds.length) return;
+		const n = selectedIds.length;
+		const label =
+			tab === 'stickers'
+				? `sticker${n === 1 ? '' : 's'}`
+				: `frame${n === 1 ? '' : 's'}`;
+		if (!confirm(`Delete ${n} custom ${label}?`)) return;
+		busy = true;
+		try {
+			await removeCustomAssets(selectedIds);
+			status = `Deleted ${n}.`;
+			exitSelectMode();
+		} catch (err) {
+			status = err instanceof Error ? err.message : 'Delete failed';
 		} finally {
 			busy = false;
 		}
@@ -1059,6 +1155,13 @@
 		gap: 0.85rem;
 	}
 
+	.grid-toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-bottom: 0.65rem;
+	}
+
 	.card {
 		background: var(--cream);
 		color: var(--cream-ink);
@@ -1078,11 +1181,63 @@
 		opacity: 0.9;
 	}
 
+	.card.selectable {
+		cursor: pointer;
+	}
+
+	.card.selected {
+		box-shadow:
+			0 0 0 3px #0f172a,
+			0 0 0 6px var(--gold-bright),
+			5px 5px 0 #07152d;
+	}
+
 	.thumb {
+		position: relative;
 		background:
 			linear-gradient(135deg, #e8eef6 0%, #d6dde8 100%);
 		box-shadow: inset 0 0 0 2px #0f172a;
 		padding: 0.35rem;
+	}
+
+	.select-hit {
+		position: relative;
+		display: block;
+		width: 100%;
+		padding: 0.35rem;
+		border: 0;
+		cursor: pointer;
+		text-align: inherit;
+		background:
+			linear-gradient(135deg, #e8eef6 0%, #d6dde8 100%);
+		box-shadow: inset 0 0 0 2px #0f172a;
+	}
+
+	.select-hit img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: contain;
+	}
+
+	.select-mark {
+		position: absolute;
+		top: 0.35rem;
+		right: 0.35rem;
+		z-index: 1;
+		width: 1.1rem;
+		height: 1.1rem;
+		display: grid;
+		place-items: center;
+		font-size: 0.65rem;
+		line-height: 1;
+		background: color-mix(in srgb, #fff 88%, transparent);
+		color: #0f172a;
+		box-shadow: 0 0 0 2px #0f172a;
+	}
+
+	.select-mark.checked {
+		background: var(--gold-bright);
 	}
 
 	.card img {
