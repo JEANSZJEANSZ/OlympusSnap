@@ -120,18 +120,13 @@
 					</button>
 					<button
 						type="button"
-						class="story-btn"
-						aria-label="Stickers"
+						class="story-btn story-btn-sticker"
+						aria-label="Stickers and GIFs"
 						aria-expanded={stickerSheetOpen}
 						disabled={busy}
 						onclick={openStickerSheet}
 					>
-						<svg viewBox="0 0 24 24" aria-hidden="true">
-							<path
-								fill="currentColor"
-								d="M12 3c4.97 0 9 4.03 9 9 0 1.86-.57 3.58-1.53 5.01L12 12.5 4.53 17.01A8.96 8.96 0 013 12c0-4.97 4.03-9 9-9zm-3.2 7.2a1.3 1.3 0 110 2.6 1.3 1.3 0 010-2.6zm6.4 0a1.3 1.3 0 110 2.6 1.3 1.3 0 010-2.6zM8.4 15.4c.86 1.5 2.1 2.4 3.6 2.4s2.74-.9 3.6-2.4c.14-.24-.02-.5-.28-.5H8.68c-.26 0-.42.26-.28.5z"
-							/>
-						</svg>
+						<span class="story-emoji" aria-hidden="true">😊</span>
 					</button>
 					<button
 						type="button"
@@ -195,7 +190,7 @@
 		selectedFrameId
 	} from '../lib/stores/stores.js';
 	import { getLiveFrameById } from '../lib/assets/assetStore.js';
-	import { stickers } from '../lib/assets/assetStore.js';
+	import { stickers, applyGuestCatalogFlagsFromUrl } from '../lib/assets/assetStore.js';
 	import { go } from '../router/index.js';
 	import { getSessionFromUrl, loadCapture } from '../lib/session/sessionClient.js';
 	import { imageHandoffBusy } from '../lib/fx/imageHandoff.js';
@@ -288,6 +283,7 @@
 
 		const parts = getSessionFromUrl();
 		if (parts) {
+			applyGuestCatalogFlagsFromUrl();
 			mobileSession = true;
 			sessionLoading = true;
 			entryBusy = true;
@@ -599,6 +595,15 @@
 	.story-btn svg {
 		width: 1.28rem;
 		height: 1.28rem;
+	}
+
+	.story-emoji {
+		font-size: 1.45rem;
+		line-height: 1;
+	}
+
+	.story-btn-sticker {
+		font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
 	}
 
 	.story-btn:disabled {
