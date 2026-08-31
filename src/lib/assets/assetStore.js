@@ -23,6 +23,9 @@ const SEED_STICKERS_KEY = 'olympus-snap-show-seed-stickers';
 const RANDOM_FRAME_KEY = 'olympus-snap-random-frame';
 const ORACLE_SHUFFLE_KEY = 'olympus-snap-oracle-shuffle';
 const ORACLE_SHUFFLE_MS_KEY = 'olympus-snap-oracle-shuffle-ms';
+/** Gap between cloud bulk-delete requests to avoid 429 rate limits. */
+const BULK_DELETE_GAP_MS = 450;
+const BULK_DELETE_MAX_ATTEMPTS = 5;
 
 export const ORACLE_SHUFFLE_MIN_MS = 800;
 export const ORACLE_SHUFFLE_MAX_MS = 5000;
@@ -515,10 +518,42 @@ export async function removeCustomAsset(id) {
 }
 
 /**
- * Delete multiple custom assets in one rebuild.
- * @param {string[]} ids
+ * @param {number} ms
  */
-export async function removeCustomAssets(ids) {
+function sleep(ms) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * @param {string} id
+ * @param {'frame' | 'sticker'} kind
+ * @param {number} gapMs
+ */
+async function deleteAssetWithRetry(id, kind, gapMs) {
+	for (let attempt = 1; attempt <= BULK_DELETE_MAX_ATTEMPTS; attempt++) {
+		try {
+			await apiDeleteAsset(id, kind);
+			return;
+		} catch (err) {
+			const status = err && typeof err === 'object' && 'status' in err ? Number(err.status) : 0;
+			const canRetry = status === 429 && attempt < BULK_DELETE_MAX_ATTEMPTS;
+			if (!canRetry) throw err;
+			await sleep(gapMs * attempt);
+		}
+	}
+}
+
+/**
+ * Delete multiple custom assets in one rebuild.
+ * Cloud deletes run sequentially with a gap to avoid rate limits.
+ * @param {string[]} ids
+ * @param {{
+ *   onProgress?: (info: { index: number; total: number; id: string; name: string }) => void;
+ *   gapMs?: number;
+ * }} [opts]
+ */
+export async function removeCustomAssets(ids, opts = {}) {
+	const gapMs = opts.gapMs ?? BULK_DELETE_GAP_MS;
 	const unique = [...new Set(ids)];
 	if (!unique.length) return;
 
@@ -530,12 +565,16 @@ export async function removeCustomAssets(ids) {
 	if (!toDelete.length) return;
 
 	if (isCloudAssetsEnabled()) {
-		await Promise.all(
-			toDelete.map((id) => {
-				const kind = get(stickers).some((s) => s.id === id) ? 'sticker' : 'frame';
-				return apiDeleteAsset(id, kind);
-			})
-		);
+		const total = toDelete.length;
+		for (let i = 0; i < toDelete.length; i++) {
+			const id = toDelete[i];
+			const hit = all.find((a) => a.id === id);
+			const name = hit?.name ?? id;
+			opts.onProgress?.({ index: i + 1, total, id, name });
+			const kind = get(stickers).some((s) => s.id === id) ? 'sticker' : 'frame';
+			await deleteAssetWithRetry(id, kind, gapMs);
+			if (i < toDelete.length - 1) await sleep(gapMs);
+		}
 		rebuildStores(await loadCustoms());
 		return;
 	}
