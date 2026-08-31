@@ -26,14 +26,25 @@
 		</label>
 		<div class="grid">
 			{#each filtered as item (item.id)}
+				{@const ready = isStickerReady(item.src)}
 				<button
 					type="button"
 					class="tile"
+					class:loading={!ready}
 					disabled={disabled}
 					onclick={() => onSelect?.(item)}
 					aria-label={item.name}
 				>
-					<img src={item.src} alt="" draggable="false" />
+					{#if ready}
+						<img
+							src={resolveCachedFrameSrc(item.src)}
+							alt=""
+							draggable="false"
+							onerror={() => onStickerImgError(item.src)}
+						/>
+					{:else}
+						<span class="tile-spinner" aria-hidden="true"></span>
+					{/if}
 				</button>
 			{/each}
 		</div>
@@ -42,6 +53,13 @@
 
 <script>
 	import { fly } from 'svelte/transition';
+	import {
+		frameImageCacheTick,
+		invalidateFrameImage,
+		isFrameImageCached,
+		preloadFrameImage,
+		resolveCachedFrameSrc
+	} from '../utils/loadImageForCanvas.js';
 
 	/** @typedef {{ id: string; name: string; src: string }} StickerItem */
 
@@ -61,6 +79,28 @@
 		const q = query.trim().toLowerCase();
 		if (!q) return stickers;
 		return stickers.filter((item) => item.name.toLowerCase().includes(q));
+	});
+
+	/** @param {string} src */
+	function isStickerReady(src) {
+		$frameImageCacheTick;
+		return isFrameImageCached(src);
+	}
+
+	/** @param {string} src */
+	function onStickerImgError(src) {
+		if (!src) return;
+		invalidateFrameImage(src);
+		void preloadFrameImage(src);
+	}
+
+	$effect(() => {
+		const seen = /** @type {string[]} */ ([]);
+		for (const item of stickers) {
+			if (!item.src || seen.includes(item.src)) continue;
+			seen.push(item.src);
+			void preloadFrameImage(item.src);
+		}
 	});
 </script>
 
@@ -169,6 +209,11 @@
 		cursor: pointer;
 	}
 
+	.tile.loading {
+		background: color-mix(in srgb, #fff 6%, transparent);
+		border-radius: 0.45rem;
+	}
+
 	.tile:disabled {
 		opacity: 0.4;
 		pointer-events: none;
@@ -179,5 +224,27 @@
 		height: 88%;
 		object-fit: contain;
 		filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+	}
+
+	.tile-spinner {
+		width: 1.35rem;
+		height: 1.35rem;
+		border-radius: 50%;
+		border: 2px solid color-mix(in srgb, #fff 18%, transparent);
+		border-top-color: color-mix(in srgb, #fff 72%, transparent);
+		animation: spin 0.75s linear infinite;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.tile-spinner {
+			animation: none;
+			border-top-color: color-mix(in srgb, #fff 40%, transparent);
+		}
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>

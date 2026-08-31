@@ -515,6 +515,38 @@ export async function removeCustomAsset(id) {
 }
 
 /**
+ * Delete multiple custom assets in one rebuild.
+ * @param {string[]} ids
+ */
+export async function removeCustomAssets(ids) {
+	const unique = [...new Set(ids)];
+	if (!unique.length) return;
+
+	const all = [...get(frames), ...get(stickers)];
+	const toDelete = unique.filter((id) => {
+		const hit = all.find((a) => a.id === id);
+		return hit?.custom;
+	});
+	if (!toDelete.length) return;
+
+	if (isCloudAssetsEnabled()) {
+		await Promise.all(
+			toDelete.map((id) => {
+				const kind = get(stickers).some((s) => s.id === id) ? 'sticker' : 'frame';
+				return apiDeleteAsset(id, kind);
+			})
+		);
+		rebuildStores(await loadCustoms());
+		return;
+	}
+
+	for (const id of toDelete) {
+		await idbDelete(id);
+	}
+	rebuildStores(await idbListAll());
+}
+
+/**
  * Push IndexedDB customs to cloud (skips name+kind already present remotely).
  * @returns {Promise<{ uploaded: number; skipped: number }>}
  */

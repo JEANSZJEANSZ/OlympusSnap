@@ -385,7 +385,11 @@ export async function createStudioEditor(opts) {
 
 	/** Default scale so stickers feel similar across frame sizes — sized for Instagram-style first place. */
 	function defaultSpawnScale() {
-		return Math.max(1.7, Math.min(3.5, Math.round((Math.min(frameW, frameH) / 280) * 10) / 10));
+		const dim = Math.min(frameW, frameH);
+		const divisor = touchMode ? 200 : 280;
+		const floor = touchMode ? 2.4 : 1.7;
+		const cap = touchMode ? 4.5 : 3.5;
+		return Math.max(floor, Math.min(cap, Math.round((dim / divisor) * 10) / 10));
 	}
 
 	/**
