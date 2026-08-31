@@ -118,7 +118,7 @@
 		createSession,
 		studioSessionQuery
 	} from '../lib/session/sessionClient.js';
-	import { showSeedFrames, showSeedStickers } from '../lib/assets/assetStore.js';
+	import { showSeedFrames } from '../lib/assets/assetStore.js';
 	import { imageHandoffBusy } from '../lib/fx/imageHandoff.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
@@ -230,7 +230,6 @@
 						buildStudioSessionUrl({
 							id: created.id,
 							key: created.key,
-							showSeedStickers: get(showSeedStickers),
 							showSeedFrames: get(showSeedFrames)
 						})
 					);
@@ -259,7 +258,6 @@
 			`?${studioSessionQuery({
 				id: sessionId,
 				key: sessionKey,
-				showSeedStickers: get(showSeedStickers),
 				showSeedFrames: get(showSeedFrames)
 			})}`
 		);

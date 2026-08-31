@@ -11,7 +11,7 @@ import {
 	patchAsset as apiPatchAsset,
 	resolveCloudAssetSrc
 } from './assetApi.js';
-import { FRAMES as SEED_FRAMES, STICKERS as SEED_STICKERS } from './catalog.js';
+import { FRAMES as SEED_FRAMES } from './catalog.js';
 import { idbDelete, idbListAll, idbPut, idbReplaceAllCustoms } from './idb.js';
 import { measureImage } from '../utils/imageCrop.js';
 import { warmFrameImages } from '../utils/loadImageForCanvas.js';
@@ -19,7 +19,6 @@ import { warmFrameImages } from '../utils/loadImageForCanvas.js';
 const PIN_KEY = 'olympus-snap-admin-pin';
 const DEFAULT_PIN = 'olympus';
 const SEED_FRAMES_KEY = 'olympus-snap-show-seed-frames';
-const SEED_STICKERS_KEY = 'olympus-snap-show-seed-stickers';
 const RANDOM_FRAME_KEY = 'olympus-snap-random-frame';
 const ORACLE_SHUFFLE_KEY = 'olympus-snap-oracle-shuffle';
 const ORACLE_SHUFFLE_MS_KEY = 'olympus-snap-oracle-shuffle-ms';
@@ -117,17 +116,11 @@ export const frames = writable(
 );
 
 /** @type {import('svelte/store').Writable<StickerAsset[]>} */
-export const stickers = writable(
-	readFlag(SEED_STICKERS_KEY, true) ? seedStickers() : []
-);
+export const stickers = writable([]);
 
 /** When false, seed frames are hidden from guests (customs only). Default on for booth testing. */
 /** @type {import('svelte/store').Writable<boolean>} */
 export const showSeedFrames = writable(readFlag(SEED_FRAMES_KEY, true));
-
-/** When false, seed stickers are hidden from guests (customs only). */
-/** @type {import('svelte/store').Writable<boolean>} */
-export const showSeedStickers = writable(readFlag(SEED_STICKERS_KEY, true));
 
 /**
  * When true, Frame Select runs a Pythia oracle pick instead of pull-to-select.
@@ -149,10 +142,6 @@ let cachedCustoms = [];
 
 function seedFrames() {
 	return SEED_FRAMES.map((f) => ({ ...f, custom: false }));
-}
-
-function seedStickers() {
-	return SEED_STICKERS.map((s) => ({ ...s, custom: false }));
 }
 
 /**
@@ -243,9 +232,8 @@ function rebuildStores(customs) {
 		}));
 
 	const includeFrames = get(showSeedFrames);
-	const includeStickers = get(showSeedStickers);
 	frames.set([...(includeFrames ? seedFrames() : []), ...customFrames]);
-	stickers.set([...(includeStickers ? seedStickers() : []), ...customStickers]);
+	stickers.set(customStickers);
 	warmCatalogImages();
 }
 
@@ -265,23 +253,13 @@ export function setShowSeedFrames(on) {
 	rebuildStores(cachedCustoms);
 }
 
-/** @param {boolean} on */
-export function setShowSeedStickers(on) {
-	showSeedStickers.set(!!on);
-	writeFlag(SEED_STICKERS_KEY, !!on);
-	rebuildStores(cachedCustoms);
-}
-
 /**
- * Apply booth catalog flags from a guest Studio URL (`ss` / `sf` query params).
- * Encoded when the booth builds the QR so phones inherit Admin seed toggles.
+ * Apply booth frame catalog flag from a guest Studio URL (`sf` query param).
+ * Encoded when the booth builds the QR so phones inherit Admin seed-frame toggles.
  */
 export function applyGuestCatalogFlagsFromUrl() {
 	if (typeof location === 'undefined') return;
 	const params = new URLSearchParams(location.search);
-	if (params.has('ss')) {
-		setShowSeedStickers(params.get('ss') !== '0');
-	}
 	if (params.has('sf')) {
 		setShowSeedFrames(params.get('sf') !== '0');
 	}
@@ -676,7 +654,6 @@ export async function exportCatalog() {
 		exportedAt: new Date().toISOString(),
 		pin: getAdminPin(),
 		showSeedFrames: get(showSeedFrames),
-		showSeedStickers: get(showSeedStickers),
 		assets
 	};
 }
@@ -757,19 +734,13 @@ export async function importCatalog(payload) {
 		await idbReplaceAllCustoms(cleaned);
 	}
 
-	const raw = /** @type {{ pin?: string; showSeedFrames?: unknown; showSeedStickers?: unknown }} */ (
-		payload
-	);
+	const raw = /** @type {{ pin?: string; showSeedFrames?: unknown }} */ (payload);
 	if (typeof raw.pin === 'string' && raw.pin.length > 0) {
 		setAdminPin(raw.pin);
 	}
 	if (typeof raw.showSeedFrames === 'boolean') {
 		showSeedFrames.set(raw.showSeedFrames);
 		writeFlag(SEED_FRAMES_KEY, raw.showSeedFrames);
-	}
-	if (typeof raw.showSeedStickers === 'boolean') {
-		showSeedStickers.set(raw.showSeedStickers);
-		writeFlag(SEED_STICKERS_KEY, raw.showSeedStickers);
 	}
 	rebuildStores(await loadCustoms());
 }
