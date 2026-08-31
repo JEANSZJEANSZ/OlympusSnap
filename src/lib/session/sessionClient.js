@@ -77,14 +77,26 @@ export function getSessionFromUrl() {
 }
 
 /**
+ * @param {{ id: string; key: string; showSeedStickers?: boolean; showSeedFrames?: boolean }} parts
+ * @returns {string} query string (no leading ?)
+ */
+export function studioSessionQuery(parts) {
+	const q = new URLSearchParams();
+	q.set('ses', encodeSes({ id: parts.id, key: parts.key }));
+	if (parts.showSeedStickers === false) q.set('ss', '0');
+	if (parts.showSeedFrames === false) q.set('sf', '0');
+	return q.toString();
+}
+
+/**
  * Public URL for QR — use LAN hostname in production booths (VITE_PUBLIC_ORIGIN).
- * @param {{ id: string; key: string }} parts
+ * @param {{ id: string; key: string; showSeedStickers?: boolean; showSeedFrames?: boolean }} parts
  * @returns {string}
  */
-export function buildStudioSessionUrl({ id, key }) {
+export function buildStudioSessionUrl(parts) {
 	const origin =
 		(import.meta.env.VITE_PUBLIC_ORIGIN || '').replace(/\/+$/, '') ||
 		(typeof location !== 'undefined' ? location.origin : '');
-	const path = `${toFullPath('/studio')}?ses=${encodeURIComponent(encodeSes({ id, key }))}`;
+	const path = `${toFullPath('/studio')}?${studioSessionQuery(parts)}`;
 	return `${origin}${path}`;
 }

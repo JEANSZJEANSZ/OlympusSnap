@@ -115,9 +115,10 @@
 	import { go } from '../router/index.js';
 	import {
 		buildStudioSessionUrl,
-		createSession
+		createSession,
+		studioSessionQuery
 	} from '../lib/session/sessionClient.js';
-	import { encodeSes } from '../lib/session/sesCodec.js';
+	import { showSeedFrames, showSeedStickers } from '../lib/assets/assetStore.js';
 	import { imageHandoffBusy } from '../lib/fx/imageHandoff.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
@@ -225,7 +226,14 @@
 				if (!cancelled) {
 					sessionId = created.id;
 					sessionKey = created.key;
-					await renderQr(buildStudioSessionUrl({ id: created.id, key: created.key }));
+					await renderQr(
+						buildStudioSessionUrl({
+							id: created.id,
+							key: created.key,
+							showSeedStickers: get(showSeedStickers),
+							showSeedFrames: get(showSeedFrames)
+						})
+					);
 				}
 			} catch (err) {
 				console.warn('[reveal] session create failed', err);
@@ -246,7 +254,15 @@
 	/** Same-device / booth test — click QR instead of scanning. */
 	function openStudioFromQr() {
 		if (!sessionId || !sessionKey) return;
-		go('studio', `?ses=${encodeURIComponent(encodeSes({ id: sessionId, key: sessionKey }))}`);
+		go(
+			'studio',
+			`?${studioSessionQuery({
+				id: sessionId,
+				key: sessionKey,
+				showSeedStickers: get(showSeedStickers),
+				showSeedFrames: get(showSeedFrames)
+			})}`
+		);
 	}
 
 	function restart() {

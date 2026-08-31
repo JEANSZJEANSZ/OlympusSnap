@@ -112,10 +112,14 @@ function readOracleShuffleMs() {
  */
 
 /** @type {import('svelte/store').Writable<FrameAsset[]>} */
-export const frames = writable(SEED_FRAMES.map((f) => ({ ...f, custom: false })));
+export const frames = writable(
+	readFlag(SEED_FRAMES_KEY, true) ? seedFrames() : []
+);
 
 /** @type {import('svelte/store').Writable<StickerAsset[]>} */
-export const stickers = writable(SEED_STICKERS.map((s) => ({ ...s, custom: false })));
+export const stickers = writable(
+	readFlag(SEED_STICKERS_KEY, true) ? seedStickers() : []
+);
 
 /** When false, seed frames are hidden from guests (customs only). Default on for booth testing. */
 /** @type {import('svelte/store').Writable<boolean>} */
@@ -252,7 +256,7 @@ function warmCatalogImages() {
 	]);
 }
 
-warmCatalogImages();
+rebuildStores([]);
 
 /** @param {boolean} on */
 export function setShowSeedFrames(on) {
@@ -266,6 +270,21 @@ export function setShowSeedStickers(on) {
 	showSeedStickers.set(!!on);
 	writeFlag(SEED_STICKERS_KEY, !!on);
 	rebuildStores(cachedCustoms);
+}
+
+/**
+ * Apply booth catalog flags from a guest Studio URL (`ss` / `sf` query params).
+ * Encoded when the booth builds the QR so phones inherit Admin seed toggles.
+ */
+export function applyGuestCatalogFlagsFromUrl() {
+	if (typeof location === 'undefined') return;
+	const params = new URLSearchParams(location.search);
+	if (params.has('ss')) {
+		setShowSeedStickers(params.get('ss') !== '0');
+	}
+	if (params.has('sf')) {
+		setShowSeedFrames(params.get('sf') !== '0');
+	}
 }
 
 /** @param {boolean} on */
