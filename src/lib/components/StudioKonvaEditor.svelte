@@ -19,7 +19,8 @@
 		onSelect = undefined,
 		onDragActive = undefined,
 		onDragMove = undefined,
-		onDragEnd = undefined
+		onDragEnd = undefined,
+		onReady = undefined
 	} = $props();
 
 	/** @type {ResizeObserver | undefined} */
@@ -34,33 +35,38 @@
 		let instance = null;
 
 		(async () => {
-			const created = await createStudioEditor({
-				container: el,
-				compositeDataUrl: url,
-				stickers: [],
-				selectedId: null,
-				touchMode: untrack(() => touchMode),
-				onStickersChange: (list) => onStickersChange?.(list),
-				onSelect: (id) => onSelect?.(id),
-				onDragActive: (on) => onDragActive?.(on),
-				onDragMove: (pos) => onDragMove?.(pos),
-				onDragEnd: (pos) => onDragEnd?.(pos)
-			});
-			if (cancelled) {
-				created.destroy();
-				return;
-			}
-			instance = created;
-			editor = created;
-
-			created.fitToContainer(el.clientWidth, el.clientHeight);
-
-			resizeObserver = new ResizeObserver(() => {
-				if (el.clientWidth && el.clientHeight) {
-					created.fitToContainer(el.clientWidth, el.clientHeight);
+			try {
+				const created = await createStudioEditor({
+					container: el,
+					compositeDataUrl: url,
+					stickers: [],
+					selectedId: null,
+					touchMode: untrack(() => touchMode),
+					onStickersChange: (list) => onStickersChange?.(list),
+					onSelect: (id) => onSelect?.(id),
+					onDragActive: (on) => onDragActive?.(on),
+					onDragMove: (pos) => onDragMove?.(pos),
+					onDragEnd: (pos) => onDragEnd?.(pos)
+				});
+				if (cancelled) {
+					created.destroy();
+					return;
 				}
-			});
-			resizeObserver.observe(el);
+				instance = created;
+				editor = created;
+
+				created.fitToContainer(el.clientWidth, el.clientHeight);
+
+				resizeObserver = new ResizeObserver(() => {
+					if (el.clientWidth && el.clientHeight) {
+						created.fitToContainer(el.clientWidth, el.clientHeight);
+					}
+				});
+				resizeObserver.observe(el);
+				onReady?.();
+			} catch {
+				if (!cancelled) onReady?.();
+			}
 		})();
 
 		return () => {

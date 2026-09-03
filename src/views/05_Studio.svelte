@@ -14,11 +14,7 @@
 		<div class="mountains mountains-near" aria-hidden="true"></div>
 	{/if}
 
-	{#if sessionLoading}
-		<div class="session-loading" aria-live="polite">
-			<p>OPENING YOUR RELIC…</p>
-		</div>
-	{:else if sessionError}
+	{#if sessionError}
 		<div class="session-empty">
 			<p class="session-empty-title">
 				{sessionError === 'forbidden' ? 'LINK FORBIDDEN' : 'LINK NOT FOUND'}
@@ -53,6 +49,7 @@
 									onDragActive={onStickerDragActive}
 									onDragMove={onStickerDragMove}
 									onDragEnd={onStickerDragEnd}
+									onReady={onEditorReady}
 								/>
 							{/if}
 						</div>
@@ -100,8 +97,8 @@
 			{#if mobileSession}
 				<aside
 					class="story-rail"
-					class:is-hidden={stickerSheetOpen || shareFallbackOpen || dragActive}
-					aria-hidden={stickerSheetOpen || shareFallbackOpen || dragActive}
+					class:is-hidden={stickerSheetOpen || shareFallbackOpen || dragActive || sessionLoading}
+					aria-hidden={stickerSheetOpen || shareFallbackOpen || dragActive || sessionLoading}
 					aria-label="Studio tools"
 				>
 					<button
@@ -179,6 +176,13 @@
 			{/if}
 		</div>
 	{/if}
+
+	{#if sessionLoading && !sessionError}
+		<div class="session-loading" aria-live="polite">
+			<span class="session-spinner" aria-hidden="true"></span>
+			<p>Loading your snap…</p>
+		</div>
+	{/if}
 </section>
 
 <script>
@@ -214,9 +218,10 @@
 	let exiting = $state(false);
 	let saving = $state(false);
 	let sharing = $state(false);
-	let mobileSession = $state(false);
+	const guestFromUrl = typeof location !== 'undefined' && !!getSessionFromUrl();
+	let mobileSession = $state(guestFromUrl);
 	let coarsePointer = $state(false);
-	let sessionLoading = $state(false);
+	let sessionLoading = $state(guestFromUrl);
 	let stickerSheetOpen = $state(false);
 	let shareFallbackOpen = $state(false);
 	let dragActive = $state(false);
@@ -275,6 +280,12 @@
 		}
 	}
 
+	function onEditorReady() {
+		if (!sessionLoading) return;
+		sessionLoading = false;
+		entryBusy = false;
+	}
+
 	onMount(() => {
 		reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		coarsePointer = window.matchMedia('(pointer: coarse)').matches;
@@ -287,6 +298,7 @@
 			mobileSession = true;
 			sessionLoading = true;
 			entryBusy = true;
+			capturedImageData.set(null);
 
 			(async () => {
 				try {
@@ -295,16 +307,12 @@
 					if (payload.frameId) selectedFrameId.set(payload.frameId);
 					activeStickers.set([]);
 					measureComposite(payload.imageDataUrl);
-					sessionLoading = false;
-					await initEditorEntry();
 				} catch (err) {
 					/* Same-device booth click: image may already live in the store. */
 					const existing = get(capturedImageData);
 					if (existing && err?.code !== 'FORBIDDEN') {
 						activeStickers.set([]);
 						measureComposite(existing);
-						sessionLoading = false;
-						await initEditorEntry();
 						return;
 					}
 					sessionLoading = false;
@@ -706,7 +714,49 @@
 		clip-path: polygon(0 100%, 0 68%, 12% 52%, 22% 72%, 34% 40%, 48% 64%, 60% 34%, 72% 58%, 84% 28%, 100% 55%, 100% 100%);
 	}
 
-	.session-loading,
+	.session-loading {
+		position: absolute;
+		inset: 0;
+		z-index: 12;
+		display: grid;
+		place-content: center;
+		justify-items: center;
+		gap: 0.9rem;
+		background: #071936;
+		text-align: center;
+		padding: 1.5rem;
+		pointer-events: auto;
+	}
+
+	.session-loading p {
+		margin: 0;
+		font-size: 0.95rem;
+		letter-spacing: 0.04em;
+		color: color-mix(in srgb, #fff8df 86%, transparent);
+	}
+
+	.session-spinner {
+		width: 2.15rem;
+		height: 2.15rem;
+		border-radius: 50%;
+		border: 2px solid color-mix(in srgb, #fff8df 18%, transparent);
+		border-top-color: #fff8df;
+		animation: session-spin 0.75s linear infinite;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.session-spinner {
+			animation: none;
+			border-top-color: color-mix(in srgb, #fff8df 48%, transparent);
+		}
+	}
+
+	@keyframes session-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
 	.session-empty {
 		display: grid;
 		place-content: center;
