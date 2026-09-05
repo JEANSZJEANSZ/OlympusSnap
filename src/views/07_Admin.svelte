@@ -194,11 +194,11 @@
 									>
 										{#if selectedIds.includes(item.id)}✓{/if}
 									</span>
-									<img src={item.src} alt="" />
+									<AssetThumb src={item.src} alt="" />
 								</button>
 							{:else}
 								<div class="thumb">
-									<img src={item.src} alt="" />
+									<AssetThumb src={item.src} alt="" />
 								</div>
 							{/if}
 							<div class="meta">
@@ -394,7 +394,7 @@
 							{#each recent as item (item.id)}
 								<li>
 									{#if item.previewBase64}
-										<img
+										<AssetThumb
 											src={`data:image/png;base64,${item.previewBase64}`}
 											alt=""
 										/>
@@ -478,6 +478,7 @@
 	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 	import FrameSlotEditor from '../lib/components/FrameSlotEditor.svelte';
 	import FrameCropEditor from '../lib/components/FrameCropEditor.svelte';
+	import AssetThumb from '../lib/components/AssetThumb.svelte';
 
 	/** @type {HTMLElement | undefined} */
 	let rootEl = $state();
@@ -1199,13 +1200,6 @@
 		box-shadow: inset 0 0 0 2px #0f172a;
 	}
 
-	.select-hit img {
-		display: block;
-		width: 100%;
-		aspect-ratio: 1;
-		object-fit: contain;
-	}
-
 	.select-mark {
 		position: absolute;
 		top: 0.35rem;
@@ -1224,13 +1218,6 @@
 
 	.select-mark.checked {
 		background: var(--gold-bright);
-	}
-
-	.card img {
-		display: block;
-		width: 100%;
-		aspect-ratio: 1;
-		object-fit: contain;
 	}
 
 	.meta {
@@ -1340,11 +1327,7 @@
 			3px 3px 0 var(--primary);
 	}
 
-	.recent-grid img {
-		display: block;
-		width: 100%;
-		aspect-ratio: 1;
-		object-fit: contain;
+	.recent-grid :global(.asset-thumb) {
 		background: linear-gradient(135deg, #e8eef6 0%, #d6dde8 100%);
 		box-shadow: inset 0 0 0 2px #0f172a;
 	}
