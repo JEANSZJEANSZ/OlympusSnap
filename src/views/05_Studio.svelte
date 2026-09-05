@@ -52,6 +52,32 @@
 									onReady={onEditorReady}
 								/>
 							{/if}
+
+							{#if mobileSession && (saving || saveDone)}
+								<div
+									class={['download-status', { done: saveDone }]}
+									role="status"
+									aria-live="polite"
+									aria-busy={saving}
+									transition:fade={{ duration: reduced ? 0 : 180 }}
+								>
+									<div class="download-status-card">
+										{#if saving}
+											<span class="dl-spinner dl-spinner-lg" aria-hidden="true"></span>
+										{:else}
+											<span class="dl-check-wrap" aria-hidden="true">
+												<svg viewBox="0 0 24 24">
+													<path
+														fill="currentColor"
+														d="M9.2 16.2 4.8 11.8l-1.4 1.4 5.8 5.8 12-12-1.4-1.4z"
+													/>
+												</svg>
+											</span>
+										{/if}
+										<p>{saveDone ? 'Saved' : 'Preparing snap…'}</p>
+									</div>
+								</div>
+							{/if}
 						</div>
 					</div>
 				</aside>
@@ -103,17 +129,29 @@
 				>
 					<button
 						type="button"
-						class="story-btn"
-						aria-label={saving ? 'Saving' : 'Download snap'}
-						disabled={busy || !$capturedImageData}
+						class={['story-btn', { 'is-working': saving || saveDone }]}
+						aria-label={saving ? 'Preparing snap' : saveDone ? 'Snap saved' : 'Download snap'}
+						aria-busy={saving}
+						disabled={busy || saveDone || !$capturedImageData}
 						onclick={saveMySnap}
 					>
-						<svg viewBox="0 0 24 24" aria-hidden="true">
-							<path
-								fill="currentColor"
-								d="M11 3h2v10h3l-4 5-4-5h3V3zm-7 16h16v2H4v-2z"
-							/>
-						</svg>
+						{#if saving}
+							<span class="dl-spinner" aria-hidden="true"></span>
+						{:else if saveDone}
+							<svg viewBox="0 0 24 24" aria-hidden="true">
+								<path
+									fill="currentColor"
+									d="M9.2 16.2 4.8 11.8l-1.4 1.4 5.8 5.8 12-12-1.4-1.4z"
+								/>
+							</svg>
+						{:else}
+							<svg viewBox="0 0 24 24" aria-hidden="true">
+								<path
+									fill="currentColor"
+									d="M11 3h2v10h3l-4 5-4-5h3V3zm-7 16h16v2H4v-2z"
+								/>
+							</svg>
+						{/if}
 					</button>
 					<button
 						type="button"
@@ -187,6 +225,7 @@
 
 <script>
 	import { onMount, tick } from 'svelte';
+	import { fade } from 'svelte/transition';
 	import { get } from 'svelte/store';
 	import {
 		activeStickers,
@@ -217,6 +256,7 @@
 	let reduced = $state(false);
 	let exiting = $state(false);
 	let saving = $state(false);
+	let saveDone = $state(false);
 	let sharing = $state(false);
 	const guestFromUrl = typeof location !== 'undefined' && !!getSessionFromUrl();
 	let mobileSession = $state(guestFromUrl);
@@ -417,15 +457,21 @@
 	}
 
 	async function saveMySnap() {
-		if (saving || entryBusy || exiting) return;
+		if (saving || saveDone || entryBusy || exiting) return;
 		saving = true;
+		saveDone = false;
+		shareFallbackOpen = false;
+		stickerSheetOpen = false;
 		try {
 			const url = await exportCurrent();
 			if (!url) return;
 			downloadDataUrl(url);
-			shareFallbackOpen = false;
+			saving = false;
+			saveDone = true;
+			await new Promise((r) => setTimeout(r, reduced ? 420 : 900));
 		} finally {
 			saving = false;
+			saveDone = false;
 		}
 	}
 
@@ -540,6 +586,7 @@
 	}
 
 	.mobile-session .frame-pedestal {
+		position: relative;
 		width: 100%;
 		height: 100%;
 		max-width: 100%;
@@ -619,8 +666,95 @@
 		cursor: not-allowed;
 	}
 
+	.story-btn.is-working {
+		color: #fff4c2;
+		background: rgba(18, 18, 18, 0.62);
+		box-shadow:
+			0 0 0 1px color-mix(in srgb, #fff4c2 38%, transparent),
+			0 0 16px color-mix(in srgb, #d4a017 32%, transparent);
+	}
+
+	.story-btn.is-working:disabled {
+		opacity: 1;
+		cursor: wait;
+	}
+
 	.story-btn:active:not(:disabled) {
 		transform: scale(0.94);
+	}
+
+	.dl-spinner {
+		width: 1.18rem;
+		height: 1.18rem;
+		border-radius: 50%;
+		border: 2px solid color-mix(in srgb, #fff4c2 22%, transparent);
+		border-top-color: #fff4c2;
+		animation: session-spin 0.7s linear infinite;
+	}
+
+	.dl-spinner-lg {
+		width: 1.35rem;
+		height: 1.35rem;
+		flex-shrink: 0;
+	}
+
+	.download-status {
+		position: absolute;
+		inset: 0;
+		z-index: 3;
+		display: grid;
+		place-items: center;
+		pointer-events: auto;
+		background: radial-gradient(
+			ellipse at center,
+			rgba(7, 25, 54, 0.38) 0%,
+			rgba(7, 25, 54, 0.12) 70%
+		);
+	}
+
+	.download-status-card {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		padding: 0.72rem 1.1rem 0.72rem 0.82rem;
+		border-radius: 999px;
+		background: rgba(10, 18, 32, 0.72);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
+		box-shadow:
+			0 10px 28px rgba(3, 12, 27, 0.45),
+			inset 0 1px 0 color-mix(in srgb, #fff8df 16%, transparent);
+		color: #fff8df;
+	}
+
+	.download-status-card p {
+		margin: 0;
+		font-family: var(--font-pixel);
+		font-size: 0.62rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #fff8df;
+	}
+
+	.download-status.done .download-status-card {
+		box-shadow:
+			0 10px 28px rgba(3, 12, 27, 0.45),
+			0 0 18px color-mix(in srgb, #d4a017 28%, transparent),
+			inset 0 1px 0 color-mix(in srgb, #fff8df 16%, transparent);
+	}
+
+	.dl-check-wrap {
+		display: grid;
+		place-items: center;
+		width: 1.35rem;
+		height: 1.35rem;
+		flex-shrink: 0;
+		color: #fff4c2;
+	}
+
+	.dl-check-wrap svg {
+		width: 1.15rem;
+		height: 1.15rem;
 	}
 
 	.trash-target {
@@ -745,7 +879,8 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.session-spinner {
+		.session-spinner,
+		.dl-spinner {
 			animation: none;
 			border-top-color: color-mix(in srgb, #fff8df 48%, transparent);
 		}
