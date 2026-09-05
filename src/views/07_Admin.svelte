@@ -477,8 +477,8 @@
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 	import FrameSlotEditor from '../lib/components/FrameSlotEditor.svelte';
-	import FrameCropEditor from '../lib/components/FrameCropEditor.svelte';
 	import AssetThumb from '../lib/components/AssetThumb.svelte';
+	import FrameCropEditor from '../lib/components/FrameCropEditor.svelte';
 
 	/** @type {HTMLElement | undefined} */
 	let rootEl = $state();
