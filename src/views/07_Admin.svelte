@@ -194,11 +194,11 @@
 									>
 										{#if selectedIds.includes(item.id)}✓{/if}
 									</span>
-									<AssetThumb src={item.src} alt="" />
+									<img src={item.src} alt="" />
 								</button>
 							{:else}
 								<div class="thumb">
-									<AssetThumb src={item.src} alt="" />
+									<img src={item.src} alt="" />
 								</div>
 							{/if}
 							<div class="meta">
@@ -244,6 +244,9 @@
 				</div>
 			{/if}
 
+			{#if $catalogError}
+				<p class="status" role="alert">Cloud catalog down: {$catalogError}</p>
+			{/if}
 			{#if status}
 				<p class="status" role="status">{status}</p>
 			{/if}
@@ -394,10 +397,7 @@
 							{#each recent as item (item.id)}
 								<li>
 									{#if item.previewBase64}
-										<AssetThumb
-											src={`data:image/png;base64,${item.previewBase64}`}
-											alt=""
-										/>
+										<img src={`data:image/png;base64,${item.previewBase64}`} alt="" />
 									{/if}
 									<span>{item.frameId}</span>
 									<span>{item.createdAt}</span>
@@ -449,6 +449,7 @@
 	import {
 		frames,
 		stickers,
+		catalogError,
 		showSeedFrames,
 		randomFrame,
 		oracleShuffleMs,
@@ -477,7 +478,6 @@
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 	import FrameSlotEditor from '../lib/components/FrameSlotEditor.svelte';
-	import AssetThumb from '../lib/components/AssetThumb.svelte';
 	import FrameCropEditor from '../lib/components/FrameCropEditor.svelte';
 
 	/** @type {HTMLElement | undefined} */
@@ -1187,6 +1187,13 @@
 		padding: 0.35rem;
 	}
 
+	.card img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: contain;
+	}
+
 	.select-hit {
 		position: relative;
 		display: block;
@@ -1198,6 +1205,13 @@
 		background:
 			linear-gradient(135deg, #e8eef6 0%, #d6dde8 100%);
 		box-shadow: inset 0 0 0 2px #0f172a;
+	}
+
+	.select-hit img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: contain;
 	}
 
 	.select-mark {
@@ -1327,7 +1341,11 @@
 			3px 3px 0 var(--primary);
 	}
 
-	.recent-grid :global(.asset-thumb) {
+	.recent-grid img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: contain;
 		background: linear-gradient(135deg, #e8eef6 0%, #d6dde8 100%);
 		box-shadow: inset 0 0 0 2px #0f172a;
 	}

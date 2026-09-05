@@ -136,6 +136,10 @@ export const oracleShuffleMs = writable(readOracleShuffleMs());
 /** @type {import('svelte/store').Writable<boolean>} */
 export const assetsReady = writable(false);
 
+/** Last listCustoms/IndexedDB failure; null when catalog load succeeded. */
+/** @type {import('svelte/store').Writable<string | null>} */
+export const catalogError = writable(null);
+
 /** Latest customs snapshot so toggles can rebuild without another round-trip. */
 /** @type {import('./idb.js').CustomAsset[]} */
 let cachedCustoms = [];
@@ -282,13 +286,24 @@ export function setOracleShuffleMs(ms) {
 	}
 }
 
+/**
+ * @param {unknown} err
+ * @returns {string}
+ */
+function catalogErrorMessage(err) {
+	if (err instanceof Error && err.message) return err.message;
+	return String(err || 'Unknown error');
+}
+
 /** Load customs from cloud or IndexedDB and merge with seeds. */
 export async function initAssets() {
 	try {
 		const customs = await loadCustoms();
 		rebuildStores(customs);
+		catalogError.set(null);
 	} catch (err) {
 		console.warn('[assets] Custom catalog unavailable, using seeds only', err);
+		catalogError.set(catalogErrorMessage(err));
 		rebuildStores([]);
 	} finally {
 		assetsReady.set(true);
