@@ -7,7 +7,21 @@
 		aria-label="Stickers"
 		transition:fly={{ y: 48, duration: reduced ? 0 : 280 }}
 	>
-		<div class="handle" aria-hidden="true"></div>
+		<div class="sheet-head">
+			<span class="head-spacer" aria-hidden="true"></span>
+			<div class="handle" aria-hidden="true"></div>
+			<button type="button" class="close" aria-label="Close stickers" onclick={onClose}>
+				<svg viewBox="0 0 24 24" aria-hidden="true">
+					<path
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2.2"
+						stroke-linecap="round"
+						d="M6 6l12 12M18 6 6 18"
+					/>
+				</svg>
+			</button>
+		</div>
 		<label class="search">
 			<svg viewBox="0 0 24 24" aria-hidden="true">
 				<path
@@ -149,12 +163,52 @@
 		color: #fff8df;
 	}
 
+	.sheet-head {
+		display: grid;
+		grid-template-columns: 2.65rem minmax(0, 1fr) 2.65rem;
+		align-items: center;
+		min-height: 2.65rem;
+	}
+
+	.head-spacer {
+		width: 2.65rem;
+		height: 2.65rem;
+	}
+
 	.handle {
 		width: 2.4rem;
 		height: 0.28rem;
-		margin: 0.15rem auto 0.15rem;
+		margin: 0 auto;
 		border-radius: 99px;
 		background: color-mix(in srgb, #fff 28%, transparent);
+	}
+
+	.close {
+		display: grid;
+		place-items: center;
+		width: 2.65rem;
+		height: 2.65rem;
+		padding: 0;
+		border: 0;
+		border-radius: 999px;
+		background: color-mix(in srgb, #fff 10%, transparent);
+		color: #fff8df;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.close svg {
+		width: 1.15rem;
+		height: 1.15rem;
+	}
+
+	.close:active {
+		transform: scale(0.94);
+	}
+
+	.close:focus-visible {
+		outline: 2px solid #fff8df;
+		outline-offset: 2px;
 	}
 
 	.search {
