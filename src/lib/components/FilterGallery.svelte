@@ -16,7 +16,13 @@
 				disabled={disabled}
 				onclick={() => onSelect?.(preset.id)}
 			>
-				<span class="swatch" style:filter={preset.cssFilter === 'none' ? '' : preset.cssFilter}></span>
+				<span
+					class="swatch"
+					class:grain={!!preset.grain}
+					class:vignette={!!preset.vignette}
+					class:leak={preset.leak === 'warm'}
+					style:filter={preset.cssFilter === 'none' ? '' : preset.cssFilter}
+				></span>
 				<span class="label">{preset.label}</span>
 			</button>
 		{/each}
@@ -103,6 +109,8 @@
 	}
 
 	.swatch {
+		position: relative;
+		overflow: hidden;
 		width: var(--booth-filter-swatch, 4.75rem);
 		height: var(--booth-filter-swatch, 4.75rem);
 		flex-shrink: 0;
@@ -110,6 +118,37 @@
 		background:
 			linear-gradient(145deg, #e8b896 0%, #c97858 38%, #8b4a3a 72%, #3a241c 100%);
 		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+	}
+
+	.swatch.vignette {
+		box-shadow:
+			inset 0 0 0 1px rgba(255, 255, 255, 0.25),
+			inset 0 0 1.15rem 0.35rem rgba(20, 8, 4, 0.72);
+	}
+
+	.swatch.grain::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		opacity: 0.4;
+		background-image: repeating-radial-gradient(
+			circle at 30% 40%,
+			rgba(255, 255, 255, 0.28) 0 0.6px,
+			transparent 0.6px 2.4px
+		);
+	}
+
+	.swatch.leak::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: radial-gradient(
+			ellipse at 18% 12%,
+			rgba(255, 196, 92, 0.72) 0%,
+			transparent 55%
+		);
 	}
 
 	.label {

@@ -1,5 +1,5 @@
 /**
- * Live camera preview — mirror + CSS color grade only.
+ * Live camera preview — mirror + CSS color grade + analog overlays.
  */
 import {
 	drawMirroredVideo,
@@ -82,7 +82,7 @@ export function stopLivePreview() {
 }
 
 /**
- * Capture pipeline: raw still → color grade.
+ * Capture pipeline: raw still → color grade + analog overlays.
  * @param {HTMLVideoElement} videoEl
  * @param {import('../canvas/photoKonva.js').FilterPresetId} presetId
  * @returns {Promise<string | null>}
