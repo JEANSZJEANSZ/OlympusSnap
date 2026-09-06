@@ -3,7 +3,10 @@
 		<button
 			type="button"
 			class="brand"
-			aria-label="Home — long-press for Admin"
+			class:home-locked={lockBrandHome}
+			aria-label={lockBrandHome
+				? 'Olympus Snap — long-press for Admin'
+				: 'Home — long-press for Admin'}
 			onpointerdown={onBrandPointerDown}
 			onpointerup={clearPress}
 			onpointerleave={clearPress}
@@ -47,6 +50,7 @@
 	let suppressClick = false;
 
 	const showBoothGate = $derived(!$boothUnlocked && !isBoothPublicRoute($route));
+	const lockBrandHome = $derived($route === 'studio');
 
 	onMount(() => {
 		initAssets();
@@ -75,6 +79,7 @@
 			suppressClick = false;
 			return;
 		}
+		if (lockBrandHome) return;
 		go('landing');
 	}
 </script>
@@ -112,6 +117,10 @@
 		cursor: pointer;
 		-webkit-touch-callout: none;
 		user-select: none;
+	}
+
+	.brand.home-locked {
+		cursor: default;
 	}
 
 	.cart {
