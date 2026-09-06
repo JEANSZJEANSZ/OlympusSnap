@@ -155,13 +155,39 @@
 					</button>
 					<button
 						type="button"
-						class="story-btn story-btn-sticker"
+						class="story-btn"
 						aria-label="Stickers and GIFs"
 						aria-expanded={stickerSheetOpen}
 						disabled={busy}
 						onclick={openStickerSheet}
 					>
-						<span class="story-emoji" aria-hidden="true">😊</span>
+						<svg viewBox="0 0 24 24" aria-hidden="true">
+							<path
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linejoin="round"
+								stroke-linecap="round"
+								d="M19.6 13.15A7.6 7.6 0 1 0 11.15 20.1c.42.08.86.12 1.3.12.48 0 .75-.38.75-.75v-2.85c0-1.18.96-2.14 2.14-2.14H18c.4 0 .75-.28.75-.72a7.55 7.55 0 0 0-.15-1.56z"
+							/>
+							<path
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linejoin="round"
+								stroke-linecap="round"
+								d="M15.35 14.48h2.7c.48 0 .87.4.87.87v2.7M15.35 14.48 18.92 18.05"
+							/>
+							<circle cx="9.35" cy="10.35" r="1.05" fill="currentColor" />
+							<circle cx="13.85" cy="10.35" r="1.05" fill="currentColor" />
+							<path
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								d="M9.55 13.3c.8 1.25 2.2 1.8 3.6 1.5"
+							/>
+						</svg>
 					</button>
 					<button
 						type="button"
@@ -650,15 +676,6 @@
 	.story-btn svg {
 		width: 1.28rem;
 		height: 1.28rem;
-	}
-
-	.story-emoji {
-		font-size: 1.45rem;
-		line-height: 1;
-	}
-
-	.story-btn-sticker {
-		font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
 	}
 
 	.story-btn:disabled {
