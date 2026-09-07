@@ -100,7 +100,7 @@
 					{/if}
 				</p>
 
-				{#if gestureRite && !reviewOpen}
+				{#if gestureRite && !(reviewOpen && isLastCanvas)}
 					<div class="gesture-rite" aria-live="polite">
 						<img class="gesture-rite-art" src={gestureRite.src} alt="" width="96" height="96" />
 						<p class="gesture-rite-cue">{gestureRite.cue}</p>
@@ -185,13 +185,7 @@
 		clearCaptures,
 		selectedFrameId
 	} from '../lib/stores/stores.js';
-	import {
-		getLiveFrameById,
-		assetsReady,
-		gestureSnap,
-		gestureSnapKind,
-		GESTURE_SNAP_KINDS
-	} from '../lib/assets/assetStore.js';
+	import { getLiveFrameById, assetsReady, gestureSnap } from '../lib/assets/assetStore.js';
 	import { beginImageHandoff, imageHandoffBusy } from '../lib/fx/imageHandoff.js';
 	import { playViewExit } from '../lib/fx/viewExitMotion.js';
 	import {
@@ -208,6 +202,7 @@
 		disposeGestureShutter,
 		getHandOverlay
 	} from '../lib/vision/gestureShutter.js';
+	import { buildSnapGesturePlaylist } from '../lib/vision/snapGesturePlaylist.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import FilterGallery from '../lib/components/FilterGallery.svelte';
@@ -296,10 +291,13 @@
 		}
 	});
 
-	const gestureRite = $derived.by(() => {
-		if (!$gestureSnap) return null;
-		const id = GESTURE_SNAP_KINDS.find((k) => k.id === $gestureSnapKind)?.id ?? 'Victory';
-		return GESTURE_RITE[id];
+	const catalogSettled = $derived($assetsReady && (!$selectedFrameId || !!frame));
+
+	const playlist = $derived.by(() => {
+		if (!catalogSettled) {
+			return /** @type {import('../lib/vision/snapGesturePlaylist.js').SnapGestureKind[]} */ ([]);
+		}
+		return buildSnapGesturePlaylist(snapTotal);
 	});
 
 	const poseText = $derived(
@@ -324,6 +322,16 @@
 		if (ritualOpen) return -1;
 		if (reviewOpen) return isLastCanvas ? -1 : slotIndex + 1;
 		return slotIndex;
+	});
+
+	const slotKind = $derived.by(() => {
+		const i = liveSlot >= 0 ? liveSlot : slotIndex;
+		return playlist[i] ?? playlist[slotIndex] ?? 'Victory';
+	});
+
+	const gestureRite = $derived.by(() => {
+		if (!$gestureSnap || !playlist.length) return null;
+		return GESTURE_RITE[slotKind] ?? GESTURE_RITE.Victory;
 	});
 
 	const reviewText = $derived(
@@ -413,10 +421,17 @@
 
 	$effect(() => {
 		const enabled = $gestureSnap;
-		const kind = $gestureSnapKind;
+		const kind = slotKind;
 		const video = videoEl;
 
-		if (!enabled || !video || !cameraReady || ritualOpen || (reviewOpen && isLastCanvas)) {
+		if (
+			!enabled ||
+			!playlist.length ||
+			!video ||
+			!cameraReady ||
+			ritualOpen ||
+			(reviewOpen && isLastCanvas)
+		) {
 			if (!enabled) disposeGestureShutter();
 			else stopGestureShutter();
 			return;

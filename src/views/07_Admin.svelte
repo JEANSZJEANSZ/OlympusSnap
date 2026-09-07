@@ -301,8 +301,8 @@
 				<p class="panel-kicker">BOOTH FLOW</p>
 				<p class="seed-copy">
 					Random Frame skips pull-to-select. Pythia chooses a relic on the Delphi altar.
-					Gesture Snap lets guests hold the Admin-selected gesture (victory / stop / thumbs up) to
-					start the camera rite (SNAP stays). Gesture Pick lets guests swipe an open palm left/right to change
+					Gesture Snap lets guests hold the pose shown on Camera for each canvas
+					(victory / stop / thumbs up) to start the rite (SNAP stays). Gesture Pick lets guests swipe an open palm left/right to change
 					the relic; make a fist and pull down to tug the rope (oracle ignores it). Booth flow toggles
 					persist for this browser tab session.
 				</p>
@@ -331,14 +331,8 @@
 						onclick={() => {
 							const next = !$gestureSnap;
 							setGestureSnap(next);
-							const kindPhrase =
-								$gestureSnapKind === 'Open_Palm'
-									? 'stop sign'
-									: $gestureSnapKind === 'Thumb_Up'
-										? 'thumbs up'
-										: 'victory sign';
 							status = next
-								? `Gesture Snap ON — hold ${kindPhrase} to start the rite.`
+								? 'Gesture Snap ON — hold the pose shown on Camera for each canvas.'
 								: 'Gesture Snap OFF — SNAP button only.';
 						}}
 					>
@@ -361,29 +355,6 @@
 						<span class="seed-toggle-label">GESTURE PICK</span>
 						<span class="seed-toggle-state">{$gestureFrame ? 'ON' : 'OFF'}</span>
 					</button>
-				</div>
-				<div class="seed-toggles gesture-kind-row" role="group" aria-label="Gesture Snap trigger">
-					{#each GESTURE_SNAP_KINDS as opt (opt.id)}
-						<button
-							type="button"
-							class="seed-toggle"
-							class:on={$gestureSnapKind === opt.id}
-							aria-pressed={$gestureSnapKind === opt.id}
-							disabled={!$gestureSnap}
-							onclick={() => {
-								setGestureSnapKind(opt.id);
-								const pickPhrase =
-									opt.id === 'Open_Palm'
-										? 'stop sign'
-										: opt.id === 'Thumb_Up'
-											? 'thumbs up'
-											: 'victory sign';
-								status = `Gesture Snap trigger: ${pickPhrase}.`;
-							}}
-						>
-							<span class="seed-toggle-label">{opt.label}</span>
-						</button>
-					{/each}
 				</div>
 				<label class="shuffle-slider">
 					<span class="shuffle-slider-head">
@@ -517,16 +488,13 @@
 		showSeedFrames,
 		randomFrame,
 		gestureSnap,
-		gestureSnapKind,
 		gestureFrame,
-		GESTURE_SNAP_KINDS,
 		oracleShuffleMs,
 		ORACLE_SHUFFLE_MIN_MS,
 		ORACLE_SHUFFLE_MAX_MS,
 		setShowSeedFrames,
 		setRandomFrame,
 		setGestureSnap,
-		setGestureSnapKind,
 		setGestureFrame,
 		setOracleShuffleMs,
 		addFrame,

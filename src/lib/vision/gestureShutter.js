@@ -1,7 +1,7 @@
 /**
  * Light gesture shutter for Camera Temple.
  * MediaPipe GestureRecognizer ~15fps / 2 hands / GPU — pause when not armed; close on leave.
- * Admin pick (Victory / Open_Palm / Thumb_Up) filtered in JS, not classifier allowlist.
+ * Current Camera-playlist pose (Victory / Open_Palm / Thumb_Up) filtered in JS, not classifier allowlist.
  */
 
 import { disposeGestureRecognizer, ensureGestureRecognizer } from './mediapipeHands.js';
