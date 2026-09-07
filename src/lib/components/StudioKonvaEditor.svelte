@@ -122,6 +122,11 @@
 		return editor?.exportDataUrl() ?? null;
 	}
 
+	/** @returns {Promise<Blob | null>} */
+	export async function exportBlob() {
+		return (await editor?.exportBlob?.()) ?? null;
+	}
+
 	/**
 	 * @param {number} factor
 	 * @returns {boolean}

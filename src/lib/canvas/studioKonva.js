@@ -526,6 +526,36 @@ export async function createStudioEditor(opts) {
 	container.addEventListener('touchcancel', onTouchEnd, { passive: true, capture: true });
 	container.addEventListener('touchend', onTouchEnd, { passive: true, capture: true });
 
+	function prepareNativeExport() {
+		transformer.nodes([]);
+		stickerLayer.batchDraw();
+		uiLayer.batchDraw();
+
+		const prevScale = stage.scaleX();
+		const prevW = stage.width();
+		const prevH = stage.height();
+
+		stage.scale({ x: 1, y: 1 });
+		stage.width(frameW);
+		stage.height(frameH);
+		stickerLayer.batchDraw();
+
+		return { prevScale, prevW, prevH };
+	}
+
+	/**
+	 * @param {{ prevScale: number; prevW: number; prevH: number }} snap
+	 */
+	function restoreNativeExport(snap) {
+		stage.scale({ x: snap.prevScale, y: snap.prevScale });
+		stage.width(snap.prevW);
+		stage.height(snap.prevH);
+		applyTransformerChrome(transformer, touchMode);
+		uiLayer.moveToTop();
+		stickerLayer.batchDraw();
+		uiLayer.batchDraw();
+	}
+
 	return {
 		stage,
 		frameW,
@@ -640,30 +670,51 @@ export async function createStudioEditor(opts) {
 
 		/** @returns {string} */
 		exportDataUrl() {
-			transformer.nodes([]);
-			stickerLayer.batchDraw();
-			uiLayer.batchDraw();
+			const snap = prepareNativeExport();
+			try {
+				return stage.toDataURL({ pixelRatio: 1, mimeType: 'image/png' });
+			} finally {
+				restoreNativeExport(snap);
+			}
+		},
 
-			const prevScale = stage.scaleX();
-			const prevW = stage.width();
-			const prevH = stage.height();
+		/** @returns {Promise<Blob | null>} */
+		async exportBlob() {
+			const snap = prepareNativeExport();
+			try {
+				const opts = { pixelRatio: 1, mimeType: 'image/png' };
+				if (typeof stage.toBlob === 'function') {
+					try {
+						const result = stage.toBlob(opts);
+						if (result != null && typeof result.then === 'function') {
+							const blob = await result;
+							if (blob) return blob;
+						} else {
+							const blob = await new Promise((resolve) => {
+								stage.toBlob({
+									...opts,
+									callback: (b) => resolve(b ?? null)
+								});
+							});
+							if (blob) return blob;
+						}
+					} catch {
+						/* fall through to dataURL */
+					}
+				}
 
-			stage.scale({ x: 1, y: 1 });
-			stage.width(frameW);
-			stage.height(frameH);
-			stickerLayer.batchDraw();
-
-			const out = stage.toDataURL({ pixelRatio: 1, mimeType: 'image/png' });
-
-			stage.scale({ x: prevScale, y: prevScale });
-			stage.width(prevW);
-			stage.height(prevH);
-			applyTransformerChrome(transformer, touchMode);
-			uiLayer.moveToTop();
-			stickerLayer.batchDraw();
-			uiLayer.batchDraw();
-
-			return out;
+				const dataUrl = stage.toDataURL(opts);
+				if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
+				const match = /^data:([^;]+);base64,(.+)$/i.exec(dataUrl);
+				if (!match) return null;
+				const mime = match[1] || 'image/png';
+				const binary = atob(match[2]);
+				const bytes = new Uint8Array(binary.length);
+				for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+				return new Blob([bytes], { type: mime });
+			} finally {
+				restoreNativeExport(snap);
+			}
 		},
 
 		destroy() {

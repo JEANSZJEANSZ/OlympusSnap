@@ -268,7 +268,7 @@
 	import StudioKonvaEditor from '../lib/components/StudioKonvaEditor.svelte';
 	import StickerSheet from '../lib/components/StickerSheet.svelte';
 	import ShareFallbackSheet from '../lib/components/ShareFallbackSheet.svelte';
-	import { downloadDataUrl, shareCompositeFile } from '../lib/share/shareComposite.js';
+	import { downloadBlob, shareCompositeFile } from '../lib/share/shareComposite.js';
 	import { isPointInRect } from '../lib/utils/hitTest.js';
 	import { warmFrameImages } from '../lib/utils/loadImageForCanvas.js';
 
@@ -482,6 +482,11 @@
 		return url;
 	}
 
+	/** @returns {Promise<Blob | null>} */
+	async function exportCurrentBlob() {
+		return (await editorRef?.exportBlob?.()) ?? null;
+	}
+
 	function waitForPaint() {
 		return new Promise((resolve) => {
 			requestAnimationFrame(() => requestAnimationFrame(resolve));
@@ -497,9 +502,10 @@
 		await tick();
 		await waitForPaint();
 		try {
-			const url = await exportCurrent();
-			if (!url) return;
-			downloadDataUrl(url);
+			const blob = await exportCurrentBlob();
+			if (!blob) return;
+			downloadBlob(blob);
+			await waitForPaint();
 			saving = false;
 			saveDone = true;
 			await new Promise((r) => setTimeout(r, reduced ? 420 : 900));

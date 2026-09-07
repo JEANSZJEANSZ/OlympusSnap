@@ -8,10 +8,9 @@ const PNG_MIME = 'image/png';
 
 /**
  * @param {string} dataUrl
- * @param {string} [filename]
- * @returns {File | null}
+ * @returns {Blob | null}
  */
-export function dataUrlToFile(dataUrl, filename = 'olympus-snap.png') {
+export function dataUrlToBlob(dataUrl) {
 	if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
 	const match = /^data:([^;]+);base64,(.+)$/i.exec(dataUrl);
 	if (!match) return null;
@@ -19,7 +18,18 @@ export function dataUrlToFile(dataUrl, filename = 'olympus-snap.png') {
 	const binary = atob(match[2]);
 	const bytes = new Uint8Array(binary.length);
 	for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-	return new File([bytes], filename, { type: mime, lastModified: Date.now() });
+	return new Blob([bytes], { type: mime });
+}
+
+/**
+ * @param {string} dataUrl
+ * @param {string} [filename]
+ * @returns {File | null}
+ */
+export function dataUrlToFile(dataUrl, filename = 'olympus-snap.png') {
+	const blob = dataUrlToBlob(dataUrl);
+	if (!blob) return null;
+	return new File([blob], filename, { type: blob.type || PNG_MIME, lastModified: Date.now() });
 }
 
 /**
@@ -90,17 +100,44 @@ export function facebookHomeUrl() {
 	return 'https://www.facebook.com/';
 }
 
+/** @type {{ url: string; timer: ReturnType<typeof setTimeout> } | null} */
+let pendingDownloadRevoke = null;
+
+function clearPendingDownloadRevoke() {
+	if (!pendingDownloadRevoke) return;
+	clearTimeout(pendingDownloadRevoke.timer);
+	URL.revokeObjectURL(pendingDownloadRevoke.url);
+	pendingDownloadRevoke = null;
+}
+
 /**
- * @param {string} dataUrl
+ * @param {Blob} blob
  * @param {string} [filename]
  */
-export function downloadDataUrl(dataUrl, filename = 'olympus-snap.png') {
-	if (typeof document === 'undefined' || !dataUrl) return;
+export function downloadBlob(blob, filename = 'olympus-snap.png') {
+	if (typeof document === 'undefined' || !blob) return;
+	clearPendingDownloadRevoke();
+	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
-	a.href = dataUrl;
+	a.href = url;
 	a.download = filename;
 	a.rel = 'noopener';
 	document.body.appendChild(a);
 	a.click();
 	a.remove();
+	const timer = setTimeout(() => {
+		URL.revokeObjectURL(url);
+		if (pendingDownloadRevoke?.url === url) pendingDownloadRevoke = null;
+	}, 40_000);
+	pendingDownloadRevoke = { url, timer };
+}
+
+/**
+ * @param {string} dataUrl
+ * @param {string} [filename]
+ */
+export function downloadDataUrl(dataUrl, filename = 'olympus-snap.png') {
+	const blob = dataUrlToBlob(dataUrl);
+	if (!blob) return;
+	downloadBlob(blob, filename);
 }
