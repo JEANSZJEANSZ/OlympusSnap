@@ -190,7 +190,7 @@
 		try {
 			qrDataUrl = await QRCode.toDataURL(studioUrl, {
 				margin: 1,
-				width: 280,
+				width: 512,
 				color: { dark: '#071936', light: '#fff8df' }
 			});
 		} catch (err) {
@@ -450,8 +450,8 @@
 	}
 
 	.qr-box {
-		width: clamp(8.5rem, 22vw, 10rem);
-		height: clamp(8.5rem, 22vw, 10rem);
+		width: clamp(14rem, min(36vw, 42vh), 20rem);
+		height: clamp(14rem, min(36vw, 42vh), 20rem);
 		padding: 0.55rem;
 		background: color-mix(in srgb, var(--surface) 90%, #071936);
 		color: var(--text);
@@ -673,8 +673,8 @@
 		}
 
 		.qr-box {
-			width: min(72vw, 9rem);
-			height: min(72vw, 9rem);
+			width: min(72vw, 14rem);
+			height: min(72vw, 14rem);
 		}
 
 		.detail-panel :global(.dialog .body) {

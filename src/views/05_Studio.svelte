@@ -482,12 +482,20 @@
 		return url;
 	}
 
+	function waitForPaint() {
+		return new Promise((resolve) => {
+			requestAnimationFrame(() => requestAnimationFrame(resolve));
+		});
+	}
+
 	async function saveMySnap() {
 		if (busy || !$capturedImageData) return;
 		saving = true;
 		saveDone = false;
 		shareFallbackOpen = false;
 		stickerSheetOpen = false;
+		await tick();
+		await waitForPaint();
 		try {
 			const url = await exportCurrent();
 			if (!url) return;
@@ -505,6 +513,8 @@
 		if (busy) return;
 		sharing = true;
 		stickerSheetOpen = false;
+		await tick();
+		await waitForPaint();
 		try {
 			const url = await exportCurrent();
 			if (!url) return;
