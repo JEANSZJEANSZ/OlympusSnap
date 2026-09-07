@@ -20,6 +20,7 @@ const PIN_KEY = 'olympus-snap-admin-pin';
 const DEFAULT_PIN = 'olympus';
 const SEED_FRAMES_KEY = 'olympus-snap-show-seed-frames';
 const RANDOM_FRAME_KEY = 'olympus-snap-random-frame';
+const GESTURE_SNAP_KEY = 'olympus-snap-gesture-snap';
 const ORACLE_SHUFFLE_KEY = 'olympus-snap-oracle-shuffle';
 const ORACLE_SHUFFLE_MS_KEY = 'olympus-snap-oracle-shuffle-ms';
 /** Gap between cloud bulk-delete requests to avoid 429 rate limits. */
@@ -128,6 +129,13 @@ export const showSeedFrames = writable(readFlag(SEED_FRAMES_KEY, true));
  */
 /** @type {import('svelte/store').Writable<boolean>} */
 export const randomFrame = writable(readSessionFlag(RANDOM_FRAME_KEY, false));
+
+/**
+ * When true, Camera Temple arms Victory-gesture shutter (SNAP button still works).
+ * Session-scoped; default on for booth guests.
+ */
+/** @type {import('svelte/store').Writable<boolean>} */
+export const gestureSnap = writable(readSessionFlag(GESTURE_SNAP_KEY, true));
 
 /** Oracle lot-spin duration in ms. Session-scoped. */
 /** @type {import('svelte/store').Writable<number>} */
@@ -273,6 +281,12 @@ export function applyGuestCatalogFlagsFromUrl() {
 export function setRandomFrame(on) {
 	randomFrame.set(!!on);
 	writeSessionFlag(RANDOM_FRAME_KEY, !!on);
+}
+
+/** @param {boolean} on */
+export function setGestureSnap(on) {
+	gestureSnap.set(!!on);
+	writeSessionFlag(GESTURE_SNAP_KEY, !!on);
 }
 
 /** @param {number} ms */

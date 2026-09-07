@@ -178,7 +178,7 @@
 		clearCaptures,
 		selectedFrameId
 	} from '../lib/stores/stores.js';
-	import { getLiveFrameById, assetsReady } from '../lib/assets/assetStore.js';
+	import { getLiveFrameById, assetsReady, gestureSnap } from '../lib/assets/assetStore.js';
 	import { beginImageHandoff, imageHandoffBusy } from '../lib/fx/imageHandoff.js';
 	import { playViewExit } from '../lib/fx/viewExitMotion.js';
 	import {
@@ -189,6 +189,11 @@
 	import { startCamera, stopCamera } from '../lib/utils/camera.js';
 	import { compositeFramePhotos } from '../lib/utils/canvasRenderer.js';
 	import { startLivePreview, stopLivePreview } from '../lib/vision/livePreview.js';
+	import {
+		startGestureShutter,
+		stopGestureShutter,
+		disposeGestureShutter
+	} from '../lib/vision/gestureShutter.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
 	import FilterGallery from '../lib/components/FilterGallery.svelte';
@@ -260,13 +265,24 @@
 	const frameAspect = $derived(`${frameNatW} / ${frameNatH}`);
 	const frameAspectNum = $derived(frameNatH > 0 ? frameNatW / frameNatH : 3 / 4);
 
-	const poseText = $derived(
-		useSlots
+	const poseText = $derived.by(() => {
+		const base = useSlots
 			? `Canvas ${slotIndex + 1} of ${snapTotal}. ${poses[slotIndex % poses.length]}`
-			: sessionPose
-	);
+			: sessionPose;
+		if (!$gestureSnap) return base;
+		return `${base} Hold the victory sign to begin the rite — or tap SNAP.`;
+	});
 
 	const isLastCanvas = $derived(slotIndex + 1 >= snapTotal);
+
+	/** SNAP is available: first shot, or next canvas from review (not last-slot reveal). */
+	const snapArmed = $derived.by(() => {
+		if (exiting || ritualOpen || !cameraReady || $frameHandoffBusy || $imageHandoffBusy) {
+			return false;
+		}
+		if (reviewOpen) return !isLastCanvas;
+		return true;
+	});
 
 	/** Hole that should show the live camera — current slot, or the next one while reviewing. */
 	const liveSlot = $derived.by(() => {
@@ -359,6 +375,28 @@
 		return () => stopLivePreview();
 	});
 
+	$effect(() => {
+		const enabled = $gestureSnap;
+		const video = videoEl;
+
+		if (!enabled || !video || !cameraReady || ritualOpen || (reviewOpen && isLastCanvas)) {
+			if (!enabled) disposeGestureShutter();
+			else stopGestureShutter();
+			return;
+		}
+
+		void startGestureShutter({
+			video,
+			isArmed: () => snapArmed,
+			onTrigger: () => {
+				if (reviewOpen) void snapNextFromReview();
+				else beginRitual();
+			}
+		});
+
+		return () => stopGestureShutter();
+	});
+
 	onMount(() => {
 		if (!$selectedFrameId) {
 			go('frame');
@@ -380,6 +418,7 @@
 		return () => {
 			stopCameraInit?.();
 			stopLivePreview();
+			disposeGestureShutter();
 			stopCamera();
 			stream = null;
 		};

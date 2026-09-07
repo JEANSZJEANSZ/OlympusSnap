@@ -5,6 +5,32 @@
  */
 
 const PNG_MIME = 'image/png';
+const JPEG_MIME = 'image/jpeg';
+
+/**
+ * @param {Blob | null | undefined} blob
+ * @param {string} [base]
+ * @returns {string}
+ */
+export function blobFilename(blob, base = 'olympus-snap') {
+	const type = (blob?.type || '').toLowerCase();
+	const ext = type === JPEG_MIME || type === 'image/jpg' ? 'jpg' : 'png';
+	return `${base}.${ext}`;
+}
+
+/**
+ * @param {Blob} blob
+ * @param {string} [filename]
+ * @returns {File | null}
+ */
+export function blobToFile(blob, filename) {
+	if (!blob) return null;
+	const name = filename ?? blobFilename(blob);
+	return new File([blob], name, {
+		type: blob.type || PNG_MIME,
+		lastModified: Date.now()
+	});
+}
 
 /**
  * @param {string} dataUrl
@@ -29,7 +55,7 @@ export function dataUrlToBlob(dataUrl) {
 export function dataUrlToFile(dataUrl, filename = 'olympus-snap.png') {
 	const blob = dataUrlToBlob(dataUrl);
 	if (!blob) return null;
-	return new File([blob], filename, { type: blob.type || PNG_MIME, lastModified: Date.now() });
+	return blobToFile(blob, filename);
 }
 
 /**
@@ -55,6 +81,33 @@ export function canShareCompositeFile(dataUrl) {
  */
 export async function shareCompositeFile(dataUrl, opts = {}) {
 	const file = dataUrlToFile(dataUrl, opts.filename ?? 'olympus-snap.png');
+	if (!file) return 'failed';
+	if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+		return 'unsupported';
+	}
+
+	const payload = { files: [file], title: '' };
+	try {
+		if (typeof navigator.canShare === 'function' && !navigator.canShare({ files: [file] })) {
+			return 'unsupported';
+		}
+		await navigator.share(payload);
+		return 'shared';
+	} catch (err) {
+		if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') {
+			return 'cancelled';
+		}
+		return 'failed';
+	}
+}
+
+/**
+ * @param {Blob} blob
+ * @param {{ filename?: string }} [opts]
+ * @returns {Promise<'shared' | 'cancelled' | 'unsupported' | 'failed'>}
+ */
+export async function shareCompositeBlob(blob, opts = {}) {
+	const file = blobToFile(blob, opts.filename);
 	if (!file) return 'failed';
 	if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
 		return 'unsupported';
@@ -112,15 +165,16 @@ function clearPendingDownloadRevoke() {
 
 /**
  * @param {Blob} blob
- * @param {string} [filename]
+ * @param {string} [filename] When omitted, derived from blob.type (.jpg / .png).
  */
-export function downloadBlob(blob, filename = 'olympus-snap.png') {
+export function downloadBlob(blob, filename) {
 	if (typeof document === 'undefined' || !blob) return;
+	const name = filename ?? blobFilename(blob);
 	clearPendingDownloadRevoke();
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
 	a.href = url;
-	a.download = filename;
+	a.download = name;
 	a.rel = 'noopener';
 	document.body.appendChild(a);
 	a.click();

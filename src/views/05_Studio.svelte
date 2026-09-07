@@ -53,9 +53,9 @@
 								/>
 							{/if}
 
-							{#if mobileSession && (saving || saveDone)}
+							{#if saving || saveDone || saveError}
 								<div
-									class={['download-status', { done: saveDone }]}
+									class={['download-status', { done: saveDone, error: saveError }]}
 									role="status"
 									aria-live="polite"
 									aria-busy={saving}
@@ -64,6 +64,8 @@
 									<div class="download-status-card">
 										{#if saving}
 											<span class="dl-spinner dl-spinner-lg" aria-hidden="true"></span>
+										{:else if saveError}
+											<span class="dl-error-mark" aria-hidden="true">!</span>
 										{:else}
 											<span class="dl-check-wrap" aria-hidden="true">
 												<svg viewBox="0 0 24 24">
@@ -74,7 +76,13 @@
 												</svg>
 											</span>
 										{/if}
-										<p>{saveDone ? 'Ready' : 'Downloading…'}</p>
+										<p>
+											{saveError
+												? 'Could not save — try again'
+												: saveDone
+													? 'Ready'
+													: 'Downloading…'}
+										</p>
 									</div>
 								</div>
 							{/if}
@@ -250,7 +258,7 @@
 </section>
 
 <script>
-	import { onMount, tick } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import { get } from 'svelte/store';
 	import {
@@ -268,7 +276,7 @@
 	import StudioKonvaEditor from '../lib/components/StudioKonvaEditor.svelte';
 	import StickerSheet from '../lib/components/StickerSheet.svelte';
 	import ShareFallbackSheet from '../lib/components/ShareFallbackSheet.svelte';
-	import { downloadBlob, shareCompositeFile } from '../lib/share/shareComposite.js';
+	import { downloadBlob, shareCompositeBlob } from '../lib/share/shareComposite.js';
 	import { isPointInRect } from '../lib/utils/hitTest.js';
 	import { warmFrameImages } from '../lib/utils/loadImageForCanvas.js';
 
@@ -283,7 +291,10 @@
 	let exiting = $state(false);
 	let saving = $state(false);
 	let saveDone = $state(false);
+	let saveError = $state(false);
 	let sharing = $state(false);
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	let saveErrorTimer = null;
 	const guestFromUrl = typeof location !== 'undefined' && !!getSessionFromUrl();
 	let mobileSession = $state(guestFromUrl);
 	let coarsePointer = $state(false);
@@ -328,6 +339,23 @@
 	const busy = $derived(entryBusy || exiting || saving || saveDone || sharing);
 
 	const dialogText = $derived('Scan the QR at the booth to open mobile studio.');
+
+	function clearSaveError() {
+		saveError = false;
+		if (saveErrorTimer != null) {
+			clearTimeout(saveErrorTimer);
+			saveErrorTimer = null;
+		}
+	}
+
+	function flashSaveError() {
+		clearSaveError();
+		saveError = true;
+		saveErrorTimer = setTimeout(() => {
+			saveError = false;
+			saveErrorTimer = null;
+		}, 2000);
+	}
 
 	async function initEditorEntry() {
 		await tick();
@@ -399,6 +427,10 @@
 		entryBusy = false;
 	});
 
+	onDestroy(() => {
+		clearSaveError();
+	});
+
 	/** @param {import('../lib/stores/stores.js').ActiveSticker[]} list */
 	function onStickersChange(list) {
 		activeStickers.set(list);
@@ -424,6 +456,7 @@
 
 	function openStickerSheet() {
 		if (busy) return;
+		clearSaveError();
 		shareFallbackOpen = false;
 		stickerSheetOpen = true;
 		void warmFrameImages(get(stickers).map((s) => s.src));
@@ -435,6 +468,7 @@
 
 	function closeShareFallback() {
 		shareFallbackOpen = false;
+		clearSaveError();
 	}
 
 	function hitTrash(clientX, clientY) {
@@ -476,6 +510,7 @@
 		if (removed) selectedId = null;
 	}
 
+	/** Capped JPEG data URL for ShareFallbackSheet copy only (not save/share primary path). */
 	async function exportCurrent() {
 		const url = await editorRef?.exportDataUrl();
 		if (url) lastExportUrl = url;
@@ -495,6 +530,7 @@
 
 	async function saveMySnap() {
 		if (busy || !$capturedImageData) return;
+		clearSaveError();
 		saving = true;
 		saveDone = false;
 		shareFallbackOpen = false;
@@ -503,7 +539,10 @@
 		await waitForPaint();
 		try {
 			const blob = await exportCurrentBlob();
-			if (!blob) return;
+			if (!blob) {
+				flashSaveError();
+				return;
+			}
 			downloadBlob(blob);
 			await waitForPaint();
 			saving = false;
@@ -517,15 +556,21 @@
 
 	async function shareMySnap() {
 		if (busy) return;
+		clearSaveError();
 		sharing = true;
 		stickerSheetOpen = false;
 		await tick();
 		await waitForPaint();
 		try {
-			const url = await exportCurrent();
-			if (!url) return;
-			const result = await shareCompositeFile(url);
+			const blob = await exportCurrentBlob();
+			if (!blob) {
+				flashSaveError();
+				return;
+			}
+			const result = await shareCompositeBlob(blob);
 			if (result === 'unsupported' || result === 'failed') {
+				// Fallback sheet still needs a (now-capped) data URL for clipboard copy.
+				await exportCurrent();
 				shareFallbackOpen = true;
 			}
 		} finally {
@@ -774,6 +819,36 @@
 			0 10px 28px rgba(3, 12, 27, 0.45),
 			0 0 18px color-mix(in srgb, #d4a017 28%, transparent),
 			inset 0 1px 0 color-mix(in srgb, #fff8df 16%, transparent);
+	}
+
+	.download-status.error {
+		pointer-events: none;
+		background: radial-gradient(
+			ellipse at center,
+			rgba(54, 18, 18, 0.42) 0%,
+			rgba(7, 25, 54, 0.1) 70%
+		);
+	}
+
+	.download-status.error .download-status-card {
+		box-shadow:
+			0 10px 28px rgba(3, 12, 27, 0.45),
+			0 0 14px color-mix(in srgb, #e07070 22%, transparent),
+			inset 0 1px 0 color-mix(in srgb, #fff8df 16%, transparent);
+	}
+
+	.dl-error-mark {
+		display: grid;
+		place-items: center;
+		width: 1.35rem;
+		height: 1.35rem;
+		flex-shrink: 0;
+		border-radius: 50%;
+		font-family: var(--font-pixel);
+		font-size: 0.85rem;
+		line-height: 1;
+		color: #fff4c2;
+		background: color-mix(in srgb, #c44 55%, transparent);
 	}
 
 	.dl-check-wrap {

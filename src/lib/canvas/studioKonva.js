@@ -8,6 +8,12 @@ import { loadImageForCanvas as loadImage } from '../utils/loadImageForCanvas.js'
 export const STICKER_BASE = 64;
 const MIN_SCALE = 0.35;
 
+/** Long-edge caps for export — never upsize the live display stage to native. */
+const EXPORT_CAP_LONG_EDGE = 2048;
+const EXPORT_RETRY_LONG_EDGE = 1280;
+const EXPORT_MIME = 'image/jpeg';
+const EXPORT_QUALITY = 0.92;
+
 /**
  * @typedef {{
  *   id: string;
@@ -526,34 +532,65 @@ export async function createStudioEditor(opts) {
 	container.addEventListener('touchcancel', onTouchEnd, { passive: true, capture: true });
 	container.addEventListener('touchend', onTouchEnd, { passive: true, capture: true });
 
-	function prepareNativeExport() {
+	/**
+	 * Hide transformer chrome for export. Does NOT resize the stage to native —
+	 * pixelRatio below maps display-sized layers to a capped output size.
+	 * @returns {{ prevNodes: Konva.Node[] }}
+	 */
+	function prepareExportChrome() {
+		const prevNodes = transformer.nodes().slice();
 		transformer.nodes([]);
 		stickerLayer.batchDraw();
 		uiLayer.batchDraw();
-
-		const prevScale = stage.scaleX();
-		const prevW = stage.width();
-		const prevH = stage.height();
-
-		stage.scale({ x: 1, y: 1 });
-		stage.width(frameW);
-		stage.height(frameH);
-		stickerLayer.batchDraw();
-
-		return { prevScale, prevW, prevH };
+		return { prevNodes };
 	}
 
 	/**
-	 * @param {{ prevScale: number; prevW: number; prevH: number }} snap
+	 * @param {{ prevNodes: Konva.Node[] }} snap
 	 */
-	function restoreNativeExport(snap) {
-		stage.scale({ x: snap.prevScale, y: snap.prevScale });
-		stage.width(snap.prevW);
-		stage.height(snap.prevH);
+	function restoreExportChrome(snap) {
+		transformer.nodes(snap.prevNodes ?? []);
 		applyTransformerChrome(transformer, touchMode);
 		uiLayer.moveToTop();
 		stickerLayer.batchDraw();
 		uiLayer.batchDraw();
+	}
+
+	/**
+	 * Export ~min(native, longEdgeCap) while the stage stays display-sized.
+	 * @param {number} longEdgeCap
+	 * @returns {number}
+	 */
+	function exportPixelRatio(longEdgeCap) {
+		const capScale = Math.min(1, longEdgeCap / Math.max(frameW, frameH, 1));
+		return capScale / Math.max(stage.scaleX(), 1e-6);
+	}
+
+	/**
+	 * @param {number} pixelRatio
+	 * @returns {Promise<Blob | null>}
+	 */
+	async function stageToJpegBlob(pixelRatio) {
+		const opts = {
+			pixelRatio,
+			mimeType: EXPORT_MIME,
+			quality: EXPORT_QUALITY
+		};
+		if (typeof stage.toBlob !== 'function') return null;
+		try {
+			const result = stage.toBlob(opts);
+			if (result != null && typeof result.then === 'function') {
+				return (await result) ?? null;
+			}
+			return await new Promise((resolve) => {
+				stage.toBlob({
+					...opts,
+					callback: (b) => resolve(b ?? null)
+				});
+			});
+		} catch {
+			return null;
+		}
 	}
 
 	return {
@@ -668,52 +705,44 @@ export async function createStudioEditor(opts) {
 			return true;
 		},
 
-		/** @returns {string} */
+		/**
+		 * Capped JPEG data URL (no stage resize). Prefer exportBlob for save/share.
+		 * @returns {string}
+		 */
 		exportDataUrl() {
-			const snap = prepareNativeExport();
+			const snap = prepareExportChrome();
 			try {
-				return stage.toDataURL({ pixelRatio: 1, mimeType: 'image/png' });
+				const caps = [EXPORT_CAP_LONG_EDGE, EXPORT_RETRY_LONG_EDGE];
+				for (const cap of caps) {
+					try {
+						const url = stage.toDataURL({
+							pixelRatio: exportPixelRatio(cap),
+							mimeType: EXPORT_MIME,
+							quality: EXPORT_QUALITY
+						});
+						if (typeof url === 'string' && url.startsWith('data:')) return url;
+					} catch {
+						/* retry smaller cap */
+					}
+				}
+				return '';
 			} finally {
-				restoreNativeExport(snap);
+				restoreExportChrome(snap);
 			}
 		},
 
-		/** @returns {Promise<Blob | null>} */
+		/**
+		 * Capped JPEG blob via stage.toBlob only (no toDataURL/atob fallback).
+		 * @returns {Promise<Blob | null>}
+		 */
 		async exportBlob() {
-			const snap = prepareNativeExport();
+			const snap = prepareExportChrome();
 			try {
-				const opts = { pixelRatio: 1, mimeType: 'image/png' };
-				if (typeof stage.toBlob === 'function') {
-					try {
-						const result = stage.toBlob(opts);
-						if (result != null && typeof result.then === 'function') {
-							const blob = await result;
-							if (blob) return blob;
-						} else {
-							const blob = await new Promise((resolve) => {
-								stage.toBlob({
-									...opts,
-									callback: (b) => resolve(b ?? null)
-								});
-							});
-							if (blob) return blob;
-						}
-					} catch {
-						/* fall through to dataURL */
-					}
-				}
-
-				const dataUrl = stage.toDataURL(opts);
-				if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
-				const match = /^data:([^;]+);base64,(.+)$/i.exec(dataUrl);
-				if (!match) return null;
-				const mime = match[1] || 'image/png';
-				const binary = atob(match[2]);
-				const bytes = new Uint8Array(binary.length);
-				for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-				return new Blob([bytes], { type: mime });
+				const first = await stageToJpegBlob(exportPixelRatio(EXPORT_CAP_LONG_EDGE));
+				if (first) return first;
+				return await stageToJpegBlob(exportPixelRatio(EXPORT_RETRY_LONG_EDGE));
 			} finally {
-				restoreNativeExport(snap);
+				restoreExportChrome(snap);
 			}
 		},
 
@@ -730,7 +759,7 @@ export async function createStudioEditor(opts) {
 }
 
 /**
- * Export composited image + stickers at native resolution.
+ * Export composited image + stickers as a capped JPEG data URL (no live-stage upsize).
  * @param {string} compositeDataUrl
  * @param {StudioSticker[]} stickers
  * @returns {Promise<string>}

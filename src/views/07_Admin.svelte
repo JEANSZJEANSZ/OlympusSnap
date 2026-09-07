@@ -301,7 +301,8 @@
 				<p class="panel-kicker">BOOTH FLOW</p>
 				<p class="seed-copy">
 					Random Frame skips pull-to-select. Pythia chooses a relic on the Delphi altar.
-					Shuffle length and Random Frame persist for this browser tab session.
+					Gesture Snap lets guests hold a victory sign to start the camera rite (SNAP stays).
+					Booth flow toggles persist for this browser tab session.
 				</p>
 				<div class="seed-toggles">
 					<button
@@ -319,6 +320,22 @@
 					>
 						<span class="seed-toggle-label">RANDOM FRAME</span>
 						<span class="seed-toggle-state">{$randomFrame ? 'ON' : 'OFF'}</span>
+					</button>
+					<button
+						type="button"
+						class="seed-toggle"
+						class:on={$gestureSnap}
+						aria-pressed={$gestureSnap}
+						onclick={() => {
+							const next = !$gestureSnap;
+							setGestureSnap(next);
+							status = next
+								? 'Gesture Snap ON — hold victory sign to start the rite.'
+								: 'Gesture Snap OFF — SNAP button only.';
+						}}
+					>
+						<span class="seed-toggle-label">GESTURE SNAP</span>
+						<span class="seed-toggle-state">{$gestureSnap ? 'ON' : 'OFF'}</span>
 					</button>
 				</div>
 				<label class="shuffle-slider">
@@ -452,11 +469,13 @@
 		catalogError,
 		showSeedFrames,
 		randomFrame,
+		gestureSnap,
 		oracleShuffleMs,
 		ORACLE_SHUFFLE_MIN_MS,
 		ORACLE_SHUFFLE_MAX_MS,
 		setShowSeedFrames,
 		setRandomFrame,
+		setGestureSnap,
 		setOracleShuffleMs,
 		addFrame,
 		addStickers,
