@@ -1,17 +1,23 @@
 /**
  * Frame Select air gestures — Camera-style canned poses.
- * Open_Palm + dx past threshold → swipe. Closed_Fist → grab and drag the rope.
+ * Open_Palm + dx/velocity past threshold → swipe. Closed_Fist → grab and drag the rope.
+ * Palm stroke stays sticky through brief Open_Palm flicker (motion blur).
  */
 
 import { ensureGestureRecognizer } from './mediapipeHands.js';
 
-const INFER_INTERVAL_MS = 33;
-const SCORE_MIN = 0.5;
+const INFER_INTERVAL_MS = 24;
+const FIST_SCORE_MIN = 0.5;
+const PALM_SCORE_MIN = 0.35;
 const WRIST = 0;
 const MIDDLE_MCP = 9;
-const SWIPE_MIN = 0.14;
+const SWIPE_MIN = 0.1;
+const SWIPE_VEL_DX = 0.06;
+const SWIPE_VEL = 1.2;
+const AXIS_DY = 0.9;
 const COOLDOWN_MS = 280;
 const MISS_RESET = 5;
+const PALM_GRACE = 7;
 
 /** @typedef {{ minX: number; minY: number; maxX: number; maxY: number; matching: boolean }} HandOverlayBox */
 /** @typedef {{ left: boolean; right: boolean; down: boolean }} AirCharge */
@@ -35,6 +41,9 @@ let chargeCb;
 let palmOriginX = null;
 /** @type {number | null} */
 let palmOriginY = null;
+/** @type {number | null} */
+let prevPalmX = null;
+let palmLabelMiss = 0;
 let tugging = false;
 let missCount = 0;
 let cooldownUntil = 0;
@@ -67,6 +76,8 @@ function clearVisuals() {
 function resetStroke() {
 	palmOriginX = null;
 	palmOriginY = null;
+	prevPalmX = null;
+	palmLabelMiss = 0;
 	tugging = false;
 	missCount = 0;
 }
@@ -74,12 +85,13 @@ function resetStroke() {
 /**
  * @param {import('@mediapipe/tasks-vision').Category[] | undefined} categories
  * @param {string} name
+ * @param {number} min
  * @returns {boolean}
  */
-function categoriesMatch(categories, name) {
+function categoriesMatch(categories, name, min) {
 	if (!categories?.length) return false;
 	for (const cat of categories) {
-		if (cat?.categoryName === name && (cat.score ?? 0) >= SCORE_MIN) return true;
+		if (cat?.categoryName === name && (cat.score ?? 0) >= min) return true;
 	}
 	return false;
 }
@@ -146,8 +158,8 @@ function pickHand(result) {
 	const cats = result?.gestures?.[bestIndex];
 	return {
 		...best,
-		openPalm: categoriesMatch(cats, 'Open_Palm'),
-		closedFist: categoriesMatch(cats, 'Closed_Fist')
+		openPalm: categoriesMatch(cats, 'Open_Palm', PALM_SCORE_MIN),
+		closedFist: categoriesMatch(cats, 'Closed_Fist', FIST_SCORE_MIN)
 	};
 }
 
@@ -165,6 +177,20 @@ export function stopFrameAirGestures() {
 	lastInferAt = 0;
 	resetStroke();
 	clearVisuals();
+}
+
+/**
+ * @param {number} dx
+ * @param {number} dy
+ * @param {number} vx
+ * @returns {boolean}
+ */
+function isSwipe(dx, dy, vx) {
+	const adx = Math.abs(dx);
+	const ady = Math.abs(dy);
+	if (adx <= ady * AXIS_DY) return false;
+	if (adx >= SWIPE_MIN) return true;
+	return adx >= SWIPE_VEL_DX && Math.abs(vx) >= SWIPE_VEL;
 }
 
 /**
@@ -214,6 +240,7 @@ export async function startFrameAirGestures(opts) {
 
 		const now = performance.now();
 		if (now - lastInferAt < INFER_INTERVAL_MS) return;
+		const dtSec = Math.max(0.016, (now - lastInferAt) / 1000);
 		lastInferAt = now;
 
 		let result;
@@ -240,7 +267,7 @@ export async function startFrameAirGestures(opts) {
 
 		missCount = 0;
 		const { palm, aabb, openPalm, closedFist } = hand;
-		lastOverlay = [{ ...aabb, matching: openPalm || closedFist }];
+		lastOverlay = [{ ...aabb, matching: openPalm || closedFist || palmOriginX != null }];
 
 		if (tugging) {
 			if (!closedFist) {
@@ -248,6 +275,8 @@ export async function startFrameAirGestures(opts) {
 				tugging = false;
 				palmOriginX = null;
 				palmOriginY = null;
+				prevPalmX = null;
+				palmLabelMiss = 0;
 				setCharge({ ...IDLE_CHARGE });
 				return;
 			}
@@ -262,21 +291,37 @@ export async function startFrameAirGestures(opts) {
 			tugging = true;
 			palmOriginX = null;
 			palmOriginY = null;
+			prevPalmX = null;
+			palmLabelMiss = 0;
 			setCharge({ left: false, right: false, down: true });
 			opts.onTugMove(palm);
 			return;
 		}
 
+		const inStroke = palmOriginX != null && palmOriginY != null;
 		if (!openPalm) {
-			palmOriginX = null;
-			palmOriginY = null;
-			setCharge({ ...IDLE_CHARGE });
-			return;
+			if (!inStroke) {
+				setCharge({ ...IDLE_CHARGE });
+				prevPalmX = palm.x;
+				return;
+			}
+			palmLabelMiss += 1;
+			if (palmLabelMiss >= PALM_GRACE) {
+				palmOriginX = null;
+				palmOriginY = null;
+				prevPalmX = null;
+				palmLabelMiss = 0;
+				setCharge({ ...IDLE_CHARGE });
+				return;
+			}
+		} else {
+			palmLabelMiss = 0;
 		}
 
 		if (palmOriginX == null || palmOriginY == null) {
 			palmOriginX = palm.x;
 			palmOriginY = palm.y;
+			prevPalmX = palm.x;
 			setCharge({ ...IDLE_CHARGE });
 			return;
 		}
@@ -285,21 +330,25 @@ export async function startFrameAirGestures(opts) {
 		const dy = palm.y - palmOriginY;
 		const adx = Math.abs(dx);
 		const ady = Math.abs(dy);
+		const vx = prevPalmX == null ? 0 : (palm.x - prevPalmX) / dtSec;
+		prevPalmX = palm.x;
 		const cooling = now < cooldownUntil;
 
 		setCharge({
-			left: !cooling && dx < -0.05 && adx > ady,
-			right: !cooling && dx > 0.05 && adx > ady,
+			left: !cooling && dx < -0.04 && adx > ady * AXIS_DY,
+			right: !cooling && dx > 0.04 && adx > ady * AXIS_DY,
 			down: false
 		});
 
 		if (cooling) return;
 
-		if (adx >= SWIPE_MIN && adx > ady) {
+		if (isSwipe(dx, dy, vx)) {
 			const dir = /** @type {-1 | 1} */ (dx > 0 ? 1 : -1);
 			cooldownUntil = now + COOLDOWN_MS;
 			palmOriginX = palm.x;
 			palmOriginY = palm.y;
+			prevPalmX = palm.x;
+			palmLabelMiss = 0;
 			setCharge({ ...IDLE_CHARGE });
 			opts.onSwipe(dir);
 		}
