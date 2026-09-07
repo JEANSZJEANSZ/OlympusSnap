@@ -4,23 +4,16 @@
  * Admin pick (Victory / Open_Palm / Thumb_Up) filtered in JS, not classifier allowlist.
  */
 
+import { disposeGestureRecognizer, ensureGestureRecognizer } from './mediapipeHands.js';
+
 const INFER_INTERVAL_MS = 66;
 const HOLD_MS = 700;
 const MISS_RESET = 5;
 const SCORE_MIN = 0.5;
 const GESTURE_KINDS = /** @type {const} */ (['Victory', 'Open_Palm', 'Thumb_Up']);
 
-const APP_BASE = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
-const WASM_ROOT = `${APP_BASE}assets/vision`;
-const MODEL_PATH = `${WASM_ROOT}/gesture_recognizer.task`;
-
 /** @typedef {{ minX: number; minY: number; maxX: number; maxY: number; matching: boolean }} HandOverlayBox */
 
-/** @type {import('@mediapipe/tasks-vision').GestureRecognizer | null} */
-let recognizer = null;
-/** @type {Promise<import('@mediapipe/tasks-vision').GestureRecognizer | null> | null} */
-let loadPromise = null;
-let loadFailed = false;
 /** @type {number} */
 let rafId = 0;
 /** @type {number} */
@@ -47,56 +40,6 @@ export function getHandOverlay() {
 
 function clearOverlay() {
 	lastOverlay = [];
-}
-
-/**
- * @returns {Promise<GestureRecognizer | null>}
- */
-async function ensureRecognizer() {
-	if (recognizer) return recognizer;
-	if (loadFailed) return null;
-	if (loadPromise) return loadPromise;
-
-	loadPromise = (async () => {
-		try {
-			const { FilesetResolver, GestureRecognizer } = await import('@mediapipe/tasks-vision');
-			const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
-			const opts = {
-				baseOptions: {
-					modelAssetPath: MODEL_PATH,
-					delegate: /** @type {'GPU'} */ ('GPU')
-				},
-				runningMode: /** @type {'VIDEO'} */ ('VIDEO'),
-				numHands: 2,
-				minHandDetectionConfidence: 0.4,
-				minHandPresenceConfidence: 0.4,
-				minTrackingConfidence: 0.4,
-				cannedGesturesClassifierOptions: {
-					scoreThreshold: 0.3
-				}
-			};
-			try {
-				recognizer = await GestureRecognizer.createFromOptions(vision, opts);
-			} catch (gpuErr) {
-				console.warn('[gestureShutter] GPU delegate failed, trying CPU', gpuErr);
-				recognizer = await GestureRecognizer.createFromOptions(vision, {
-					...opts,
-					baseOptions: {
-						modelAssetPath: MODEL_PATH,
-						delegate: /** @type {'CPU'} */ ('CPU')
-					}
-				});
-			}
-			return recognizer;
-		} catch (err) {
-			loadFailed = true;
-			loadPromise = null;
-			console.warn('[gestureShutter] failed to load — SNAP button only', err);
-			return null;
-		}
-	})();
-
-	return loadPromise;
 }
 
 /**
@@ -195,15 +138,7 @@ export function stopGestureShutter() {
 /** Stop loop and free WASM (leave Camera / toggle off). */
 export function disposeGestureShutter() {
 	stopGestureShutter();
-	if (recognizer) {
-		try {
-			recognizer.close();
-		} catch {
-			/* ignore */
-		}
-		recognizer = null;
-	}
-	loadPromise = null;
+	disposeGestureRecognizer();
 }
 
 /**
@@ -221,7 +156,7 @@ export async function startGestureShutter(opts) {
 		? opts.gesture
 		: 'Victory';
 
-	const rec = await ensureRecognizer();
+	const rec = await ensureGestureRecognizer();
 	if (!rec || !opts.video || gen !== loopGen) return;
 
 	lastInferAt = 0;

@@ -63,6 +63,11 @@ export function createFrameSelectMotion(root, opts = {}) {
 			},
 			setSelectHandlers() {},
 			setPullEnabled() {},
+			beginAirPull() {
+				return false;
+			},
+			moveAirPull() {},
+			endAirPull() {},
 			dispose() {}
 		};
 	}
@@ -125,6 +130,9 @@ export function createFrameSelectMotion(root, opts = {}) {
 	let birdScaleX = 1;
 	let resizeQueued = false;
 	let pointerId = -1;
+	let airPulling = false;
+	let airOriginNy = 0;
+	let airGrabY = 0;
 	let lockDx = 0;
 	let lockDy = 0;
 	let lockRot = 0;
@@ -576,6 +584,7 @@ export function createFrameSelectMotion(root, opts = {}) {
 	}
 
 	function endDrag() {
+		airPulling = false;
 		if (pointerId !== -1) {
 			try {
 				stripEl.releasePointerCapture?.(pointerId);
@@ -605,6 +614,7 @@ export function createFrameSelectMotion(root, opts = {}) {
 			mode === 'swapping' ||
 			mode === 'falling' ||
 			snapped ||
+			airPulling ||
 			!frameBody ||
 			!handBody ||
 			!engine
@@ -828,6 +838,61 @@ export function createFrameSelectMotion(root, opts = {}) {
 		else unbindPull();
 	}
 
+	/**
+	 * Attach physics hand at relic center for air-tug. Pass mirrored palm Y (0–1).
+	 * @param {number} originNy
+	 * @returns {boolean}
+	 */
+	function beginAirPull(originNy) {
+		if (
+			reduced ||
+			airPulling ||
+			confirming ||
+			mode === 'swapping' ||
+			mode === 'falling' ||
+			mode === 'dragging' ||
+			snapped ||
+			!frameBody ||
+			!handBody ||
+			!engine
+		) {
+			return false;
+		}
+		airPulling = true;
+		airOriginNy = originNy;
+		airGrabY = frameBody.position.y;
+		mode = 'dragging';
+		Body.setPosition(handBody, { x: frameBody.position.x, y: airGrabY });
+		detachHand();
+		handConstraint = Constraint.create({
+			bodyA: handBody,
+			bodyB: frameBody,
+			pointB: { x: 0, y: 0 },
+			stiffness: HAND_STIFFNESS,
+			render: { visible: false },
+			label: 'hand'
+		});
+		Composite.add(engine.world, handConstraint);
+		root.classList.add('pulling');
+		return true;
+	}
+
+	/**
+	 * Follow palm Y; X stays pinned to the relic.
+	 * @param {number} ny
+	 */
+	function moveAirPull(ny) {
+		if (!airPulling || mode !== 'dragging' || snapped || !handBody || !frameBody) return;
+		const y = airGrabY + (ny - airOriginNy) * stageEl.clientHeight;
+		Body.setPosition(handBody, { x: frameBody.position.x, y });
+	}
+
+	function endAirPull() {
+		if (!airPulling) return;
+		airPulling = false;
+		endDrag();
+	}
+
 	/** @param {() => void} onDone */
 	function playConfirm(onDone) {
 		if (confirming) return;
@@ -958,6 +1023,9 @@ export function createFrameSelectMotion(root, opts = {}) {
 		playBackToLanding,
 		setSelectHandlers,
 		setPullEnabled,
+		beginAirPull,
+		moveAirPull,
+		endAirPull,
 		dispose
 	};
 }

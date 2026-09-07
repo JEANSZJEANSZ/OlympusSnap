@@ -100,6 +100,13 @@
 					{/if}
 				</p>
 
+				{#if gestureRite && !reviewOpen}
+					<div class="gesture-rite" aria-live="polite">
+						<img class="gesture-rite-art" src={gestureRite.src} alt="" width="96" height="96" />
+						<p class="gesture-rite-cue">{gestureRite.cue}</p>
+					</div>
+				{/if}
+
 				<DialogBox
 					speaker={reviewOpen ? 'REVIEW' : 'POSE CHALLENGE'}
 					text={reviewOpen ? reviewText : poseText}
@@ -272,21 +279,34 @@
 	const frameAspect = $derived(`${frameNatW} / ${frameNatH}`);
 	const frameAspectNum = $derived(frameNatH > 0 ? frameNatW / frameNatH : 3 / 4);
 
-	const GESTURE_RITE_CUES = /** @type {const} */ ({
-		Victory: 'Hold the victory sign to begin the rite — or tap SNAP.',
-		Open_Palm: 'Hold an open palm (stop sign) to begin the rite — or tap SNAP.',
-		Thumb_Up: 'Hold a thumbs up to begin the rite — or tap SNAP.'
+	const APP_BASE = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
+
+	const GESTURE_RITE = /** @type {const} */ ({
+		Victory: {
+			src: `${APP_BASE}assets/gestures/victory.png`,
+			cue: 'Show a victory sign to the gods to capture!'
+		},
+		Open_Palm: {
+			src: `${APP_BASE}assets/gestures/open-palm.png`,
+			cue: 'Show an open palm to the gods to capture!'
+		},
+		Thumb_Up: {
+			src: `${APP_BASE}assets/gestures/thumb-up.png`,
+			cue: 'Show a thumbs up to the gods to capture!'
+		}
 	});
 
-	const poseText = $derived.by(() => {
-		const base = useSlots
-			? `Canvas ${slotIndex + 1} of ${snapTotal}. ${poses[slotIndex % poses.length]}`
-			: sessionPose;
-		if (!$gestureSnap) return base;
-		const known = GESTURE_SNAP_KINDS.find((k) => k.id === $gestureSnapKind);
-		const cue = GESTURE_RITE_CUES[known?.id ?? 'Victory'];
-		return `${base} ${cue}`;
+	const gestureRite = $derived.by(() => {
+		if (!$gestureSnap) return null;
+		const id = GESTURE_SNAP_KINDS.find((k) => k.id === $gestureSnapKind)?.id ?? 'Victory';
+		return GESTURE_RITE[id];
 	});
+
+	const poseText = $derived(
+		useSlots
+			? `Canvas ${slotIndex + 1} of ${snapTotal}. ${poses[slotIndex % poses.length]}`
+			: sessionPose
+	);
 
 	const isLastCanvas = $derived(slotIndex + 1 >= snapTotal);
 
@@ -746,6 +766,37 @@
 		box-shadow: 2px 2px 0 #071936;
 	}
 
+	.gesture-rite {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: 0.65rem;
+		max-width: 100%;
+		padding: 0.4rem 0.55rem;
+		background: #102f56;
+		border: 2px solid var(--gold);
+		box-shadow: 2px 2px 0 #07152d;
+		box-sizing: border-box;
+	}
+
+	.gesture-rite-art {
+		width: 4.2rem;
+		height: 4.2rem;
+		flex: 0 0 auto;
+		object-fit: contain;
+		background: #07152d;
+		image-rendering: pixelated;
+		image-rendering: -moz-crisp-edges;
+		image-rendering: crisp-edges;
+	}
+
+	.gesture-rite-cue {
+		margin: 0;
+		color: #fff8df;
+		font-size: var(--booth-text-sm);
+		line-height: 1.4;
+	}
+
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
@@ -867,6 +918,15 @@
 			min-height: 0;
 			overflow: visible;
 			gap: 0.3rem;
+		}
+
+		.gesture-rite-art {
+			width: 2.6rem;
+			height: 2.6rem;
+		}
+
+		.gesture-rite-cue {
+			font-size: var(--booth-text-xs);
 		}
 
 		.head .eyebrow,

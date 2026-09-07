@@ -22,6 +22,7 @@ const SEED_FRAMES_KEY = 'olympus-snap-show-seed-frames';
 const RANDOM_FRAME_KEY = 'olympus-snap-random-frame';
 const GESTURE_SNAP_KEY = 'olympus-snap-gesture-snap';
 const GESTURE_SNAP_KIND_KEY = 'olympus-snap-gesture-snap-kind';
+const GESTURE_FRAME_KEY = 'olympus-snap-gesture-frame';
 const ORACLE_SHUFFLE_KEY = 'olympus-snap-oracle-shuffle';
 const ORACLE_SHUFFLE_MS_KEY = 'olympus-snap-oracle-shuffle-ms';
 /** Gap between cloud bulk-delete requests to avoid 429 rate limits. */
@@ -173,6 +174,13 @@ export const gestureSnap = writable(readSessionFlag(GESTURE_SNAP_KEY, true));
  */
 /** @type {import('svelte/store').Writable<GestureSnapKind>} */
 export const gestureSnapKind = writable(readGestureSnapKind());
+
+/**
+ * When true, Frame Select arms air-swipe / rope-tug (camera PIP).
+ * Session-scoped; default off so mouse booths do not open the camera early.
+ */
+/** @type {import('svelte/store').Writable<boolean>} */
+export const gestureFrame = writable(readSessionFlag(GESTURE_FRAME_KEY, false));
 
 /** Oracle lot-spin duration in ms. Session-scoped. */
 /** @type {import('svelte/store').Writable<number>} */
@@ -335,6 +343,12 @@ export function setGestureSnapKind(kind) {
 	} catch {
 		/* ignore */
 	}
+}
+
+/** @param {boolean} on */
+export function setGestureFrame(on) {
+	gestureFrame.set(!!on);
+	writeSessionFlag(GESTURE_FRAME_KEY, !!on);
 }
 
 /** @param {number} ms */

@@ -302,8 +302,9 @@
 				<p class="seed-copy">
 					Random Frame skips pull-to-select. Pythia chooses a relic on the Delphi altar.
 					Gesture Snap lets guests hold the Admin-selected gesture (victory / stop / thumbs up) to
-					start the camera rite (SNAP stays). Booth flow toggles persist for this browser tab
-					session.
+					start the camera rite (SNAP stays). Gesture Pick lets guests swipe left/right to change
+					the relic and pull down to tug the rope (oracle mode ignores it). Booth flow toggles
+					persist for this browser tab session.
 				</p>
 				<div class="seed-toggles">
 					<button
@@ -343,6 +344,22 @@
 					>
 						<span class="seed-toggle-label">GESTURE SNAP</span>
 						<span class="seed-toggle-state">{$gestureSnap ? 'ON' : 'OFF'}</span>
+					</button>
+					<button
+						type="button"
+						class="seed-toggle"
+						class:on={$gestureFrame}
+						aria-pressed={$gestureFrame}
+						onclick={() => {
+							const next = !$gestureFrame;
+							setGestureFrame(next);
+							status = next
+								? 'Gesture Pick ON — swipe relics, pull down to drop.'
+								: 'Gesture Pick OFF — pull the rope by hand.';
+						}}
+					>
+						<span class="seed-toggle-label">GESTURE PICK</span>
+						<span class="seed-toggle-state">{$gestureFrame ? 'ON' : 'OFF'}</span>
 					</button>
 				</div>
 				<div class="seed-toggles gesture-kind-row" role="group" aria-label="Gesture Snap trigger">
@@ -501,6 +518,7 @@
 		randomFrame,
 		gestureSnap,
 		gestureSnapKind,
+		gestureFrame,
 		GESTURE_SNAP_KINDS,
 		oracleShuffleMs,
 		ORACLE_SHUFFLE_MIN_MS,
@@ -509,6 +527,7 @@
 		setRandomFrame,
 		setGestureSnap,
 		setGestureSnapKind,
+		setGestureFrame,
 		setOracleShuffleMs,
 		addFrame,
 		addStickers,

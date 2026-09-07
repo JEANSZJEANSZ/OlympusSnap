@@ -3,7 +3,20 @@
 	import { get } from 'svelte/store';
 	import { selectedFrameId } from '../lib/stores/stores.js';
 	import { go } from '../router/index.js';
-	import { assetsReady, frames, randomFrame, oracleShuffleMs } from '../lib/assets/assetStore.js';
+	import {
+		assetsReady,
+		frames,
+		randomFrame,
+		oracleShuffleMs,
+		gestureFrame
+	} from '../lib/assets/assetStore.js';
+	import { startCamera, stopCamera } from '../lib/utils/camera.js';
+	import { startLivePreview, stopLivePreview } from '../lib/vision/livePreview.js';
+	import {
+		startFrameAirGestures,
+		stopFrameAirGestures,
+		getFrameAirOverlay
+	} from '../lib/vision/frameAirGestures.js';
 	import { createFrameSelectMotion } from '../lib/fx/frameSelectMotion.js';
 	import { playOracleRite } from '../lib/fx/oracleRite.js';
 	import { beginFrameHandoff } from '../lib/fx/frameHandoff.js';
@@ -28,6 +41,12 @@
 	let oracleStarted = $state(false);
 	/** @type {HTMLElement | undefined} */
 	let rootEl = $state();
+	/** @type {HTMLVideoElement | undefined} */
+	let videoEl = $state();
+	/** @type {HTMLCanvasElement | undefined} */
+	let pipCanvas = $state();
+	let cameraReady = $state(false);
+	let airCharge = $state({ left: false, right: false, down: false });
 	/** @type {Record<string, { w: number; h: number }>} */
 	let measuredDims = $state({});
 	/** @type {ReturnType<typeof createFrameSelectMotion> | undefined} */
@@ -50,6 +69,9 @@
 	const dialogText = $derived.by(() => {
 		if (!frame) return 'The courier bears no relic. Open Admin to forge a frame.';
 		if (!oracleMode) {
+			if ($gestureFrame) {
+				return `${frame.name} hangs ready. Swipe left or right to choose. Pull down to drop the relic.`;
+			}
 			return reduced
 				? `${frame.name} hangs ready. Tap the strip to proceed.`
 				: `${frame.name} hangs ready. Pull hard, hold if you wish, then release to drop.`;
@@ -248,6 +270,9 @@
 			unsubscribeFrames();
 			motion?.dispose();
 			motion = undefined;
+			stopFrameAirGestures();
+			stopLivePreview();
+			stopCamera();
 		};
 	});
 
@@ -290,6 +315,75 @@
 			window.clearTimeout(timer);
 			if (!oracleStarted) signal.cancelled = true;
 		};
+	});
+
+	$effect(() => {
+		const airOn = $gestureFrame && !oracleMode && !exiting;
+		const el = rootEl;
+		const video = videoEl;
+		const tugEnabled = !reduced;
+
+		if (!airOn || !el || !video) {
+			stopFrameAirGestures();
+			stopLivePreview();
+			stopCamera();
+			cameraReady = false;
+			airCharge = { left: false, right: false, down: false };
+			return;
+		}
+
+		let cancelled = false;
+
+		(async () => {
+			const stream = await startCamera(video);
+			if (cancelled) {
+				stopCamera();
+				return;
+			}
+			cameraReady = !!stream;
+			if (!stream || cancelled) return;
+
+			void startFrameAirGestures({
+				video,
+				isArmed: () => !exiting && !oracleMode && !!motion,
+				tugEnabled,
+				onSwipe: (dir) => {
+					if (dir < 0) prev();
+					else next();
+				},
+				onTugStart: (palm) => motion?.beginAirPull(palm.y) ?? false,
+				onTugMove: (palm) => motion?.moveAirPull(palm.y),
+				onTugEnd: () => motion?.endAirPull(),
+				onCharge: (c) => {
+					airCharge = { left: c.left, right: c.right, down: c.down };
+				}
+			});
+		})();
+
+		return () => {
+			cancelled = true;
+			stopFrameAirGestures();
+			stopLivePreview();
+			stopCamera();
+			cameraReady = false;
+			airCharge = { left: false, right: false, down: false };
+		};
+	});
+
+	$effect(() => {
+		if (!$gestureFrame || oracleMode || exiting || !cameraReady || !videoEl || !pipCanvas) {
+			stopLivePreview();
+			return;
+		}
+
+		startLivePreview({
+			video: videoEl,
+			canvas: pipCanvas,
+			getPreset: () => 'natural',
+			getHandOverlay: getFrameAirOverlay
+		});
+
+		return () => stopLivePreview();
 	});
 
 	function selectFrame(target, direction) {
@@ -360,6 +454,7 @@
 	{@attach attachRoot}
 >
 	<BoothOlympusBackdrop />
+	<video bind:this={videoEl} class="capture-source" playsinline muted autoplay></video>
 	<div class="back-veil" aria-hidden="true"></div>
 	{#if oracleActive}
 		<div class="oracle-veil" aria-hidden="true"></div>
@@ -502,7 +597,13 @@
 				</div>
 			</div>
 		{:else}
-			<button class="nav nav-prev" type="button" onclick={prev} aria-label="Previous frame">
+			<button
+				class="nav nav-prev"
+				class:air-on={airCharge.left}
+				type="button"
+				onclick={prev}
+				aria-label="Previous frame"
+			>
 				<span class="chev" aria-hidden="true"></span>
 			</button>
 
@@ -590,9 +691,23 @@
 						{/if}
 					</button>
 				</div>
+
+				{#if $gestureFrame && !oracleMode}
+					<div class="air-cue air-cue-down" class:on={airCharge.down} aria-hidden="true"></div>
+					<div class="air-pip">
+						<canvas bind:this={pipCanvas}></canvas>
+						<span class="air-pip-label">LENS</span>
+					</div>
+				{/if}
 			</div>
 
-			<button class="nav nav-next" type="button" onclick={next} aria-label="Next frame">
+			<button
+				class="nav nav-next"
+				class:air-on={airCharge.right}
+				type="button"
+				onclick={next}
+				aria-label="Next frame"
+			>
 				<span class="chev" aria-hidden="true"></span>
 			</button>
 		{/if}
@@ -913,6 +1028,23 @@
 		outline-offset: 3px;
 	}
 
+	.nav.air-on {
+		border-color: var(--gold-bright);
+		filter: brightness(1.15);
+		box-shadow:
+			4px 4px 0 #07152d,
+			inset 0 0 0 2px var(--gold-bright);
+	}
+
+	.capture-source {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		opacity: 0;
+		pointer-events: none;
+		overflow: hidden;
+	}
+
 	.flight-stage {
 		position: relative;
 		z-index: 2;
@@ -1046,6 +1178,67 @@
 
 	.frame-view:global(.pulling) .frame-body {
 		cursor: grabbing;
+	}
+
+	.air-pip {
+		position: absolute;
+		left: 0.5rem;
+		bottom: 0.5rem;
+		z-index: 6;
+		width: 7.5rem;
+		aspect-ratio: 4 / 3;
+		border: 2px solid var(--gold);
+		box-shadow: 3px 3px 0 #07152d;
+		background: #07152d;
+		pointer-events: none;
+		overflow: hidden;
+	}
+
+	.air-pip canvas {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.air-pip-label {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		padding: 0.12rem 0.2rem;
+		font-family: var(--font-pixel);
+		font-size: 0.32rem;
+		letter-spacing: 0.16em;
+		text-align: center;
+		color: var(--gold-bright);
+		background: rgba(7, 21, 45, 0.72);
+		text-shadow: 1px 1px 0 #07152d;
+	}
+
+	.air-cue-down {
+		position: absolute;
+		left: 50%;
+		bottom: 0.55rem;
+		z-index: 6;
+		width: 0;
+		height: 0;
+		translate: -50% 0;
+		border-left: 12px solid transparent;
+		border-right: 12px solid transparent;
+		border-top: 16px solid color-mix(in srgb, var(--gold) 62%, transparent);
+		opacity: 0.5;
+		pointer-events: none;
+		filter: drop-shadow(2px 2px 0 #07152d);
+	}
+
+	.air-cue-down.on {
+		opacity: 1;
+		scale: 1.18;
+		border-top-color: var(--gold-bright);
+		filter:
+			drop-shadow(2px 2px 0 #07152d)
+			brightness(1.2);
 	}
 
 	.frame-body:disabled {
