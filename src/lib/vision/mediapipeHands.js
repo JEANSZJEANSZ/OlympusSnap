@@ -32,11 +32,11 @@ export async function ensureGestureRecognizer() {
 				},
 				runningMode: /** @type {'VIDEO'} */ ('VIDEO'),
 				numHands: 2,
-				minHandDetectionConfidence: 0.4,
-				minHandPresenceConfidence: 0.4,
-				minTrackingConfidence: 0.4,
+				minHandDetectionConfidence: 0.5,
+				minHandPresenceConfidence: 0.5,
+				minTrackingConfidence: 0.55,
 				cannedGesturesClassifierOptions: {
-					scoreThreshold: 0.3
+					scoreThreshold: 0.45
 				}
 			};
 			try {

@@ -10,6 +10,7 @@ const INFER_INTERVAL_MS = 66;
 const HOLD_MS = 700;
 const MISS_RESET = 5;
 const SCORE_MIN = 0.5;
+const SCORE_EXIT = 0.28;
 const GESTURE_KINDS = /** @type {const} */ (['Victory', 'Open_Palm', 'Thumb_Up']);
 
 /** @typedef {{ minX: number; minY: number; maxX: number; maxY: number; matching: boolean }} HandOverlayBox */
@@ -24,6 +25,7 @@ let lastVideoTime = -1;
 let holdStartedAt = 0;
 /** @type {number} */
 let missCount = 0;
+let poseLatched = false;
 /** @type {(() => void) | null} */
 let onVisibility = null;
 let loopGen = 0;
@@ -45,28 +47,39 @@ function clearOverlay() {
 /**
  * @param {import('@mediapipe/tasks-vision').Category[] | undefined} categories
  * @param {string} gesture
- * @returns {boolean}
+ * @returns {number}
  */
-function categoriesMatch(categories, gesture) {
-	if (!categories?.length) return false;
+function categoryScore(categories, gesture) {
+	if (!categories?.length) return 0;
+	let best = 0;
 	for (const cat of categories) {
-		if (cat?.categoryName === gesture && (cat.score ?? 0) >= SCORE_MIN) return true;
+		if (cat?.categoryName === gesture) best = Math.max(best, cat.score ?? 0);
 	}
-	return false;
+	return best;
 }
 
 /**
  * @param {import('@mediapipe/tasks-vision').GestureRecognizerResult | null | undefined} result
  * @param {string} gesture
+ * @returns {number}
+ */
+function bestGestureScore(result, gesture) {
+	const hands = result?.gestures;
+	if (!hands?.length) return 0;
+	let best = 0;
+	for (const categories of hands) {
+		best = Math.max(best, categoryScore(categories, gesture));
+	}
+	return best;
+}
+
+/**
+ * @param {import('@mediapipe/tasks-vision').Category[] | undefined} categories
+ * @param {string} gesture
  * @returns {boolean}
  */
-function isTriggerGesture(result, gesture) {
-	const hands = result?.gestures;
-	if (!hands?.length) return false;
-	for (const categories of hands) {
-		if (categoriesMatch(categories, gesture)) return true;
-	}
-	return false;
+function categoriesMatch(categories, gesture) {
+	return categoryScore(categories, gesture) >= (poseLatched ? SCORE_EXIT : SCORE_MIN);
 }
 
 /**
@@ -96,10 +109,7 @@ function landmarksAabb(pts) {
  */
 function storeOverlay(result, gesture) {
 	const landmarks = result?.landmarks;
-	if (!landmarks?.length) {
-		clearOverlay();
-		return;
-	}
+	if (!landmarks?.length) return;
 	/** @type {HandOverlayBox[]} */
 	const boxes = [];
 	for (let i = 0; i < landmarks.length; i++) {
@@ -107,15 +117,16 @@ function storeOverlay(result, gesture) {
 		if (!aabb) continue;
 		boxes.push({
 			...aabb,
-			matching: categoriesMatch(result?.gestures?.[i], gesture)
+			matching: categoriesMatch(result?.gestures?.[i], gesture) || poseLatched
 		});
 	}
-	lastOverlay = boxes;
+	if (boxes.length) lastOverlay = boxes;
 }
 
 function resetHold() {
 	holdStartedAt = 0;
 	missCount = 0;
+	poseLatched = false;
 }
 
 /** Cancel the infer loop; keep the loaded recognizer warm. */
@@ -203,18 +214,27 @@ export async function startGestureShutter(opts) {
 			return;
 		}
 
+		const hasHands = !!result?.landmarks?.length;
+		const score = hasHands ? bestGestureScore(result, gesture) : 0;
+		if (hasHands && score >= (poseLatched ? SCORE_EXIT : SCORE_MIN)) {
+			poseLatched = true;
+			missCount = 0;
+		} else {
+			missCount += 1;
+			if (missCount >= MISS_RESET) poseLatched = false;
+		}
+
 		storeOverlay(result, gesture);
 
-		if (isTriggerGesture(result, gesture)) {
-			missCount = 0;
+		if (poseLatched) {
 			if (!holdStartedAt) holdStartedAt = now;
 			if (now - holdStartedAt >= HOLD_MS) {
 				resetHold();
 				opts.onTrigger();
 			}
-		} else {
-			missCount += 1;
-			if (missCount >= MISS_RESET) resetHold();
+		} else if (missCount >= MISS_RESET) {
+			holdStartedAt = 0;
+			if (!hasHands) clearOverlay();
 		}
 	};
 

@@ -1,14 +1,17 @@
 /**
  * Frame Select air gestures — Camera-style canned poses.
  * Open_Palm + dx/velocity past threshold → swipe. Closed_Fist → grab and drag the rope.
- * Palm stroke stays sticky through brief Open_Palm flicker (motion blur).
+ * Pose hysteresis + landmark fist keep a still hand locked through classifier flicker.
  */
 
 import { ensureGestureRecognizer } from './mediapipeHands.js';
 
-const INFER_INTERVAL_MS = 24;
-const FIST_SCORE_MIN = 0.4;
-const PALM_SCORE_MIN = 0.35;
+const INFER_INTERVAL_MS = 33;
+const PALM_ENTER = 0.5;
+const PALM_EXIT = 0.28;
+const FIST_ENTER = 0.5;
+const FIST_EXIT = 0.28;
+const AABB_EMA = 0.35;
 const WRIST = 0;
 const MIDDLE_MCP = 9;
 const SWIPE_MIN = 0.1;
@@ -50,6 +53,10 @@ let tugging = false;
 let missCount = 0;
 let fistLabelMiss = 0;
 let cooldownUntil = 0;
+let palmLatched = false;
+let fistLatched = false;
+/** @type {{ minX: number; minY: number; maxX: number; maxY: number } | null} */
+let smoothBox = null;
 
 /**
  * @returns {HandOverlayBox[]}
@@ -73,6 +80,9 @@ function setCharge(next) {
 
 function clearVisuals() {
 	lastOverlay = [];
+	smoothBox = null;
+	palmLatched = false;
+	fistLatched = false;
 	setCharge({ ...IDLE_CHARGE });
 }
 
@@ -84,20 +94,83 @@ function resetStroke() {
 	tugging = false;
 	missCount = 0;
 	fistLabelMiss = 0;
+	palmLatched = false;
+	fistLatched = false;
 }
 
 /**
  * @param {import('@mediapipe/tasks-vision').Category[] | undefined} categories
  * @param {string} name
- * @param {number} min
- * @returns {boolean}
+ * @returns {number}
  */
-function categoriesMatch(categories, name, min) {
-	if (!categories?.length) return false;
+function categoryScore(categories, name) {
+	if (!categories?.length) return 0;
+	let best = 0;
 	for (const cat of categories) {
-		if (cat?.categoryName === name && (cat.score ?? 0) >= min) return true;
+		if (cat?.categoryName === name) best = Math.max(best, cat.score ?? 0);
 	}
-	return false;
+	return best;
+}
+
+/**
+ * @param {boolean} wasOn
+ * @param {number} score
+ * @param {number} enter
+ * @param {number} exit
+ */
+function latchPose(wasOn, score, enter, exit) {
+	if (wasOn) {
+		if (score <= 0) return true;
+		return score >= exit;
+	}
+	return score >= enter;
+}
+
+/**
+ * @param {{ x?: number; y?: number } | undefined} a
+ * @param {{ x?: number; y?: number } | undefined} b
+ */
+function dist2d(a, b) {
+	if (!a || !b) return 0;
+	return Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0));
+}
+
+/**
+ * Curled fingers (index–pinky) when the canned Closed_Fist label flickers.
+ * @param {import('@mediapipe/tasks-vision').NormalizedLandmark[] | undefined} pts
+ */
+function isLandmarkFist(pts) {
+	if (!pts || pts.length < 21) return false;
+	const wrist = pts[WRIST];
+	const tips = [8, 12, 16, 20];
+	const pips = [6, 10, 14, 18];
+	let curled = 0;
+	for (let i = 0; i < 4; i++) {
+		const tip = pts[tips[i]];
+		const pip = pts[pips[i]];
+		if (!tip || !pip || !wrist) continue;
+		if (dist2d(tip, wrist) < dist2d(pip, wrist) * 1.2) curled += 1;
+	}
+	return curled >= 3;
+}
+
+/**
+ * @param {{ minX: number; minY: number; maxX: number; maxY: number }} next
+ */
+function smoothAabb(next) {
+	if (!smoothBox) {
+		smoothBox = { ...next };
+		return smoothBox;
+	}
+	const a = AABB_EMA;
+	const b = 1 - a;
+	smoothBox = {
+		minX: next.minX * a + smoothBox.minX * b,
+		minY: next.minY * a + smoothBox.minY * b,
+		maxX: next.maxX * a + smoothBox.maxX * b,
+		maxY: next.maxY * a + smoothBox.maxY * b
+	};
+	return smoothBox;
 }
 
 /**
@@ -137,7 +210,7 @@ function palmCentroid(pts) {
 }
 
 /**
- * Largest hand + whether it is Open_Palm / Closed_Fist.
+ * Largest hand plus Open_Palm / Closed_Fist classifier scores.
  * @param {import('@mediapipe/tasks-vision').GestureRecognizerResult | null | undefined} result
  */
 function pickHand(result) {
@@ -160,10 +233,12 @@ function pickHand(result) {
 	}
 	if (!best) return null;
 	const cats = result?.gestures?.[bestIndex];
+	const pts = landmarks[bestIndex];
 	return {
 		...best,
-		openPalm: categoriesMatch(cats, 'Open_Palm', PALM_SCORE_MIN),
-		closedFist: categoriesMatch(cats, 'Closed_Fist', FIST_SCORE_MIN)
+		pts,
+		palmScore: categoryScore(cats, 'Open_Palm'),
+		fistScore: categoryScore(cats, 'Closed_Fist')
 	};
 }
 
@@ -271,7 +346,17 @@ export async function startFrameAirGestures(opts) {
 		}
 
 		missCount = 0;
-		const { palm, aabb, openPalm, closedFist } = hand;
+		const landmarkFist = isLandmarkFist(hand.pts);
+		let nextFist = landmarkFist || latchPose(fistLatched, hand.fistScore, FIST_ENTER, FIST_EXIT);
+		let nextPalm = latchPose(palmLatched, hand.palmScore, PALM_ENTER, PALM_EXIT);
+		if (landmarkFist) nextPalm = false;
+		else if (nextPalm && hand.palmScore >= PALM_ENTER) nextFist = false;
+		fistLatched = nextFist;
+		palmLatched = nextPalm;
+		const openPalm = palmLatched;
+		const closedFist = fistLatched;
+		const aabb = smoothAabb(hand.aabb);
+		const { palm } = hand;
 		lastOverlay = [{ ...aabb, matching: openPalm || closedFist || palmOriginX != null }];
 
 		if (tugging) {
