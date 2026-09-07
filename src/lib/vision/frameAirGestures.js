@@ -1,24 +1,17 @@
 /**
- * Frame Select air gestures — palm-centroid swipe + hold-then-pull tug.
- * Uses shared GestureRecognizer landmarks (no canned swipe label).
+ * Frame Select air gestures — Camera-style canned poses.
+ * Open_Palm + dx past threshold → swipe. Closed_Fist → grab and drag the rope.
  */
 
 import { ensureGestureRecognizer } from './mediapipeHands.js';
 
 const INFER_INTERVAL_MS = 33;
+const SCORE_MIN = 0.5;
 const WRIST = 0;
 const MIDDLE_MCP = 9;
-const EMA = 0.65;
-const STILL_MAX = 0.028;
-const HOLD_MS = 200;
-const SWIPE_MIN = 0.16;
-const SWIPE_FLICK = 0.01;
-const AXIS_RATIO = 1.35;
-const RELEASE_LIFT = 0.05;
-const CHARGE_H = 0.05;
-const COOLDOWN_MS = 380;
-const MISS_IDLE = 5;
-const MISS_TUG = 10;
+const SWIPE_MIN = 0.14;
+const COOLDOWN_MS = 280;
+const MISS_RESET = 5;
 
 /** @typedef {{ minX: number; minY: number; maxX: number; maxY: number; matching: boolean }} HandOverlayBox */
 /** @typedef {{ left: boolean; right: boolean; down: boolean }} AirCharge */
@@ -39,17 +32,9 @@ let onVisibility = null;
 let chargeCb;
 
 /** @type {number | null} */
-let originX = null;
+let palmOriginX = null;
 /** @type {number | null} */
-let originY = null;
-/** @type {number | null} */
-let smX = null;
-/** @type {number | null} */
-let smY = null;
-/** @type {number | null} */
-let prevX = null;
-let holdStartedAt = 0;
-let holding = false;
+let palmOriginY = null;
 let tugging = false;
 let missCount = 0;
 let cooldownUntil = 0;
@@ -80,25 +65,23 @@ function clearVisuals() {
 }
 
 function resetStroke() {
-	originX = null;
-	originY = null;
-	smX = null;
-	smY = null;
-	prevX = null;
-	holdStartedAt = 0;
-	holding = false;
+	palmOriginX = null;
+	palmOriginY = null;
 	tugging = false;
 	missCount = 0;
 }
 
 /**
- * @param {number} raw
- * @param {number | null} prev
- * @returns {number}
+ * @param {import('@mediapipe/tasks-vision').Category[] | undefined} categories
+ * @param {string} name
+ * @returns {boolean}
  */
-function ema(raw, prev) {
-	if (prev == null) return raw;
-	return prev + (raw - prev) * EMA;
+function categoriesMatch(categories, name) {
+	if (!categories?.length) return false;
+	for (const cat of categories) {
+		if (cat?.categoryName === name && (cat.score ?? 0) >= SCORE_MIN) return true;
+	}
+	return false;
 }
 
 /**
@@ -138,26 +121,34 @@ function palmCentroid(pts) {
 }
 
 /**
- * Prefer the larger (closer) hand.
+ * Largest hand + whether it is Open_Palm / Closed_Fist.
  * @param {import('@mediapipe/tasks-vision').GestureRecognizerResult | null | undefined} result
- * @returns {{ palm: { x: number; y: number }; aabb: { minX: number; minY: number; maxX: number; maxY: number } } | null}
  */
 function pickHand(result) {
 	const landmarks = result?.landmarks;
 	if (!landmarks?.length) return null;
 	let best = null;
 	let bestArea = -1;
-	for (const pts of landmarks) {
+	let bestIndex = 0;
+	for (let i = 0; i < landmarks.length; i++) {
+		const pts = landmarks[i];
 		const aabb = landmarksAabb(pts);
 		const palm = palmCentroid(pts);
 		if (!aabb || !palm) continue;
 		const area = Math.max(0, aabb.maxX - aabb.minX) * Math.max(0, aabb.maxY - aabb.minY);
 		if (area > bestArea) {
 			bestArea = area;
+			bestIndex = i;
 			best = { palm, aabb };
 		}
 	}
-	return best;
+	if (!best) return null;
+	const cats = result?.gestures?.[bestIndex];
+	return {
+		...best,
+		openPalm: categoriesMatch(cats, 'Open_Palm'),
+		closedFist: categoriesMatch(cats, 'Closed_Fist')
+	};
 }
 
 export function stopFrameAirGestures() {
@@ -239,8 +230,7 @@ export async function startFrameAirGestures(opts) {
 		const hand = pickHand(result);
 		if (!hand) {
 			missCount += 1;
-			const missMax = tugging || holding ? MISS_TUG : MISS_IDLE;
-			if (missCount >= missMax) {
+			if (missCount >= MISS_RESET) {
 				if (tugging) opts.onTugEnd();
 				resetStroke();
 				clearVisuals();
@@ -249,93 +239,69 @@ export async function startFrameAirGestures(opts) {
 		}
 
 		missCount = 0;
-		const raw = hand.palm;
-		smX = ema(raw.x, smX);
-		smY = ema(raw.y, smY);
-		const palm = { x: smX, y: smY };
-		const aabb = hand.aabb;
-		const flickX = prevX == null ? 0 : palm.x - prevX;
-		prevX = palm.x;
+		const { palm, aabb, openPalm, closedFist } = hand;
+		lastOverlay = [{ ...aabb, matching: openPalm || closedFist }];
 
 		if (tugging) {
-			setCharge({ left: false, right: false, down: true });
-			lastOverlay = [{ ...aabb, matching: true }];
-			opts.onTugMove(palm);
-			if (originY != null && palm.y < originY - RELEASE_LIFT) {
+			if (!closedFist) {
 				opts.onTugEnd();
 				tugging = false;
-				holding = false;
-				holdStartedAt = 0;
-				originX = palm.x;
-				originY = palm.y;
+				palmOriginX = null;
+				palmOriginY = null;
 				setCharge({ ...IDLE_CHARGE });
+				return;
 			}
+			setCharge({ left: false, right: false, down: true });
+			opts.onTugMove(palm);
 			return;
 		}
 
-		if (originX == null || originY == null) {
-			originX = palm.x;
-			originY = palm.y;
-			holdStartedAt = now;
-			holding = false;
+		if (tugEnabled && closedFist) {
+			const started = opts.onTugStart(palm);
+			if (started === false) return;
+			tugging = true;
+			palmOriginX = null;
+			palmOriginY = null;
+			setCharge({ left: false, right: false, down: true });
+			opts.onTugMove(palm);
+			return;
+		}
+
+		if (!openPalm) {
+			palmOriginX = null;
+			palmOriginY = null;
 			setCharge({ ...IDLE_CHARGE });
-			lastOverlay = [{ ...aabb, matching: false }];
 			return;
 		}
 
-		const dx = palm.x - originX;
-		const dy = palm.y - originY;
+		if (palmOriginX == null || palmOriginY == null) {
+			palmOriginX = palm.x;
+			palmOriginY = palm.y;
+			setCharge({ ...IDLE_CHARGE });
+			return;
+		}
+
+		const dx = palm.x - palmOriginX;
+		const dy = palm.y - palmOriginY;
 		const adx = Math.abs(dx);
 		const ady = Math.abs(dy);
-		const still = adx < STILL_MAX && ady < STILL_MAX;
 		const cooling = now < cooldownUntil;
 
-		if (still) {
-			if (!holdStartedAt) holdStartedAt = now;
-			if (tugEnabled && now - holdStartedAt >= HOLD_MS) holding = true;
-		} else if (!holding) {
-			holdStartedAt = 0;
-		}
-
-		const charge = {
-			left: !cooling && !holding && dx < -CHARGE_H && adx > ady * AXIS_RATIO,
-			right: !cooling && !holding && dx > CHARGE_H && adx > ady * AXIS_RATIO,
-			down: holding
-		};
-		setCharge(charge);
-		lastOverlay = [{ ...aabb, matching: holding || charge.left || charge.right }];
+		setCharge({
+			left: !cooling && dx < -0.05 && adx > ady,
+			right: !cooling && dx > 0.05 && adx > ady,
+			down: false
+		});
 
 		if (cooling) return;
 
-		if (
-			!holding &&
-			adx >= SWIPE_MIN &&
-			adx > ady * AXIS_RATIO &&
-			Math.abs(flickX) >= SWIPE_FLICK
-		) {
+		if (adx >= SWIPE_MIN && adx > ady) {
 			const dir = /** @type {-1 | 1} */ (dx > 0 ? 1 : -1);
 			cooldownUntil = now + COOLDOWN_MS;
-			originX = palm.x;
-			originY = palm.y;
-			holdStartedAt = 0;
+			palmOriginX = palm.x;
+			palmOriginY = palm.y;
 			setCharge({ ...IDLE_CHARGE });
 			opts.onSwipe(dir);
-			return;
-		}
-
-		if (tugEnabled && holding) {
-			const started = opts.onTugStart(palm);
-			if (started === false) {
-				originX = palm.x;
-				originY = palm.y;
-				holding = false;
-				holdStartedAt = 0;
-				return;
-			}
-			tugging = true;
-			originY = palm.y;
-			setCharge({ left: false, right: false, down: true });
-			opts.onTugMove(palm);
 		}
 	};
 

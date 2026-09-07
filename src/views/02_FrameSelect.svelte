@@ -70,7 +70,7 @@
 		if (!frame) return 'The courier bears no relic. Open Admin to forge a frame.';
 		if (!oracleMode) {
 			if ($gestureFrame) {
-				return `${frame.name} hangs ready. Swipe left or right to choose. Hold your hand still, then pull down to tug the relic.`;
+				return `${frame.name} hangs ready. Swipe an open palm left or right to choose. Make a fist, then pull down to tug the relic.`;
 			}
 			return reduced
 				? `${frame.name} hangs ready. Tap the strip to proceed.`
@@ -348,8 +348,8 @@
 				isArmed: () => !exiting && !oracleMode && !!motion,
 				tugEnabled,
 				onSwipe: (dir) => {
-					if (dir < 0) prev();
-					else next();
+					if (dir < 0) prev(true);
+					else next(true);
 				},
 				onTugStart: (palm) => motion?.beginAirPull(palm.y) ?? false,
 				onTugMove: (palm) => motion?.moveAirPull(palm.y),
@@ -386,7 +386,7 @@
 		return () => stopLivePreview();
 	});
 
-	function selectFrame(target, direction) {
+	function selectFrame(target, direction, air = false) {
 		if (exiting || oracleMode || !list.length) return;
 
 		const nextIndex = ((target % list.length) + list.length) % list.length;
@@ -398,21 +398,26 @@
 
 		if (motion && !reduced) {
 			const targetFrame = list[nextIndex];
-			preloadFrameImage(targetFrame?.src).then(() => {
-				if (exiting) return;
-				motion.playSwap(direction, apply);
-			});
+			if (targetFrame?.src) void preloadFrameImage(targetFrame.src);
+			if (air) {
+				motion.playSwap(direction, apply, { outMs: 280, inMs: 360 });
+			} else {
+				preloadFrameImage(targetFrame?.src).then(() => {
+					if (exiting) return;
+					motion.playSwap(direction, apply);
+				});
+			}
 		} else {
 			apply();
 		}
 	}
 
-	function prev() {
-		selectFrame(index - 1, -1);
+	function prev(air = false) {
+		selectFrame(index - 1, -1, air);
 	}
 
-	function next() {
-		selectFrame(index + 1, 1);
+	function next(air = false) {
+		selectFrame(index + 1, 1, air);
 	}
 
 	function back() {
