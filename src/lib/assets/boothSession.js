@@ -8,6 +8,15 @@ import { verifyAdminPin } from './assetStore.js';
 
 const UNLOCKED_KEY = 'olympus-snap-booth-unlocked';
 
+/**
+ * Vite `npm run dev` — skip Cerberus gate so frontend work needs no Photobooth Auth.
+ * Production / preview builds still require unlock.
+ * @returns {boolean}
+ */
+export function isBoothAuthBypassed() {
+	return !!import.meta.env.DEV;
+}
+
 /** @param {string} key @param {boolean} fallback */
 function readSessionFlag(key, fallback = false) {
 	try {
@@ -40,6 +49,7 @@ export function isBoothPublicRoute(nameOrPath) {
 }
 
 function initialUnlocked() {
+	if (isBoothAuthBypassed()) return true;
 	if (!readSessionFlag(UNLOCKED_KEY, false)) return false;
 	if (isCloudAssetsEnabled()) return !!getAdminAuth();
 	return true;
@@ -48,7 +58,12 @@ function initialUnlocked() {
 /** @type {import('svelte/store').Writable<boolean>} */
 export const boothUnlocked = writable(initialUnlocked());
 
-if (typeof window !== 'undefined' && initialUnlocked() && isCloudAssetsEnabled()) {
+if (
+	typeof window !== 'undefined' &&
+	!isBoothAuthBypassed() &&
+	initialUnlocked() &&
+	isCloudAssetsEnabled()
+) {
 	void verifyAdminAuth()
 		.then((ok) => {
 			if (!ok) lockBooth();
@@ -63,6 +78,12 @@ if (typeof window !== 'undefined' && initialUnlocked() && isCloudAssetsEnabled()
  * @returns {Promise<void>}
  */
 export async function unlockBooth(creds = {}) {
+	if (isBoothAuthBypassed()) {
+		writeSessionFlag(UNLOCKED_KEY, true);
+		boothUnlocked.set(true);
+		return;
+	}
+
 	if (isCloudAssetsEnabled()) {
 		const auth = (creds.auth || '').trim();
 		if (!auth) {
@@ -100,6 +121,10 @@ export async function unlockBooth(creds = {}) {
 }
 
 export function lockBooth() {
+	if (isBoothAuthBypassed()) {
+		boothUnlocked.set(true);
+		return;
+	}
 	clearAdminAuth();
 	writeSessionFlag(UNLOCKED_KEY, false);
 	boothUnlocked.set(false);

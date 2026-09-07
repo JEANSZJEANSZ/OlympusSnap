@@ -38,7 +38,7 @@
 	import { get } from 'svelte/store';
 	import { adminReturnTo, currentRoute, go, route } from './router/index.js';
 	import { initAssets } from './lib/assets/assetStore.js';
-	import { boothUnlocked, isBoothPublicRoute } from './lib/assets/boothSession.js';
+	import { boothUnlocked, isBoothAuthBypassed, isBoothPublicRoute } from './lib/assets/boothSession.js';
 	import FrameHandoffOverlay from './lib/components/FrameHandoffOverlay.svelte';
 	import ImageHandoffOverlay from './lib/components/ImageHandoffOverlay.svelte';
 	import BoothCursor from './lib/components/BoothCursor.svelte';
@@ -49,7 +49,9 @@
 	/** After long-press opens Admin, ignore the click that follows pointerup. */
 	let suppressClick = false;
 
-	const showBoothGate = $derived(!$boothUnlocked && !isBoothPublicRoute($route));
+	const showBoothGate = $derived(
+		!isBoothAuthBypassed() && !$boothUnlocked && !isBoothPublicRoute($route)
+	);
 	const lockBrandHome = $derived($route === 'studio');
 
 	onMount(() => {

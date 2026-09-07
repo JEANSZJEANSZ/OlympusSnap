@@ -679,13 +679,15 @@
 		position: relative;
 		z-index: 2;
 		width: 100%;
-		height: 100%;
-		max-height: min(62dvh, 380px);
-		min-height: 280px;
+		height: auto;
+		align-self: stretch;
+		max-height: none;
+		min-height: 260px;
 		margin: 0 auto;
 		display: grid;
 		place-items: center;
 		isolation: isolate;
+		container-type: size;
 	}
 
 	.oracle-ring {
@@ -784,6 +786,8 @@
 	}
 
 	.oracle-relic {
+		/* No rope — leave room for torch + runes, not bird hang. */
+		--hang-clearance: 6.2rem;
 		cursor: default;
 		box-shadow:
 			0 0 0 3px #c9a24a,
@@ -913,11 +917,13 @@
 		position: relative;
 		z-index: 2;
 		width: 100%;
-		height: 100%;
-		max-height: min(62dvh, 360px);
+		height: auto;
+		align-self: stretch;
+		max-height: none;
 		min-height: 260px;
 		margin: 0 auto;
 		overflow: visible;
+		container-type: size;
 		--rig-lift: clamp(-20px, -3vh, -8px);
 	}
 
@@ -1014,11 +1020,13 @@
 	}
 
 	.frame-body {
-		/* Cap both axes so tall strips stay narrow and landscapes stay wide. */
+		/* Leftover stage under bird+rope. Rope length is physics (7×16px) — do not grow it. */
 		--frame-ar: 3 / 4;
+		--hang-clearance: 224px;
 		position: relative;
 		display: block;
 		width: min(58vw, 280px, calc(min(37dvh, 230px) * var(--frame-ar)));
+		width: min(72vw, 640px, calc(max(0px, 100cqh - var(--hang-clearance)) * var(--frame-ar)));
 		height: auto;
 		aspect-ratio: var(--frame-ar);
 		padding: 0;
@@ -1184,6 +1192,7 @@
 
 		.frame-body {
 			width: min(72vw, 260px, calc(min(42dvh, 300px) * var(--frame-ar)));
+			width: min(78vw, 420px, calc(max(0px, 100cqh - var(--hang-clearance)) * var(--frame-ar)));
 		}
 
 		.footer {
@@ -1199,19 +1208,13 @@
 			gap: 0.18rem;
 		}
 
-		.flight-stage,
-		.oracle-stage {
-			max-height: 320px;
-			min-height: 240px;
-		}
-
 		.bird-rig {
 			scale: 0.78;
 			transform-origin: top center;
 		}
 
 		.frame-body {
-			width: min(56vw, 240px, calc(min(40dvh, 260px) * var(--frame-ar)));
+			--hang-clearance: 168px;
 		}
 
 		.pager {
