@@ -198,7 +198,8 @@
 	import {
 		startGestureShutter,
 		stopGestureShutter,
-		disposeGestureShutter
+		disposeGestureShutter,
+		getHandOverlay
 	} from '../lib/vision/gestureShutter.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import DialogBox from '../lib/components/DialogBox.svelte';
@@ -383,7 +384,8 @@
 		startLivePreview({
 			video: videoEl,
 			canvas: previewCanvas,
-			getPreset: () => filterPreset
+			getPreset: () => filterPreset,
+			getHandOverlay
 		});
 
 		return () => stopLivePreview();

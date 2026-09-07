@@ -1,18 +1,20 @@
 /**
  * Light gesture shutter for Camera Temple.
- * MediaPipe GestureRecognizer ~8fps / 1 hand / GPU — pause when not armed; close on leave.
- * Admin picks Victory, Open_Palm, or Thumb_Up; allowlist loads all three.
+ * MediaPipe GestureRecognizer ~15fps / 2 hands / GPU — pause when not armed; close on leave.
+ * Admin pick (Victory / Open_Palm / Thumb_Up) filtered in JS, not classifier allowlist.
  */
 
-const INFER_INTERVAL_MS = 125;
+const INFER_INTERVAL_MS = 66;
 const HOLD_MS = 700;
-const MISS_RESET = 2;
-const SCORE_MIN = 0.75;
-const GESTURE_ALLOWLIST = /** @type {const} */ (['Victory', 'Open_Palm', 'Thumb_Up']);
+const MISS_RESET = 5;
+const SCORE_MIN = 0.5;
+const GESTURE_KINDS = /** @type {const} */ (['Victory', 'Open_Palm', 'Thumb_Up']);
 
 const APP_BASE = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
 const WASM_ROOT = `${APP_BASE}assets/vision`;
 const MODEL_PATH = `${WASM_ROOT}/gesture_recognizer.task`;
+
+/** @typedef {{ minX: number; minY: number; maxX: number; maxY: number; matching: boolean }} HandOverlayBox */
 
 /** @type {import('@mediapipe/tasks-vision').GestureRecognizer | null} */
 let recognizer = null;
@@ -32,6 +34,20 @@ let missCount = 0;
 /** @type {(() => void) | null} */
 let onVisibility = null;
 let loopGen = 0;
+/** @type {HandOverlayBox[]} */
+let lastOverlay = [];
+
+/**
+ * Latest hand AABBs in raw-video normalized coords (unmirrored). Empty when shutter idle.
+ * @returns {HandOverlayBox[]}
+ */
+export function getHandOverlay() {
+	return lastOverlay;
+}
+
+function clearOverlay() {
+	lastOverlay = [];
+}
 
 /**
  * @returns {Promise<GestureRecognizer | null>}
@@ -51,10 +67,12 @@ async function ensureRecognizer() {
 					delegate: /** @type {'GPU'} */ ('GPU')
 				},
 				runningMode: /** @type {'VIDEO'} */ ('VIDEO'),
-				numHands: 1,
+				numHands: 2,
+				minHandDetectionConfidence: 0.4,
+				minHandPresenceConfidence: 0.4,
+				minTrackingConfidence: 0.4,
 				cannedGesturesClassifierOptions: {
-					categoryAllowlist: [...GESTURE_ALLOWLIST],
-					scoreThreshold: SCORE_MIN
+					scoreThreshold: 0.3
 				}
 			};
 			try {
@@ -82,6 +100,19 @@ async function ensureRecognizer() {
 }
 
 /**
+ * @param {import('@mediapipe/tasks-vision').Category[] | undefined} categories
+ * @param {string} gesture
+ * @returns {boolean}
+ */
+function categoriesMatch(categories, gesture) {
+	if (!categories?.length) return false;
+	for (const cat of categories) {
+		if (cat?.categoryName === gesture && (cat.score ?? 0) >= SCORE_MIN) return true;
+	}
+	return false;
+}
+
+/**
  * @param {import('@mediapipe/tasks-vision').GestureRecognizerResult | null | undefined} result
  * @param {string} gesture
  * @returns {boolean}
@@ -90,11 +121,53 @@ function isTriggerGesture(result, gesture) {
 	const hands = result?.gestures;
 	if (!hands?.length) return false;
 	for (const categories of hands) {
-		const top = categories?.[0];
-		if (!top) continue;
-		if (top.categoryName === gesture && (top.score ?? 0) >= SCORE_MIN) return true;
+		if (categoriesMatch(categories, gesture)) return true;
 	}
 	return false;
+}
+
+/**
+ * @param {import('@mediapipe/tasks-vision').NormalizedLandmark[] | undefined} pts
+ * @returns {{ minX: number; minY: number; maxX: number; maxY: number } | null}
+ */
+function landmarksAabb(pts) {
+	if (!pts?.length) return null;
+	let minX = 1;
+	let minY = 1;
+	let maxX = 0;
+	let maxY = 0;
+	for (const p of pts) {
+		const x = p.x ?? 0;
+		const y = p.y ?? 0;
+		if (x < minX) minX = x;
+		if (y < minY) minY = y;
+		if (x > maxX) maxX = x;
+		if (y > maxY) maxY = y;
+	}
+	return { minX, minY, maxX, maxY };
+}
+
+/**
+ * @param {import('@mediapipe/tasks-vision').GestureRecognizerResult | null | undefined} result
+ * @param {string} gesture
+ */
+function storeOverlay(result, gesture) {
+	const landmarks = result?.landmarks;
+	if (!landmarks?.length) {
+		clearOverlay();
+		return;
+	}
+	/** @type {HandOverlayBox[]} */
+	const boxes = [];
+	for (let i = 0; i < landmarks.length; i++) {
+		const aabb = landmarksAabb(landmarks[i]);
+		if (!aabb) continue;
+		boxes.push({
+			...aabb,
+			matching: categoriesMatch(result?.gestures?.[i], gesture)
+		});
+	}
+	lastOverlay = boxes;
 }
 
 function resetHold() {
@@ -116,6 +189,7 @@ export function stopGestureShutter() {
 	resetHold();
 	lastInferAt = 0;
 	lastVideoTime = -1;
+	clearOverlay();
 }
 
 /** Stop loop and free WASM (leave Camera / toggle off). */
@@ -143,7 +217,7 @@ export function disposeGestureShutter() {
 export async function startGestureShutter(opts) {
 	stopGestureShutter();
 	const gen = loopGen;
-	const gesture = GESTURE_ALLOWLIST.includes(/** @type {*} */ (opts.gesture))
+	const gesture = GESTURE_KINDS.includes(/** @type {*} */ (opts.gesture))
 		? opts.gesture
 		: 'Victory';
 
@@ -153,9 +227,13 @@ export async function startGestureShutter(opts) {
 	lastInferAt = 0;
 	lastVideoTime = -1;
 	resetHold();
+	clearOverlay();
 
 	onVisibility = () => {
-		if (document.hidden) resetHold();
+		if (document.hidden) {
+			resetHold();
+			clearOverlay();
+		}
 	};
 	document.addEventListener('visibilitychange', onVisibility);
 
@@ -166,6 +244,7 @@ export async function startGestureShutter(opts) {
 		if (document.hidden) return;
 		if (!opts.isArmed()) {
 			resetHold();
+			clearOverlay();
 			return;
 		}
 
@@ -185,8 +264,11 @@ export async function startGestureShutter(opts) {
 		} catch (err) {
 			console.warn('[gestureShutter] recognize failed', err);
 			resetHold();
+			clearOverlay();
 			return;
 		}
+
+		storeOverlay(result, gesture);
 
 		if (isTriggerGesture(result, gesture)) {
 			missCount = 0;
