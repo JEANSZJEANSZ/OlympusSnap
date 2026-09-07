@@ -47,6 +47,7 @@
 	let pipCanvas = $state();
 	let cameraReady = $state(false);
 	let airCharge = $state({ left: false, right: false, down: false });
+	let airPullProgress = $state(0);
 	/** @type {Record<string, { w: number; h: number }>} */
 	let measuredDims = $state({});
 	/** @type {ReturnType<typeof createFrameSelectMotion> | undefined} */
@@ -70,7 +71,7 @@
 		if (!frame) return 'The courier bears no relic. Open Admin to forge a frame.';
 		if (!oracleMode) {
 			if ($gestureFrame) {
-				return `${frame.name} hangs ready. Swipe an open palm left or right to choose. Make a fist, then pull down to tug the relic.`;
+				return `${frame.name} hangs ready. Swipe an open palm left or right to choose. Make a fist and pull down — a short tug drops the relic.`;
 			}
 			return reduced
 				? `${frame.name} hangs ready. Tap the strip to proceed.`
@@ -329,6 +330,7 @@
 			stopCamera();
 			cameraReady = false;
 			airCharge = { left: false, right: false, down: false };
+			airPullProgress = 0;
 			return;
 		}
 
@@ -352,8 +354,14 @@
 					else next(true);
 				},
 				onTugStart: (palm) => motion?.beginAirPull(palm.y) ?? false,
-				onTugMove: (palm) => motion?.moveAirPull(palm.y),
-				onTugEnd: () => motion?.endAirPull(),
+				onTugMove: (palm) => {
+					motion?.moveAirPull(palm.y);
+					airPullProgress = motion?.getAirPullProgress() ?? 0;
+				},
+				onTugEnd: () => {
+					motion?.endAirPull();
+					airPullProgress = 0;
+				},
 				onCharge: (c) => {
 					airCharge = { left: c.left, right: c.right, down: c.down };
 				}
@@ -367,6 +375,7 @@
 			stopCamera();
 			cameraReady = false;
 			airCharge = { left: false, right: false, down: false };
+			airPullProgress = 0;
 		};
 	});
 
@@ -698,7 +707,12 @@
 				</div>
 
 				{#if $gestureFrame && !oracleMode}
-					<div class="air-cue air-cue-down" class:on={airCharge.down} aria-hidden="true"></div>
+					<div
+						class="air-cue air-cue-down"
+						class:on={airCharge.down}
+						style:--tug={airCharge.down ? airPullProgress : 0}
+						aria-hidden="true"
+					></div>
 					<div class="air-pip">
 						<canvas bind:this={pipCanvas}></canvas>
 						<span class="air-pip-label">LENS</span>
@@ -1231,19 +1245,18 @@
 		translate: -50% 0;
 		border-left: 12px solid transparent;
 		border-right: 12px solid transparent;
-		border-top: 16px solid color-mix(in srgb, var(--gold) 62%, transparent);
-		opacity: 0.5;
+		border-top: 16px solid
+			color-mix(in srgb, var(--gold-bright) calc(var(--tug, 0) * 100%), var(--gold));
+		opacity: calc(0.32 + var(--tug, 0) * 0.68);
+		scale: calc(0.9 + var(--tug, 0) * 0.55);
 		pointer-events: none;
 		filter: drop-shadow(2px 2px 0 #07152d);
 	}
 
 	.air-cue-down.on {
-		opacity: 1;
-		scale: 1.18;
-		border-top-color: var(--gold-bright);
 		filter:
 			drop-shadow(2px 2px 0 #07152d)
-			brightness(1.2);
+			brightness(calc(1 + var(--tug, 0) * 0.5));
 	}
 
 	.frame-body:disabled {

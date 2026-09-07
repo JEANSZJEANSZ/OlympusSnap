@@ -7,7 +7,7 @@
 import { ensureGestureRecognizer } from './mediapipeHands.js';
 
 const INFER_INTERVAL_MS = 24;
-const FIST_SCORE_MIN = 0.5;
+const FIST_SCORE_MIN = 0.4;
 const PALM_SCORE_MIN = 0.35;
 const WRIST = 0;
 const MIDDLE_MCP = 9;
@@ -17,7 +17,9 @@ const SWIPE_VEL = 1.2;
 const AXIS_DY = 0.9;
 const COOLDOWN_MS = 280;
 const MISS_RESET = 5;
+const TUG_MISS_RESET = 10;
 const PALM_GRACE = 7;
+const FIST_GRACE = 8;
 
 /** @typedef {{ minX: number; minY: number; maxX: number; maxY: number; matching: boolean }} HandOverlayBox */
 /** @typedef {{ left: boolean; right: boolean; down: boolean }} AirCharge */
@@ -46,6 +48,7 @@ let prevPalmX = null;
 let palmLabelMiss = 0;
 let tugging = false;
 let missCount = 0;
+let fistLabelMiss = 0;
 let cooldownUntil = 0;
 
 /**
@@ -80,6 +83,7 @@ function resetStroke() {
 	palmLabelMiss = 0;
 	tugging = false;
 	missCount = 0;
+	fistLabelMiss = 0;
 }
 
 /**
@@ -257,7 +261,8 @@ export async function startFrameAirGestures(opts) {
 		const hand = pickHand(result);
 		if (!hand) {
 			missCount += 1;
-			if (missCount >= MISS_RESET) {
+			const missLimit = tugging ? TUG_MISS_RESET : MISS_RESET;
+			if (missCount >= missLimit) {
 				if (tugging) opts.onTugEnd();
 				resetStroke();
 				clearVisuals();
@@ -271,14 +276,20 @@ export async function startFrameAirGestures(opts) {
 
 		if (tugging) {
 			if (!closedFist) {
-				opts.onTugEnd();
-				tugging = false;
-				palmOriginX = null;
-				palmOriginY = null;
-				prevPalmX = null;
-				palmLabelMiss = 0;
-				setCharge({ ...IDLE_CHARGE });
-				return;
+				fistLabelMiss += 1;
+				if (fistLabelMiss >= FIST_GRACE) {
+					opts.onTugEnd();
+					tugging = false;
+					fistLabelMiss = 0;
+					palmOriginX = null;
+					palmOriginY = null;
+					prevPalmX = null;
+					palmLabelMiss = 0;
+					setCharge({ ...IDLE_CHARGE });
+					return;
+				}
+			} else {
+				fistLabelMiss = 0;
 			}
 			setCharge({ left: false, right: false, down: true });
 			opts.onTugMove(palm);
@@ -289,6 +300,7 @@ export async function startFrameAirGestures(opts) {
 			const started = opts.onTugStart(palm);
 			if (started === false) return;
 			tugging = true;
+			fistLabelMiss = 0;
 			palmOriginX = null;
 			palmOriginY = null;
 			prevPalmX = null;

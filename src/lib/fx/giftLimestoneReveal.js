@@ -1,6 +1,6 @@
 /**
  * Gift reveal — limestone Greek stele (solid 3D slab + carved face texture).
- * Strike → crack → split → portrait settle → UI handoff.
+ * Idle countdown pre-crack → auto shatter → portrait settle → UI handoff.
  */
 import {
 	CanvasTexture,
@@ -1161,6 +1161,8 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 	let shatterSepMul = 1;
 	let giftPortraitScale = 0.72;
 	let canvasFade = 1;
+	/** 0–1 rising crack during idle countdown, before triggerCrack. */
+	let preCrackProgress = 0;
 	/** @type {'zeus' | 'poseidon' | 'hades'} */
 	let crackGod = 'zeus';
 	let aftershockFired = false;
@@ -1267,8 +1269,19 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		}
 	}
 
+	/**
+	 * Idle pre-crack intensity (0–1). Visible hairline grows during the 3-2-1.
+	 * @param {number} value
+	 */
+	function setPreCrackProgress(value) {
+		if (phase !== 'idle' && phase !== 'enter') return;
+		preCrackProgress = Math.max(0, Math.min(1, Number(value) || 0));
+	}
+
 	function triggerCrack() {
 		if (phase !== 'idle' || reduced) return;
+		preCrackProgress = 1;
+		pivot.position.x = 0;
 		crackGod = gods.pickGod();
 		setPhase('crack');
 		crackT = 0;
@@ -1377,9 +1390,11 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 
 		if (phase === 'idle') {
 			pivot.position.y = Math.sin(elapsed * 0.8) * 0.01;
+			pivot.position.x = Math.sin(elapsed * (7 + preCrackProgress * 16)) * preCrackProgress * 0.02;
 			pivot.scale.setScalar(1 + Math.sin(elapsed * 0.95) * 0.008);
-			crackMat.opacity = 0.28 + (0.5 + 0.5 * Math.sin(elapsed * 2.4)) * 0.18;
-			aura.tick(elapsed, 1);
+			const pulse = (0.5 + 0.5 * Math.sin(elapsed * (2.4 + preCrackProgress * 3))) * 0.1;
+			crackMat.opacity = 0.16 + preCrackProgress * 0.78 + pulse * (0.25 + preCrackProgress * 0.35);
+			aura.tick(elapsed, 1 + preCrackProgress * 0.55);
 		}
 
 		if (phase === 'crack') {
@@ -1807,7 +1822,6 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 		if (e.button != null && e.button !== 0) return;
 		e.preventDefault();
 		onPointerMove(e);
-		triggerCrack();
 	}
 
 	canvas.addEventListener('pointermove', onPointerMove);
@@ -1842,6 +1856,7 @@ export function createGiftLimestoneReveal(canvas, opts = {}) {
 	return {
 		seed,
 		resize: onResize,
+		setPreCrackProgress,
 		triggerCrack,
 		dispose,
 		destroy: dispose

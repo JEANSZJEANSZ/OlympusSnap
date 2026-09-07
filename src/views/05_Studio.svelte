@@ -310,6 +310,7 @@
 	let sessionError = $state(null);
 	/** @type {Record<string, { w: number; h: number }>} */
 	let measuredDims = $state({});
+	let captureObjectUrl = '';
 
 	const frame = $derived(getLiveFrameById($selectedFrameId));
 
@@ -339,6 +340,20 @@
 	const busy = $derived(entryBusy || exiting || saving || saveDone || sharing);
 
 	const dialogText = $derived('Scan the QR at the booth to open mobile studio.');
+
+	/** @param {string} url */
+	function rememberCaptureUrl(url) {
+		if (captureObjectUrl && captureObjectUrl !== url) {
+			URL.revokeObjectURL(captureObjectUrl);
+		}
+		captureObjectUrl = url.startsWith('blob:') ? url : '';
+	}
+
+	function revokeCaptureUrl() {
+		if (!captureObjectUrl) return;
+		URL.revokeObjectURL(captureObjectUrl);
+		captureObjectUrl = '';
+	}
 
 	function clearSaveError() {
 		saveError = false;
@@ -397,6 +412,7 @@
 			(async () => {
 				try {
 					const payload = await loadCapture(parts.id, parts.key);
+					rememberCaptureUrl(payload.imageDataUrl);
 					capturedImageData.set(payload.imageDataUrl);
 					if (payload.frameId) selectedFrameId.set(payload.frameId);
 					activeStickers.set([]);
@@ -429,6 +445,7 @@
 
 	onDestroy(() => {
 		clearSaveError();
+		revokeCaptureUrl();
 	});
 
 	/** @param {import('../lib/stores/stores.js').ActiveSticker[]} list */

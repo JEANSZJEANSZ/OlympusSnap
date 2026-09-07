@@ -15,13 +15,19 @@
 			portraitUrl={giftImage}
 			seed={marbleSeed}
 			{reduced}
+			onReady={(api) => {
+				marbleApi = api;
+			}}
 			onPhaseChange={(p) => {
-				if (p === 'crack' || p === 'revealed') showMarbleHint = false;
+				if (p === 'idle') void runCrackCountdown();
+				if (p === 'crack' || p === 'revealed') crackCount = null;
 			}}
 			onRevealed={() => (phase = 'revealed')}
 		/>
-		{#if showMarbleHint}
-			<p class="marble-hint">STRIKE THE RELIC</p>
+		{#if crackCount != null}
+			{#key crackCount}
+				<p class="marble-countdown" aria-live="assertive">{crackCount}</p>
+			{/key}
 		{/if}
 	{/if}
 
@@ -58,7 +64,7 @@
 			<header class="head">
 				<p class="eyebrow">OLYMPUS SNAP!</p>
 				<h1>THE CRACKED RELIC</h1>
-				<p class="sub">Strike · Scan · Ascend — your mythic portrait awaits.</p>
+				<p class="sub">Watch the relic crack — then scan to ascend.</p>
 			</header>
 
 			<aside class="qr-side">
@@ -135,10 +141,14 @@
 	let sessionId = $state(/** @type {string | null} */ (null));
 	let sessionKey = $state(/** @type {string | null} */ (null));
 	let reduced = $state(false);
-	let showMarbleHint = $state(true);
 	let marbleSeed = $state(/** @type {number | null} */ (null));
 	/** @type {RevealPhase} */
 	let phase = $state('forging');
+	let crackCount = $state(/** @type {number | null} */ (null));
+	/** @type {{ setPreCrackProgress: (n: number) => void, triggerCrack: () => void } | null} */
+	let marbleApi = null;
+	let crackRitualStarted = false;
+	let crackCancelled = false;
 	/** @type {HTMLElement | undefined} */
 	let stageEl = $state();
 	/** @type {HTMLElement | undefined} */
@@ -182,6 +192,28 @@
 			stopGiftMotion = playRevealGiftMotion(stageEl, { reduced }) || null;
 		}
 	});
+
+	async function runCrackCountdown() {
+		if (crackRitualStarted || reduced || crackCancelled) return;
+		crackRitualStarted = true;
+		const api = marbleApi;
+		const tickMs = 1000;
+		for (let n = 3; n >= 1; n -= 1) {
+			if (crackCancelled) return;
+			crackCount = n;
+			const from = (3 - n) / 3;
+			const to = (4 - n) / 3;
+			const startedAt = performance.now();
+			while (performance.now() - startedAt < tickMs) {
+				if (crackCancelled) return;
+				const t = Math.min(1, (performance.now() - startedAt) / tickMs);
+				api?.setPreCrackProgress(from + (to - from) * t);
+				await new Promise((resolve) => requestAnimationFrame(resolve));
+			}
+		}
+		crackCount = null;
+		if (!crackCancelled) api?.triggerCrack();
+	}
 
 	/**
 	 * @param {string} studioUrl
@@ -245,6 +277,7 @@
 
 		return () => {
 			cancelled = true;
+			crackCancelled = true;
 			stopGiftMotion?.();
 			stopGiftMotion = null;
 		};
@@ -299,27 +332,31 @@
 		visibility: hidden;
 	}
 
-	.marble-hint {
+	.marble-countdown {
 		position: fixed;
 		left: 50%;
 		bottom: max(1.25rem, env(safe-area-inset-bottom));
 		z-index: 3;
+		margin: 0;
 		transform: translateX(-50%);
-		font-size: var(--booth-text-sm);
+		line-height: 1;
+		text-align: center;
+		font-size: clamp(3.2rem, 14vw, 7rem);
 		color: var(--gold-bright);
-		letter-spacing: 0.1em;
-		text-shadow: 2px 2px 0 #071936;
+		letter-spacing: 0.04em;
+		text-shadow: 4px 4px 0 #071936;
 		pointer-events: none;
-		animation: marble-pulse 1.6s steps(4) infinite;
+		animation: countdown-pop 0.85s steps(3) both;
 	}
 
-	@keyframes marble-pulse {
-		0%,
-		100% {
-			opacity: 1;
+	@keyframes countdown-pop {
+		from {
+			transform: translateX(-50%) scale(0.85);
+			opacity: 0.6;
 		}
-		50% {
-			opacity: 0.45;
+		to {
+			transform: translateX(-50%) scale(1);
+			opacity: 1;
 		}
 	}
 
@@ -618,9 +655,8 @@
 			touch-action: manipulation;
 		}
 
-		.marble-hint {
+		.marble-countdown {
 			bottom: max(1.5rem, calc(env(safe-area-inset-bottom) + 0.75rem));
-			font-size: var(--booth-text-xs);
 		}
 
 		.stage.revealed {

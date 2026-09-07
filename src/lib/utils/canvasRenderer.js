@@ -318,3 +318,61 @@ export async function compositeWithStickers(compositeDataUrl, stickers) {
 
 	return canvas.toDataURL('image/png');
 }
+
+/** Long-edge cap for booth → phone session upload (Studio stickers, not print). */
+export const HANDOFF_MAX_LONG_EDGE = 2048;
+const HANDOFF_JPEG_QUALITY = 0.88;
+
+/**
+ * Downscale + JPEG-encode a composite for Photobooth capture POST.
+ * @param {string} imageDataUrl
+ * @returns {Promise<{
+ *   imageDataUrl: string;
+ *   contentType: 'image/jpeg' | 'image/png';
+ *   toPng: () => string;
+ * }>}
+ */
+export async function encodeHandoffImage(imageDataUrl) {
+	const fallback = {
+		imageDataUrl,
+		contentType: /** @type {const} */ ('image/png'),
+		toPng: () => imageDataUrl
+	};
+	if (!imageDataUrl) return fallback;
+
+	const img = await loadImage(imageDataUrl).catch(() => null);
+	if (!img) return fallback;
+
+	const srcW = img.naturalWidth || img.width;
+	const srcH = img.naturalHeight || img.height;
+	if (!srcW || !srcH) return fallback;
+
+	const long = Math.max(srcW, srcH);
+	const scale = long > HANDOFF_MAX_LONG_EDGE ? HANDOFF_MAX_LONG_EDGE / long : 1;
+	const cw = Math.max(1, Math.round(srcW * scale));
+	const ch = Math.max(1, Math.round(srcH * scale));
+
+	const canvas = document.createElement('canvas');
+	canvas.width = cw;
+	canvas.height = ch;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return fallback;
+
+	ctx.fillStyle = '#111';
+	ctx.fillRect(0, 0, cw, ch);
+	ctx.drawImage(img, 0, 0, cw, ch);
+
+	const toPng = () => canvas.toDataURL('image/png');
+
+	try {
+		const jpeg = canvas.toDataURL('image/jpeg', HANDOFF_JPEG_QUALITY);
+		if (jpeg.startsWith('data:image/jpeg')) {
+			return { imageDataUrl: jpeg, contentType: 'image/jpeg', toPng };
+		}
+	} catch {
+		/* JPEG encode unsupported — PNG at the same cap still shrinks the POST. */
+	}
+
+	const png = toPng();
+	return { imageDataUrl: png, contentType: 'image/png', toPng: () => png };
+}

@@ -2,7 +2,8 @@
  * Booth → phone session handoff via Photobooth captures API; stub when offline.
  */
 import { toFullPath } from '../../router/index.js';
-import { blobToDataUrl, getApiBase, stripDataUrl } from '../assets/assetApi.js';
+import { getApiBase, stripDataUrl } from '../assets/assetApi.js';
+import { encodeHandoffImage } from '../utils/canvasRenderer.js';
 import { encodeSes, decodeSes } from './sesCodec.js';
 import { stubCreateSession, stubLoadCapture } from './sessionStub.js';
 
@@ -13,21 +14,46 @@ function useCloud() {
 }
 
 /**
+ * @param {string} imageBase64
+ * @param {string | null} frameId
+ * @param {string} contentType
+ */
+async function postCapture(imageBase64, frameId, contentType) {
+	return fetch(`${getApiBase()}/api/photobooth/captures`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			imageBase64,
+			frameId,
+			contentType
+		})
+	});
+}
+
+/**
  * @param {{ imageDataUrl: string; frameId: string | null }} payload
  * @returns {Promise<{ id: string; key: string; frameId: string | null }>}
  */
 export async function createSession(payload) {
-	if (!useCloud()) return stubCreateSession(payload);
+	const encoded = await encodeHandoffImage(payload.imageDataUrl);
 
-	const res = await fetch(`${getApiBase()}/api/photobooth/captures`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			imageBase64: stripDataUrl(payload.imageDataUrl),
-			frameId: payload.frameId,
-			contentType: 'image/png'
-		})
-	});
+	if (!useCloud()) {
+		return stubCreateSession({
+			imageDataUrl: encoded.imageDataUrl,
+			frameId: payload.frameId
+		});
+	}
+
+	let imageDataUrl = encoded.imageDataUrl;
+	let contentType = encoded.contentType;
+	let res = await postCapture(stripDataUrl(imageDataUrl), payload.frameId, contentType);
+
+	if (!res.ok && contentType === 'image/jpeg') {
+		imageDataUrl = encoded.toPng();
+		contentType = 'image/png';
+		res = await postCapture(stripDataUrl(imageDataUrl), payload.frameId, contentType);
+	}
+
 	if (!res.ok) {
 		const err = new Error('Capture create failed');
 		err.code = 'NETWORK';
@@ -63,7 +89,8 @@ export async function loadCapture(id, key) {
 		throw err;
 	}
 	const frameId = res.headers.get('X-Frame-Id');
-	const imageDataUrl = await blobToDataUrl(await res.blob());
+	const blob = await res.blob();
+	const imageDataUrl = URL.createObjectURL(blob);
 	return { imageDataUrl, frameId: frameId || null };
 }
 

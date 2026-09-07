@@ -348,7 +348,7 @@
 							const next = !$gestureFrame;
 							setGestureFrame(next);
 							status = next
-								? 'Gesture Pick ON — open-palm swipe relics, fist then pull down to drop.'
+								? 'Gesture Pick ON — open-palm swipe relics, fist and a short pull to drop.'
 								: 'Gesture Pick OFF — pull the rope by hand.';
 						}}
 					>

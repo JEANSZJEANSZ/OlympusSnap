@@ -1,6 +1,6 @@
 <script>
 	/**
-	 * Full-bleed Three.js limestone plaque reveal — strike → split → gift handoff.
+	 * Full-bleed Three.js limestone plaque reveal — countdown crack → split → gift handoff.
 	 */
 	import { onMount } from 'svelte';
 	import { createGiftLimestoneReveal } from '../fx/giftLimestoneReveal.js';
@@ -12,6 +12,7 @@
 	 * @property {boolean} [reduced]
 	 * @property {(phase: string) => void} [onPhaseChange]
 	 * @property {() => void} [onRevealed]
+	 * @property {(api: { setPreCrackProgress: (n: number) => void, triggerCrack: () => void }) => void} [onReady]
 	 */
 
 	/** @type {Props} */
@@ -20,7 +21,8 @@
 		seed,
 		reduced = false,
 		onPhaseChange,
-		onRevealed
+		onRevealed,
+		onReady
 	} = $props();
 
 	/** @type {HTMLCanvasElement | undefined} */
@@ -50,6 +52,10 @@
 				if (meta.anchorY != null) portraitAnchorY = meta.anchorY;
 			}
 		});
+		onReady?.({
+			setPreCrackProgress: (n) => api.setPreCrackProgress(n),
+			triggerCrack: () => api.triggerCrack()
+		});
 		return () => api.destroy();
 	});
 </script>
@@ -58,7 +64,7 @@
 	<canvas
 		bind:this={canvasEl}
 		class="marble-canvas"
-		aria-label="Strike the limestone relic to reveal your gift"
+		aria-label="Limestone relic revealing your gift"
 	></canvas>
 	{#if portraitUrl && portraitOpacity > 0.01}
 		<img
@@ -96,7 +102,7 @@
 		display: block;
 		width: 100%;
 		height: 100%;
-		cursor: pointer;
+		cursor: default;
 		touch-action: none;
 		background: transparent;
 	}

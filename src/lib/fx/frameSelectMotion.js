@@ -22,10 +22,10 @@ const SEG_H = 16;
 const CHAIN_STIFFNESS = 0.9;
 const CHAIN_LENGTH = 2;
 const CHAIN_DAMPING = 0.1;
-const SNAP_THRESHOLD = 18;
+const SNAP_THRESHOLD = 12;
 const HAND_STIFFNESS = 0.1;
 const AIR_HAND_STIFFNESS = 0.42;
-const AIR_PULL_GAIN = 1.75;
+const AIR_PULL_GAIN = 2.4;
 /** Booth-scale mass (demo’s raw density 0.05 on a full strip is far too heavy). */
 const PAYLOAD_MASS = 8;
 const PAYLOAD_AIR = 0.04;
@@ -70,6 +70,9 @@ export function createFrameSelectMotion(root, opts = {}) {
 			},
 			moveAirPull() {},
 			endAirPull() {},
+			getAirPullProgress() {
+				return 0;
+			},
 			dispose() {}
 		};
 	}
@@ -886,8 +889,8 @@ export function createFrameSelectMotion(root, opts = {}) {
 	function moveAirPull(ny) {
 		if (!airPulling || mode !== 'dragging' || snapped || !handBody || !frameBody) return;
 		const dy = ny - airOriginNy;
-		const dead = 0.02;
-		const applied = dy > dead ? dy - dead : dy < -0.01 ? dy : 0;
+		const dead = 0.01;
+		const applied = dy > dead ? dy - dead : dy < -dead ? dy : 0;
 		const y = airGrabY + applied * stageEl.clientHeight * AIR_PULL_GAIN;
 		const maxY = stageEl.clientHeight - 8;
 		Body.setPosition(handBody, {
@@ -900,6 +903,25 @@ export function createFrameSelectMotion(root, opts = {}) {
 		if (!airPulling) return;
 		airPulling = false;
 		endDrag();
+	}
+
+	/** 0–1 how close the air tug is to snapping the rope. */
+	function getAirPullProgress() {
+		if (!airPulling || snapped || !handBody || !frameBody) return 0;
+		const pullHint = Math.min(
+			1,
+			Math.max(0, (handBody.position.y - airGrabY) / Math.max(48, stageEl.clientHeight * 0.2))
+		);
+		let maxStretch = 0;
+		for (const constraint of breakableConstraints) {
+			if (!constraint.bodyA || !constraint.bodyB) continue;
+			const pA = Vector.add(constraint.bodyA.position, constraint.pointA);
+			const pB = Vector.add(constraint.bodyB.position, constraint.pointB);
+			const currentDistance = Vector.magnitude(Vector.sub(pA, pB));
+			const stretch = Math.abs(currentDistance - (constraint.length || 0));
+			if (stretch > maxStretch) maxStretch = stretch;
+		}
+		return Math.min(1, Math.max(pullHint, maxStretch / SNAP_THRESHOLD));
 	}
 
 	/** @param {() => void} onDone */
@@ -1035,6 +1057,7 @@ export function createFrameSelectMotion(root, opts = {}) {
 		beginAirPull,
 		moveAirPull,
 		endAirPull,
+		getAirPullProgress,
 		dispose
 	};
 }
