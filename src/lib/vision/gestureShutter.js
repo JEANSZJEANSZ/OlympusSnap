@@ -1,13 +1,14 @@
 /**
- * Light Victory-gesture shutter for Camera Temple.
+ * Light gesture shutter for Camera Temple.
  * MediaPipe GestureRecognizer ~8fps / 1 hand / GPU — pause when not armed; close on leave.
+ * Admin picks Victory, Open_Palm, or Thumb_Up; allowlist loads all three.
  */
 
 const INFER_INTERVAL_MS = 125;
 const HOLD_MS = 700;
 const MISS_RESET = 2;
 const SCORE_MIN = 0.75;
-const GESTURE = 'Victory';
+const GESTURE_ALLOWLIST = /** @type {const} */ (['Victory', 'Open_Palm', 'Thumb_Up']);
 
 const APP_BASE = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
 const WASM_ROOT = `${APP_BASE}assets/vision`;
@@ -52,7 +53,7 @@ async function ensureRecognizer() {
 				runningMode: /** @type {'VIDEO'} */ ('VIDEO'),
 				numHands: 1,
 				cannedGesturesClassifierOptions: {
-					categoryAllowlist: [GESTURE],
+					categoryAllowlist: [...GESTURE_ALLOWLIST],
 					scoreThreshold: SCORE_MIN
 				}
 			};
@@ -82,15 +83,16 @@ async function ensureRecognizer() {
 
 /**
  * @param {import('@mediapipe/tasks-vision').GestureRecognizerResult | null | undefined} result
+ * @param {string} gesture
  * @returns {boolean}
  */
-function isVictory(result) {
+function isTriggerGesture(result, gesture) {
 	const hands = result?.gestures;
 	if (!hands?.length) return false;
 	for (const categories of hands) {
 		const top = categories?.[0];
 		if (!top) continue;
-		if (top.categoryName === GESTURE && (top.score ?? 0) >= SCORE_MIN) return true;
+		if (top.categoryName === gesture && (top.score ?? 0) >= SCORE_MIN) return true;
 	}
 	return false;
 }
@@ -135,11 +137,15 @@ export function disposeGestureShutter() {
  *   video: HTMLVideoElement;
  *   isArmed: () => boolean;
  *   onTrigger: () => void;
+ *   gesture: string;
  * }} opts
  */
 export async function startGestureShutter(opts) {
 	stopGestureShutter();
 	const gen = loopGen;
+	const gesture = GESTURE_ALLOWLIST.includes(/** @type {*} */ (opts.gesture))
+		? opts.gesture
+		: 'Victory';
 
 	const rec = await ensureRecognizer();
 	if (!rec || !opts.video || gen !== loopGen) return;
@@ -182,7 +188,7 @@ export async function startGestureShutter(opts) {
 			return;
 		}
 
-		if (isVictory(result)) {
+		if (isTriggerGesture(result, gesture)) {
 			missCount = 0;
 			if (!holdStartedAt) holdStartedAt = now;
 			if (now - holdStartedAt >= HOLD_MS) {

@@ -21,6 +21,7 @@ const DEFAULT_PIN = 'olympus';
 const SEED_FRAMES_KEY = 'olympus-snap-show-seed-frames';
 const RANDOM_FRAME_KEY = 'olympus-snap-random-frame';
 const GESTURE_SNAP_KEY = 'olympus-snap-gesture-snap';
+const GESTURE_SNAP_KIND_KEY = 'olympus-snap-gesture-snap-kind';
 const ORACLE_SHUFFLE_KEY = 'olympus-snap-oracle-shuffle';
 const ORACLE_SHUFFLE_MS_KEY = 'olympus-snap-oracle-shuffle-ms';
 /** Gap between cloud bulk-delete requests to avoid 429 rate limits. */
@@ -30,6 +31,17 @@ const BULK_DELETE_MAX_ATTEMPTS = 5;
 export const ORACLE_SHUFFLE_MIN_MS = 800;
 export const ORACLE_SHUFFLE_MAX_MS = 5000;
 export const ORACLE_SHUFFLE_DEFAULT_MS = 2600;
+
+/** MediaPipe canned gesture ids Admin may pick for Camera shutter. */
+export const GESTURE_SNAP_KINDS = /** @type {const} */ ([
+	{ id: 'Victory', label: 'VICTORY', hint: 'peace' },
+	{ id: 'Open_Palm', label: 'STOP', hint: 'open palm' },
+	{ id: 'Thumb_Up', label: 'THUMB', hint: 'thumbs up' }
+]);
+
+/** @typedef {'Victory' | 'Open_Palm' | 'Thumb_Up'} GestureSnapKind */
+
+export const GESTURE_SNAP_DEFAULT_KIND = /** @type {GestureSnapKind} */ ('Victory');
 
 /** Legacy preset → ms (one-time migrate). */
 const ORACLE_SHUFFLE_PRESET_MS = /** @type {const} */ ({
@@ -105,6 +117,24 @@ function readOracleShuffleMs() {
 	return ORACLE_SHUFFLE_DEFAULT_MS;
 }
 
+/** @param {unknown} raw @returns {GestureSnapKind} */
+export function normalizeGestureSnapKind(raw) {
+	const id = typeof raw === 'string' ? raw : '';
+	if (GESTURE_SNAP_KINDS.some((k) => k.id === id)) {
+		return /** @type {GestureSnapKind} */ (id);
+	}
+	return GESTURE_SNAP_DEFAULT_KIND;
+}
+
+/** @returns {GestureSnapKind} */
+function readGestureSnapKind() {
+	try {
+		return normalizeGestureSnapKind(sessionStorage.getItem(GESTURE_SNAP_KIND_KEY));
+	} catch {
+		return GESTURE_SNAP_DEFAULT_KIND;
+	}
+}
+
 /**
  * @typedef {{ id: string; x: number; y: number; w: number; h: number }} FrameSlot
  * @typedef {{ id: string; name: string; src: string; motif?: string; thumb?: string; w?: number; h?: number; slots?: FrameSlot[]; custom?: boolean }} FrameAsset
@@ -131,11 +161,18 @@ export const showSeedFrames = writable(readFlag(SEED_FRAMES_KEY, true));
 export const randomFrame = writable(readSessionFlag(RANDOM_FRAME_KEY, false));
 
 /**
- * When true, Camera Temple arms Victory-gesture shutter (SNAP button still works).
+ * When true, Camera Temple arms Admin-selected gesture shutter (SNAP button still works).
  * Session-scoped; default on for booth guests.
  */
 /** @type {import('svelte/store').Writable<boolean>} */
 export const gestureSnap = writable(readSessionFlag(GESTURE_SNAP_KEY, true));
+
+/**
+ * MediaPipe category that triggers the shutter when gestureSnap is on.
+ * Session-scoped; default Victory (peace).
+ */
+/** @type {import('svelte/store').Writable<GestureSnapKind>} */
+export const gestureSnapKind = writable(readGestureSnapKind());
 
 /** Oracle lot-spin duration in ms. Session-scoped. */
 /** @type {import('svelte/store').Writable<number>} */
@@ -287,6 +324,17 @@ export function setRandomFrame(on) {
 export function setGestureSnap(on) {
 	gestureSnap.set(!!on);
 	writeSessionFlag(GESTURE_SNAP_KEY, !!on);
+}
+
+/** @param {unknown} kind */
+export function setGestureSnapKind(kind) {
+	const next = normalizeGestureSnapKind(kind);
+	gestureSnapKind.set(next);
+	try {
+		sessionStorage.setItem(GESTURE_SNAP_KIND_KEY, next);
+	} catch {
+		/* ignore */
+	}
 }
 
 /** @param {number} ms */

@@ -301,8 +301,9 @@
 				<p class="panel-kicker">BOOTH FLOW</p>
 				<p class="seed-copy">
 					Random Frame skips pull-to-select. Pythia chooses a relic on the Delphi altar.
-					Gesture Snap lets guests hold a victory sign to start the camera rite (SNAP stays).
-					Booth flow toggles persist for this browser tab session.
+					Gesture Snap lets guests hold the Admin-selected gesture (victory / stop / thumbs up) to
+					start the camera rite (SNAP stays). Booth flow toggles persist for this browser tab
+					session.
 				</p>
 				<div class="seed-toggles">
 					<button
@@ -329,14 +330,43 @@
 						onclick={() => {
 							const next = !$gestureSnap;
 							setGestureSnap(next);
+							const kindPhrase =
+								$gestureSnapKind === 'Open_Palm'
+									? 'stop sign'
+									: $gestureSnapKind === 'Thumb_Up'
+										? 'thumbs up'
+										: 'victory sign';
 							status = next
-								? 'Gesture Snap ON — hold victory sign to start the rite.'
+								? `Gesture Snap ON — hold ${kindPhrase} to start the rite.`
 								: 'Gesture Snap OFF — SNAP button only.';
 						}}
 					>
 						<span class="seed-toggle-label">GESTURE SNAP</span>
 						<span class="seed-toggle-state">{$gestureSnap ? 'ON' : 'OFF'}</span>
 					</button>
+				</div>
+				<div class="seed-toggles gesture-kind-row" role="group" aria-label="Gesture Snap trigger">
+					{#each GESTURE_SNAP_KINDS as opt (opt.id)}
+						<button
+							type="button"
+							class="seed-toggle"
+							class:on={$gestureSnapKind === opt.id}
+							aria-pressed={$gestureSnapKind === opt.id}
+							disabled={!$gestureSnap}
+							onclick={() => {
+								setGestureSnapKind(opt.id);
+								const pickPhrase =
+									opt.id === 'Open_Palm'
+										? 'stop sign'
+										: opt.id === 'Thumb_Up'
+											? 'thumbs up'
+											: 'victory sign';
+								status = `Gesture Snap trigger: ${pickPhrase}.`;
+							}}
+						>
+							<span class="seed-toggle-label">{opt.label}</span>
+						</button>
+					{/each}
 				</div>
 				<label class="shuffle-slider">
 					<span class="shuffle-slider-head">
@@ -470,12 +500,15 @@
 		showSeedFrames,
 		randomFrame,
 		gestureSnap,
+		gestureSnapKind,
+		GESTURE_SNAP_KINDS,
 		oracleShuffleMs,
 		ORACLE_SHUFFLE_MIN_MS,
 		ORACLE_SHUFFLE_MAX_MS,
 		setShowSeedFrames,
 		setRandomFrame,
 		setGestureSnap,
+		setGestureSnapKind,
 		setOracleShuffleMs,
 		addFrame,
 		addStickers,
@@ -1435,6 +1468,19 @@
 	.seed-toggle:focus-visible {
 		outline: 3px solid var(--gold-bright);
 		outline-offset: 2px;
+	}
+
+	.seed-toggle:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+		filter: none;
+	}
+
+	.seed-toggle:disabled:hover,
+	.seed-toggle:disabled:active {
+		filter: none;
+		transform: none;
+		box-shadow: 3px 3px 0 #07152d;
 	}
 
 	.seed-toggle-state {

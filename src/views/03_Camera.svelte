@@ -178,7 +178,13 @@
 		clearCaptures,
 		selectedFrameId
 	} from '../lib/stores/stores.js';
-	import { getLiveFrameById, assetsReady, gestureSnap } from '../lib/assets/assetStore.js';
+	import {
+		getLiveFrameById,
+		assetsReady,
+		gestureSnap,
+		gestureSnapKind,
+		GESTURE_SNAP_KINDS
+	} from '../lib/assets/assetStore.js';
 	import { beginImageHandoff, imageHandoffBusy } from '../lib/fx/imageHandoff.js';
 	import { playViewExit } from '../lib/fx/viewExitMotion.js';
 	import {
@@ -265,12 +271,20 @@
 	const frameAspect = $derived(`${frameNatW} / ${frameNatH}`);
 	const frameAspectNum = $derived(frameNatH > 0 ? frameNatW / frameNatH : 3 / 4);
 
+	const GESTURE_RITE_CUES = /** @type {const} */ ({
+		Victory: 'Hold the victory sign to begin the rite — or tap SNAP.',
+		Open_Palm: 'Hold an open palm (stop sign) to begin the rite — or tap SNAP.',
+		Thumb_Up: 'Hold a thumbs up to begin the rite — or tap SNAP.'
+	});
+
 	const poseText = $derived.by(() => {
 		const base = useSlots
 			? `Canvas ${slotIndex + 1} of ${snapTotal}. ${poses[slotIndex % poses.length]}`
 			: sessionPose;
 		if (!$gestureSnap) return base;
-		return `${base} Hold the victory sign to begin the rite — or tap SNAP.`;
+		const known = GESTURE_SNAP_KINDS.find((k) => k.id === $gestureSnapKind);
+		const cue = GESTURE_RITE_CUES[known?.id ?? 'Victory'];
+		return `${base} ${cue}`;
 	});
 
 	const isLastCanvas = $derived(slotIndex + 1 >= snapTotal);
@@ -377,6 +391,7 @@
 
 	$effect(() => {
 		const enabled = $gestureSnap;
+		const kind = $gestureSnapKind;
 		const video = videoEl;
 
 		if (!enabled || !video || !cameraReady || ritualOpen || (reviewOpen && isLastCanvas)) {
@@ -391,7 +406,8 @@
 			onTrigger: () => {
 				if (reviewOpen) void snapNextFromReview();
 				else beginRitual();
-			}
+			},
+			gesture: kind
 		});
 
 		return () => stopGestureShutter();
