@@ -303,7 +303,7 @@
 					Random Frame skips pull-to-select. Pythia chooses a relic on the Delphi altar.
 					Gesture Snap lets guests hold the pose shown on Camera for each canvas
 					(victory / stop / thumbs up) to start the rite (SNAP stays). Gesture Pick lets guests swipe an open palm left/right to change
-					the relic; make a fist and pull down to tug the rope (oracle ignores it). Booth flow toggles
+					the relic; hold a fist, then pull down to tug the rope (oracle ignores it). Booth flow toggles
 					persist for this browser tab session.
 				</p>
 				<div class="seed-toggles">
@@ -348,7 +348,7 @@
 							const next = !$gestureFrame;
 							setGestureFrame(next);
 							status = next
-								? 'Gesture Pick ON — open-palm swipe relics, fist and a short pull to drop.'
+								? 'Gesture Pick ON — center-to-side palm swipe relics; hold a fist, then pull down to drop.'
 								: 'Gesture Pick OFF — pull the rope by hand.';
 						}}
 					>

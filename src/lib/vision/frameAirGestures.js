@@ -19,6 +19,9 @@ const SWIPE_VEL_DX = 0.06;
 const SWIPE_VEL = 1.2;
 const AXIS_DY = 0.9;
 const COOLDOWN_MS = 280;
+const CENTER_LO = 0.38;
+const CENTER_HI = 0.62;
+const FIST_HOLD_MS = 280;
 const MISS_RESET = 5;
 const TUG_MISS_RESET = 10;
 const PALM_GRACE = 7;
@@ -55,6 +58,8 @@ let fistLabelMiss = 0;
 let cooldownUntil = 0;
 let palmLatched = false;
 let fistLatched = false;
+let needRecenter = false;
+let fistHoldStartedAt = 0;
 /** @type {{ minX: number; minY: number; maxX: number; maxY: number } | null} */
 let smoothBox = null;
 
@@ -96,6 +101,7 @@ function resetStroke() {
 	fistLabelMiss = 0;
 	palmLatched = false;
 	fistLatched = false;
+	fistHoldStartedAt = 0;
 }
 
 /**
@@ -254,8 +260,14 @@ export function stopFrameAirGestures() {
 	}
 	chargeCb = undefined;
 	lastInferAt = 0;
+	needRecenter = false;
 	resetStroke();
 	clearVisuals();
+}
+
+/** @param {number} x mirrored guest-space 0–1 */
+function inCenterBand(x) {
+	return x >= CENTER_LO && x <= CENTER_HI;
 }
 
 /**
@@ -365,6 +377,7 @@ export async function startFrameAirGestures(opts) {
 				if (fistLabelMiss >= FIST_GRACE) {
 					opts.onTugEnd();
 					tugging = false;
+					fistHoldStartedAt = 0;
 					fistLabelMiss = 0;
 					palmOriginX = null;
 					palmOriginY = null;
@@ -382,18 +395,25 @@ export async function startFrameAirGestures(opts) {
 		}
 
 		if (tugEnabled && closedFist) {
+			if (!fistHoldStartedAt) fistHoldStartedAt = now;
+			setCharge({ left: false, right: false, down: true });
+			if (now - fistHoldStartedAt < FIST_HOLD_MS) return;
 			const started = opts.onTugStart(palm);
-			if (started === false) return;
+			if (started === false) {
+				fistHoldStartedAt = 0;
+				return;
+			}
 			tugging = true;
+			fistHoldStartedAt = 0;
 			fistLabelMiss = 0;
 			palmOriginX = null;
 			palmOriginY = null;
 			prevPalmX = null;
 			palmLabelMiss = 0;
-			setCharge({ left: false, right: false, down: true });
 			opts.onTugMove(palm);
 			return;
 		}
+		fistHoldStartedAt = 0;
 
 		const inStroke = palmOriginX != null && palmOriginY != null;
 		if (!openPalm) {
@@ -415,7 +435,23 @@ export async function startFrameAirGestures(opts) {
 			palmLabelMiss = 0;
 		}
 
+		if (needRecenter) {
+			if (inCenterBand(palm.x)) needRecenter = false;
+			else {
+				palmOriginX = null;
+				palmOriginY = null;
+				prevPalmX = palm.x;
+				setCharge({ ...IDLE_CHARGE });
+				return;
+			}
+		}
+
 		if (palmOriginX == null || palmOriginY == null) {
+			if (!inCenterBand(palm.x)) {
+				prevPalmX = palm.x;
+				setCharge({ ...IDLE_CHARGE });
+				return;
+			}
 			palmOriginX = palm.x;
 			palmOriginY = palm.y;
 			prevPalmX = palm.x;
@@ -442,8 +478,9 @@ export async function startFrameAirGestures(opts) {
 		if (isSwipe(dx, dy, vx)) {
 			const dir = /** @type {-1 | 1} */ (dx > 0 ? 1 : -1);
 			cooldownUntil = now + COOLDOWN_MS;
-			palmOriginX = palm.x;
-			palmOriginY = palm.y;
+			needRecenter = true;
+			palmOriginX = null;
+			palmOriginY = null;
 			prevPalmX = palm.x;
 			palmLabelMiss = 0;
 			setCharge({ ...IDLE_CHARGE });

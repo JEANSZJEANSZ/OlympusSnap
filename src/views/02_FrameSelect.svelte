@@ -71,7 +71,7 @@
 		if (!frame) return 'The courier bears no relic. Open Admin to forge a frame.';
 		if (!oracleMode) {
 			if ($gestureFrame) {
-				return `${frame.name} hangs ready. Swipe an open palm left or right to choose. Make a fist and pull down — a short tug drops the relic.`;
+				return `${frame.name} hangs ready. Swipe an open palm from the center to a side to choose. Hold a fist, then pull down to tug the relic.`;
 			}
 			return reduced
 				? `${frame.name} hangs ready. Tap the strip to proceed.`
@@ -353,9 +353,9 @@
 					if (dir < 0) prev(true);
 					else next(true);
 				},
-				onTugStart: (palm) => motion?.beginAirPull(palm.y) ?? false,
+				onTugStart: (palm) => motion?.beginAirPull(palm) ?? false,
 				onTugMove: (palm) => {
-					motion?.moveAirPull(palm.y);
+					motion?.moveAirPull(palm);
 					airPullProgress = motion?.getAirPullProgress() ?? 0;
 				},
 				onTugEnd: () => {

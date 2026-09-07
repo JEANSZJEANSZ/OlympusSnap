@@ -844,11 +844,11 @@ export function createFrameSelectMotion(root, opts = {}) {
 	}
 
 	/**
-	 * Attach physics hand at relic center for air-tug. Pass mirrored palm Y (0–1).
-	 * @param {number} originNy
+	 * Attach physics hand at relic center for air-tug. Pass palm or Y (0–1).
+	 * @param {{ x: number; y: number } | number} palm
 	 * @returns {boolean}
 	 */
-	function beginAirPull(originNy) {
+	function beginAirPull(palm) {
 		if (
 			reduced ||
 			airPulling ||
@@ -863,6 +863,7 @@ export function createFrameSelectMotion(root, opts = {}) {
 		) {
 			return false;
 		}
+		const originNy = typeof palm === 'number' ? palm : palm.y;
 		airPulling = true;
 		airOriginNy = originNy;
 		airGrabY = frameBody.position.y;
@@ -884,10 +885,11 @@ export function createFrameSelectMotion(root, opts = {}) {
 
 	/**
 	 * Follow palm Y; X stays pinned to the relic.
-	 * @param {number} ny
+	 * @param {{ x: number; y: number } | number} palm
 	 */
-	function moveAirPull(ny) {
+	function moveAirPull(palm) {
 		if (!airPulling || mode !== 'dragging' || snapped || !handBody || !frameBody) return;
+		const ny = typeof palm === 'number' ? palm : palm.y;
 		const dy = ny - airOriginNy;
 		const dead = 0.01;
 		const applied = dy > dead ? dy - dead : dy < -dead ? dy : 0;
