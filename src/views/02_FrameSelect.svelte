@@ -70,7 +70,7 @@
 		if (!frame) return 'The courier bears no relic. Open Admin to forge a frame.';
 		if (!oracleMode) {
 			if ($gestureFrame) {
-				return `${frame.name} hangs ready. Swipe left or right to choose. Pull down to drop the relic.`;
+				return `${frame.name} hangs ready. Swipe left or right to choose. Hold your hand still, then pull down to tug the relic.`;
 			}
 			return reduced
 				? `${frame.name} hangs ready. Tap the strip to proceed.`

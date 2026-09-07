@@ -24,6 +24,8 @@ const CHAIN_LENGTH = 2;
 const CHAIN_DAMPING = 0.1;
 const SNAP_THRESHOLD = 18;
 const HAND_STIFFNESS = 0.1;
+const AIR_HAND_STIFFNESS = 0.42;
+const AIR_PULL_GAIN = 1.75;
 /** Booth-scale mass (demo’s raw density 0.05 on a full strip is far too heavy). */
 const PAYLOAD_MASS = 8;
 const PAYLOAD_AIR = 0.04;
@@ -868,7 +870,7 @@ export function createFrameSelectMotion(root, opts = {}) {
 			bodyA: handBody,
 			bodyB: frameBody,
 			pointB: { x: 0, y: 0 },
-			stiffness: HAND_STIFFNESS,
+			stiffness: AIR_HAND_STIFFNESS,
 			render: { visible: false },
 			label: 'hand'
 		});
@@ -883,8 +885,15 @@ export function createFrameSelectMotion(root, opts = {}) {
 	 */
 	function moveAirPull(ny) {
 		if (!airPulling || mode !== 'dragging' || snapped || !handBody || !frameBody) return;
-		const y = airGrabY + (ny - airOriginNy) * stageEl.clientHeight;
-		Body.setPosition(handBody, { x: frameBody.position.x, y });
+		const dy = ny - airOriginNy;
+		const dead = 0.02;
+		const applied = dy > dead ? dy - dead : dy < -0.01 ? dy : 0;
+		const y = airGrabY + applied * stageEl.clientHeight * AIR_PULL_GAIN;
+		const maxY = stageEl.clientHeight - 8;
+		Body.setPosition(handBody, {
+			x: frameBody.position.x,
+			y: Math.max(8, Math.min(maxY, y))
+		});
 	}
 
 	function endAirPull() {
