@@ -74,7 +74,7 @@
 												</svg>
 											</span>
 										{/if}
-										<p>{saveDone ? 'Saved' : 'Preparing snap…'}</p>
+										<p>{saveDone ? 'Ready' : 'Downloading…'}</p>
 									</div>
 								</div>
 							{/if}
@@ -130,9 +130,9 @@
 					<button
 						type="button"
 						class={['story-btn', { 'is-working': saving || saveDone }]}
-						aria-label={saving ? 'Preparing snap' : saveDone ? 'Snap saved' : 'Download snap'}
+						aria-label={saving ? 'Downloading snap' : saveDone ? 'Snap ready' : 'Download snap'}
 						aria-busy={saving}
-						disabled={busy || saveDone || !$capturedImageData}
+						disabled={busy || !$capturedImageData}
 						onclick={saveMySnap}
 					>
 						{#if saving}
@@ -325,7 +325,7 @@
 	});
 
 	const touchMode = $derived(mobileSession || coarsePointer);
-	const busy = $derived(entryBusy || exiting || saving || sharing);
+	const busy = $derived(entryBusy || exiting || saving || saveDone || sharing);
 
 	const dialogText = $derived('Scan the QR at the booth to open mobile studio.');
 
@@ -483,7 +483,7 @@
 	}
 
 	async function saveMySnap() {
-		if (saving || saveDone || entryBusy || exiting) return;
+		if (busy || !$capturedImageData) return;
 		saving = true;
 		saveDone = false;
 		shareFallbackOpen = false;
