@@ -14,7 +14,10 @@
  */
 
 import { getLiveFrameById } from '../assets/assetStore.js';
+import { HANDOFF_JPEG_QUALITY, handoffOutputSize } from './handoffEncode.js';
 import { loadImageForCanvas as loadImage } from './loadImageForCanvas.js';
+
+export { HANDOFF_MAX_LONG_EDGE } from './handoffEncode.js';
 
 /** Minimum long edge for composite exports (sharp frame strokes). */
 const EXPORT_MIN_LONG_EDGE = 2400;
@@ -319,10 +322,6 @@ export async function compositeWithStickers(compositeDataUrl, stickers) {
 	return canvas.toDataURL('image/png');
 }
 
-/** Long-edge cap for booth → phone session upload (Studio stickers, not print). */
-export const HANDOFF_MAX_LONG_EDGE = 2048;
-const HANDOFF_JPEG_QUALITY = 0.88;
-
 /**
  * Downscale + JPEG-encode a composite for Photobooth capture POST.
  * @param {string} imageDataUrl
@@ -347,10 +346,7 @@ export async function encodeHandoffImage(imageDataUrl) {
 	const srcH = img.naturalHeight || img.height;
 	if (!srcW || !srcH) return fallback;
 
-	const long = Math.max(srcW, srcH);
-	const scale = long > HANDOFF_MAX_LONG_EDGE ? HANDOFF_MAX_LONG_EDGE / long : 1;
-	const cw = Math.max(1, Math.round(srcW * scale));
-	const ch = Math.max(1, Math.round(srcH * scale));
+	const { width: cw, height: ch } = handoffOutputSize(srcW, srcH);
 
 	const canvas = document.createElement('canvas');
 	canvas.width = cw;

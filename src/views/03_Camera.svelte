@@ -195,6 +195,7 @@
 	import { go } from '../router/index.js';
 	import { startCamera, stopCamera } from '../lib/utils/camera.js';
 	import { compositeFramePhotos } from '../lib/utils/canvasRenderer.js';
+	import { primeHandoffEncode } from '../lib/session/sessionClient.js';
 	import { startLivePreview, stopLivePreview } from '../lib/vision/livePreview.js';
 	import {
 		startGestureShutter,
@@ -526,7 +527,10 @@
 				list[0] ||
 				null;
 		}
-		if (preview) capturedImageData.set(preview);
+		if (preview) {
+			capturedImageData.set(preview);
+			primeHandoffEncode(preview);
+		}
 
 		const fromEl = dockEl;
 		if (fromEl && preview) {

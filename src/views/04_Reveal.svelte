@@ -250,6 +250,9 @@
 			giftImage = unstickered;
 			marbleSeed = mintMarbleSeed(giftImage || undefined);
 
+			forging = false;
+			phase = reduced ? 'revealed' : 'marble';
+
 			try {
 				const created = await createSession({
 					imageDataUrl: unstickered,
@@ -269,10 +272,6 @@
 			} catch (err) {
 				console.warn('[reveal] session create failed', err);
 			}
-
-			if (cancelled) return;
-			forging = false;
-			phase = reduced ? 'revealed' : 'marble';
 		})();
 
 		return () => {

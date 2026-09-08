@@ -4,13 +4,51 @@
 import { toFullPath } from '../../router/index.js';
 import { getApiBase, stripDataUrl } from '../assets/assetApi.js';
 import { encodeHandoffImage } from '../utils/canvasRenderer.js';
+import { shouldRetryCaptureAsPng } from './captureRetry.js';
 import { encodeSes, decodeSes } from './sesCodec.js';
 import { stubCreateSession, stubLoadCapture } from './sessionStub.js';
 
 /** @typedef {'NOT_FOUND' | 'FORBIDDEN' | 'NETWORK'} SessionErrorCode */
 
+/**
+ * @typedef {{
+ *   imageDataUrl: string;
+ *   contentType: 'image/jpeg' | 'image/png';
+ *   toPng: () => string;
+ * }} HandoffEncoded
+ */
+
+/** @type {{ src: string; promise: Promise<HandoffEncoded> } | null} */
+let primedHandoff = null;
+
 function useCloud() {
 	return !!getApiBase();
+}
+
+/**
+ * Start JPEG encode as soon as Camera has the composite so Reveal does not wait on it.
+ * @param {string} imageDataUrl
+ * @returns {Promise<HandoffEncoded> | undefined}
+ */
+export function primeHandoffEncode(imageDataUrl) {
+	if (!imageDataUrl) return;
+	if (primedHandoff?.src === imageDataUrl) return primedHandoff.promise;
+	const promise = encodeHandoffImage(imageDataUrl);
+	primedHandoff = { src: imageDataUrl, promise };
+	return promise;
+}
+
+/**
+ * @param {string} imageDataUrl
+ * @returns {Promise<HandoffEncoded>}
+ */
+function takePrimedHandoffEncode(imageDataUrl) {
+	if (primedHandoff?.src === imageDataUrl) {
+		const { promise } = primedHandoff;
+		primedHandoff = null;
+		return promise;
+	}
+	return encodeHandoffImage(imageDataUrl);
 }
 
 /**
@@ -35,7 +73,7 @@ async function postCapture(imageBase64, frameId, contentType) {
  * @returns {Promise<{ id: string; key: string; frameId: string | null }>}
  */
 export async function createSession(payload) {
-	const encoded = await encodeHandoffImage(payload.imageDataUrl);
+	const encoded = await takePrimedHandoffEncode(payload.imageDataUrl);
 
 	if (!useCloud()) {
 		return stubCreateSession({
@@ -48,7 +86,7 @@ export async function createSession(payload) {
 	let contentType = encoded.contentType;
 	let res = await postCapture(stripDataUrl(imageDataUrl), payload.frameId, contentType);
 
-	if (!res.ok && contentType === 'image/jpeg') {
+	if (shouldRetryCaptureAsPng(res.status, contentType)) {
 		imageDataUrl = encoded.toPng();
 		contentType = 'image/png';
 		res = await postCapture(stripDataUrl(imageDataUrl), payload.frameId, contentType);
