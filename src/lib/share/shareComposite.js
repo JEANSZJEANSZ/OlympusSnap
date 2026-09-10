@@ -48,6 +48,25 @@ export function dataUrlToBlob(dataUrl) {
 }
 
 /**
+ * Guest blob URL or booth data URL — the already-uploaded (or in-memory) snap.
+ * @param {string | null | undefined} url
+ * @returns {Promise<Blob | null>}
+ */
+export async function captureSourceBlob(url) {
+	if (typeof url !== 'string' || !url) return null;
+	if (url.startsWith('blob:')) {
+		try {
+			const res = await fetch(url);
+			if (!res.ok) return null;
+			return await res.blob();
+		} catch {
+			return null;
+		}
+	}
+	return dataUrlToBlob(url);
+}
+
+/**
  * @param {string} dataUrl
  * @param {string} [filename]
  * @returns {File | null}

@@ -1,5 +1,5 @@
 /** Long-edge cap for booth → phone session upload (Studio stickers, not print). */
-export const HANDOFF_MAX_LONG_EDGE = 1600;
+export const HANDOFF_MAX_LONG_EDGE = 3200;
 export const HANDOFF_JPEG_QUALITY = 0.8;
 
 /**

@@ -2,17 +2,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HANDOFF_MAX_LONG_EDGE, handoffOutputSize } from './handoffEncode.js';
 
-test('handoff cap is 1600', () => {
-	assert.equal(HANDOFF_MAX_LONG_EDGE, 1600);
+test('handoff cap is 3200', () => {
+	assert.equal(HANDOFF_MAX_LONG_EDGE, 3200);
 });
 
 test('leaves already-small images unchanged', () => {
 	assert.deepEqual(handoffOutputSize(1280, 960), { width: 1280, height: 960 });
+	assert.deepEqual(handoffOutputSize(3200, 2400), { width: 3200, height: 2400 });
 });
 
 test('scales the long edge down to the cap', () => {
-	assert.deepEqual(handoffOutputSize(3200, 2400), { width: 1600, height: 1200 });
-	assert.deepEqual(handoffOutputSize(2400, 3200), { width: 1200, height: 1600 });
+	assert.deepEqual(handoffOutputSize(4096, 3072), { width: 3200, height: 2400 });
+	assert.deepEqual(handoffOutputSize(3072, 4096), { width: 2400, height: 3200 });
 });
 
 test('uses custom maxLong when passed', () => {

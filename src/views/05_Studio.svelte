@@ -276,7 +276,7 @@
 	import StudioKonvaEditor from '../lib/components/StudioKonvaEditor.svelte';
 	import StickerSheet from '../lib/components/StickerSheet.svelte';
 	import ShareFallbackSheet from '../lib/components/ShareFallbackSheet.svelte';
-	import { downloadBlob, shareCompositeBlob } from '../lib/share/shareComposite.js';
+	import { captureSourceBlob, downloadBlob, shareCompositeBlob } from '../lib/share/shareComposite.js';
 	import { isPointInRect } from '../lib/utils/hitTest.js';
 	import { warmFrameImages } from '../lib/utils/loadImageForCanvas.js';
 
@@ -539,6 +539,15 @@
 		return (await editorRef?.exportBlob?.()) ?? null;
 	}
 
+	/** Uploaded/in-memory snap when canvas is unchanged; Konva flatten when stickers exist. */
+	async function blobForSaveOrShare() {
+		if (!$activeStickers.length) {
+			const source = await captureSourceBlob($capturedImageData);
+			if (source) return source;
+		}
+		return exportCurrentBlob();
+	}
+
 	function waitForPaint() {
 		return new Promise((resolve) => {
 			requestAnimationFrame(() => requestAnimationFrame(resolve));
@@ -555,7 +564,7 @@
 		await tick();
 		await waitForPaint();
 		try {
-			const blob = await exportCurrentBlob();
+			const blob = await blobForSaveOrShare();
 			if (!blob) {
 				flashSaveError();
 				return;
@@ -579,7 +588,7 @@
 		await tick();
 		await waitForPaint();
 		try {
-			const blob = await exportCurrentBlob();
+			const blob = await blobForSaveOrShare();
 			if (!blob) {
 				flashSaveError();
 				return;

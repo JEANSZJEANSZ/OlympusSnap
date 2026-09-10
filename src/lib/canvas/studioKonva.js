@@ -8,7 +8,7 @@ import { loadImageForCanvas as loadImage } from '../utils/loadImageForCanvas.js'
 export const STICKER_BASE = 64;
 const MIN_SCALE = 0.35;
 
-/** Long-edge caps for export — never upsize the live display stage to native. */
+/** Fallback / OOM long-edge caps — never upsize the live display stage to native. */
 const EXPORT_CAP_LONG_EDGE = 2048;
 const EXPORT_RETRY_LONG_EDGE = 1280;
 const EXPORT_MIME = 'image/jpeg';
@@ -732,13 +732,15 @@ export async function createStudioEditor(opts) {
 		},
 
 		/**
-		 * Capped JPEG blob via stage.toBlob only (no toDataURL/atob fallback).
+		 * JPEG blob at uploaded native size via stage.toBlob (no toDataURL/atob).
+		 * Retries at EXPORT_RETRY_LONG_EDGE if the native encode fails (OOM).
 		 * @returns {Promise<Blob | null>}
 		 */
 		async exportBlob() {
 			const snap = prepareExportChrome();
 			try {
-				const first = await stageToJpegBlob(exportPixelRatio(EXPORT_CAP_LONG_EDGE));
+				const nativeRatio = 1 / Math.max(stage.scaleX(), 1e-6);
+				const first = await stageToJpegBlob(nativeRatio);
 				if (first) return first;
 				return await stageToJpegBlob(exportPixelRatio(EXPORT_RETRY_LONG_EDGE));
 			} finally {
