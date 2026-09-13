@@ -6,7 +6,7 @@ product
 
 ## Users
 
-Event guests on a shared tablet / kiosk cart. They arrive in a social, noisy setting with little patience for instructions — they want to pose, decorate, and leave with a souvenir. Operators (long-press brand → PIN) manage frames and stickers so the booth stays stocked without guests ever seeing admin.
+Event guests on a shared tablet / kiosk cart. They arrive in a social, noisy setting with little patience for instructions — they want to pose, decorate, and leave with a souvenir. Operators (long-press brand → PIN) set booth flags so guests never see admin.
 
 ## Product Purpose
 

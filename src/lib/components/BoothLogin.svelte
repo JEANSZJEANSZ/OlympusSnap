@@ -1,14 +1,9 @@
 <script>
-	import { isCloudAssetsEnabled } from '../assets/assetApi.js';
 	import { unlockBooth } from '../assets/boothSession.js';
-	import { getAdminAuth } from '../assets/adminAuth.js';
 	import DialogBox from './DialogBox.svelte';
 	import PixelButton from './PixelButton.svelte';
 	import BoothOlympusBackdrop from './BoothOlympusBackdrop.svelte';
 
-	const cloudEnabled = isCloudAssetsEnabled();
-
-	let authInput = $state(getAdminAuth());
 	let pinInput = $state('');
 	let error = $state('');
 	let busy = $state(false);
@@ -18,11 +13,7 @@
 		busy = true;
 		error = '';
 		try {
-			if (cloudEnabled) {
-				await unlockBooth({ auth: authInput });
-			} else {
-				await unlockBooth({ pin: pinInput });
-			}
+			await unlockBooth({ pin: pinInput });
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Unlock failed.';
 		} finally {
@@ -45,35 +36,19 @@
 		<div class="gate">
 			<DialogBox
 				speaker="CERBERUS"
-				text={cloudEnabled
-					? 'Speak the Photobooth Auth to open the booth. Guests use the QR for Studio.'
-					: 'Speak the Admin PIN to open the booth. Default: olympus'}
+				text="Speak the Admin PIN to open the booth. Default: olympus"
 				typewriter={false}
 			/>
-			{#if cloudEnabled}
-				<label class="field">
-					<span>API AUTH</span>
-					<input
-						type="password"
-						bind:value={authInput}
-						autocomplete="off"
-						placeholder="Auth header for Photobooth"
-						disabled={busy}
-						onkeydown={(e) => e.key === 'Enter' && submit()}
-					/>
-				</label>
-			{:else}
-				<label class="field">
-					<span>PIN</span>
-					<input
-						type="password"
-						bind:value={pinInput}
-						autocomplete="off"
-						disabled={busy}
-						onkeydown={(e) => e.key === 'Enter' && submit()}
-					/>
-				</label>
-			{/if}
+			<label class="field">
+				<span>PIN</span>
+				<input
+					type="password"
+					bind:value={pinInput}
+					autocomplete="off"
+					disabled={busy}
+					onkeydown={(e) => e.key === 'Enter' && submit()}
+				/>
+			</label>
 			{#if error}
 				<p class="err">{error}</p>
 			{/if}

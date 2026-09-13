@@ -1,19 +1,9 @@
 /**
- * Live asset catalog: seed frames/stickers + custom uploads (Photobooth API or IndexedDB).
+ * Live asset catalog: seed frames/stickers now.
+ * initAssets() is the attach point for a future Cloudflare custom catalog.
  */
 import { get, writable } from 'svelte/store';
-import {
-	createAsset as apiCreateAsset,
-	deleteAsset as apiDeleteAsset,
-	fetchAsDataUrl,
-	isCloudAssetsEnabled,
-	listCustoms,
-	patchAsset as apiPatchAsset,
-	resolveCloudAssetSrc
-} from './assetApi.js';
-import { FRAMES as SEED_FRAMES } from './catalog.js';
-import { idbDelete, idbListAll, idbPut, idbReplaceAllCustoms } from './idb.js';
-import { measureImage } from '../utils/imageCrop.js';
+import { FRAMES as SEED_FRAMES, STICKERS as SEED_STICKERS } from './catalog.js';
 import { warmFrameImages } from '../utils/loadImageForCanvas.js';
 
 const PIN_KEY = 'olympus-snap-admin-pin';
@@ -24,9 +14,6 @@ const GESTURE_SNAP_KEY = 'olympus-snap-gesture-snap';
 const GESTURE_FRAME_KEY = 'olympus-snap-gesture-frame';
 const ORACLE_SHUFFLE_KEY = 'olympus-snap-oracle-shuffle';
 const ORACLE_SHUFFLE_MS_KEY = 'olympus-snap-oracle-shuffle-ms';
-/** Gap between cloud bulk-delete requests to avoid 429 rate limits. */
-const BULK_DELETE_GAP_MS = 450;
-const BULK_DELETE_MAX_ATTEMPTS = 5;
 
 export const ORACLE_SHUFFLE_MIN_MS = 800;
 export const ORACLE_SHUFFLE_MAX_MS = 5000;
@@ -122,14 +109,12 @@ function readOracleShuffleMs() {
  */
 
 /** @type {import('svelte/store').Writable<FrameAsset[]>} */
-export const frames = writable(
-	readFlag(SEED_FRAMES_KEY, true) ? seedFrames() : []
-);
+export const frames = writable(readFlag(SEED_FRAMES_KEY, true) ? seedFrames() : []);
 
 /** @type {import('svelte/store').Writable<StickerAsset[]>} */
-export const stickers = writable([]);
+export const stickers = writable(seedStickers());
 
-/** When false, seed frames are hidden from guests (customs only). Default on for booth testing. */
+/** When false, seed frames are hidden from guests. Default on for booth testing. */
 /** @type {import('svelte/store').Writable<boolean>} */
 export const showSeedFrames = writable(readFlag(SEED_FRAMES_KEY, true));
 
@@ -161,16 +146,12 @@ export const oracleShuffleMs = writable(readOracleShuffleMs());
 /** @type {import('svelte/store').Writable<boolean>} */
 export const assetsReady = writable(false);
 
-/** Last listCustoms/IndexedDB failure; null when catalog load succeeded. */
-/** @type {import('svelte/store').Writable<string | null>} */
-export const catalogError = writable(null);
-
-/** Latest customs snapshot so toggles can rebuild without another round-trip. */
-/** @type {import('./idb.js').CustomAsset[]} */
-let cachedCustoms = [];
-
 function seedFrames() {
 	return SEED_FRAMES.map((f) => ({ ...f, custom: false }));
+}
+
+function seedStickers() {
+	return SEED_STICKERS.map((s) => ({ ...s, custom: false }));
 }
 
 /**
@@ -201,68 +182,10 @@ function normalizeSlots(raw) {
 	return out.length ? out : undefined;
 }
 
-/**
- * @param {import('./assetApi.js').CloudAsset} asset
- * @returns {import('./idb.js').CustomAsset}
- */
-function cloudToCustom(asset) {
-	return {
-		id: asset.id,
-		kind: asset.kind,
-		name: asset.name,
-		motif: asset.motif,
-		src: resolveCloudAssetSrc(asset.src),
-		w: asset.w,
-		h: asset.h,
-		slots: asset.slots,
-		custom: true
-	};
-}
-
-/**
- * @returns {Promise<import('./idb.js').CustomAsset[]>}
- */
-async function loadCustoms() {
-	if (isCloudAssetsEnabled()) {
-		const assets = await listCustoms();
-		return assets.map(cloudToCustom);
-	}
-	return idbListAll();
-}
-
-/**
- * @param {import('./idb.js').CustomAsset[]} customs
- */
-function rebuildStores(customs) {
-	cachedCustoms = customs;
-	const customFrames = customs
-		.filter((a) => a.kind === 'frame')
-		.map((a) => {
-			const src = resolveCloudAssetSrc(a.src);
-			return {
-				id: a.id,
-				name: a.name,
-				src,
-				motif: a.motif,
-				thumb: src,
-				w: a.w,
-				h: a.h,
-				slots: normalizeSlots(a.slots),
-				custom: true
-			};
-		});
-	const customStickers = customs
-		.filter((a) => a.kind === 'sticker')
-		.map((a) => ({
-			id: a.id,
-			name: a.name,
-			src: resolveCloudAssetSrc(a.src),
-			custom: true
-		}));
-
+function rebuildStores() {
 	const includeFrames = get(showSeedFrames);
-	frames.set([...(includeFrames ? seedFrames() : []), ...customFrames]);
-	stickers.set(customStickers);
+	frames.set(includeFrames ? seedFrames() : []);
+	stickers.set(seedStickers());
 	warmCatalogImages();
 }
 
@@ -273,18 +196,17 @@ function warmCatalogImages() {
 	]);
 }
 
-rebuildStores([]);
+rebuildStores();
 
 /** @param {boolean} on */
 export function setShowSeedFrames(on) {
 	showSeedFrames.set(!!on);
 	writeFlag(SEED_FRAMES_KEY, !!on);
-	rebuildStores(cachedCustoms);
+	rebuildStores();
 }
 
 /**
  * Apply booth frame catalog flag from a guest Studio URL (`sf` query param).
- * Encoded when the booth builds the QR so phones inherit Admin seed-frame toggles.
  */
 export function applyGuestCatalogFlagsFromUrl() {
 	if (typeof location === 'undefined') return;
@@ -324,27 +246,11 @@ export function setOracleShuffleMs(ms) {
 }
 
 /**
- * @param {unknown} err
- * @returns {string}
+ * Load seed catalog. Future Cloudflare customs merge here.
  */
-function catalogErrorMessage(err) {
-	if (err instanceof Error && err.message) return err.message;
-	return String(err || 'Unknown error');
-}
-
-/** Load customs from cloud or IndexedDB and merge with seeds. */
 export async function initAssets() {
-	try {
-		const customs = await loadCustoms();
-		rebuildStores(customs);
-		catalogError.set(null);
-	} catch (err) {
-		console.warn('[assets] Custom catalog unavailable, using seeds only', err);
-		catalogError.set(catalogErrorMessage(err));
-		rebuildStores([]);
-	} finally {
-		assetsReady.set(true);
-	}
+	rebuildStores();
+	assetsReady.set(true);
 }
 
 /**
@@ -354,447 +260,6 @@ export async function initAssets() {
 export function getLiveFrameById(id) {
 	if (!id) return undefined;
 	return get(frames).find((f) => f.id === id);
-}
-
-/**
- * Admin frame/sticker uploads: PNG or WebP (transparency-friendly formats).
- * @param {File} file
- * @returns {boolean}
- */
-export function isAssetImageFile(file) {
-	if (file.type === 'image/png' || file.type === 'image/webp') return true;
-	if (!file.type && /\.(png|webp)$/i.test(file.name)) return true;
-	return false;
-}
-
-/** @deprecated Prefer {@link isAssetImageFile} — kept for callers that still use the old name. */
-export function isPngFile(file) {
-	return isAssetImageFile(file);
-}
-
-/**
- * @param {File} file
- */
-function assertAssetImageFile(file) {
-	if (!isAssetImageFile(file)) {
-		throw new Error('Frames and stickers must be PNG or WebP.');
-	}
-}
-
-/**
- * @param {File} file
- * @returns {Promise<string>} data URL
- */
-export function fileToDataUrl(file) {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => resolve(/** @type {string} */ (reader.result));
-		reader.onerror = () => reject(reader.error ?? new Error('File read failed'));
-		reader.readAsDataURL(file);
-	});
-}
-
-function makeId(prefix) {
-	return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-/**
- * @param {{ name: string; motif?: string; file?: File; src?: string; slots: FrameSlot[]; w?: number; h?: number }} opts
- */
-export async function addFrame({ name, motif, file, src: srcIn, slots, w, h }) {
-	const cleaned = normalizeSlots(slots);
-	if (!cleaned?.length) throw new Error('Add at least one photo canvas');
-	let src = srcIn;
-	if (!src) {
-		if (!file) throw new Error('Frame image required');
-		assertAssetImageFile(file);
-		src = await fileToDataUrl(file);
-	}
-	let frameW = w;
-	let frameH = h;
-	if (!frameW || !frameH) {
-		const dims = await measureImage(src);
-		frameW = dims.w;
-		frameH = dims.h;
-	}
-
-	if (isCloudAssetsEnabled()) {
-		const created = await apiCreateAsset({
-			kind: 'frame',
-			name: name.trim() || 'CUSTOM FRAME',
-			motif: motif?.trim() || undefined,
-			src,
-			w: frameW,
-			h: frameH,
-			slots: cleaned
-		});
-		rebuildStores(await loadCustoms());
-		return created.id;
-	}
-
-	/** @type {import('./idb.js').CustomAsset} */
-	const record = {
-		id: makeId('frame'),
-		kind: 'frame',
-		name: name.trim() || 'CUSTOM FRAME',
-		motif: motif?.trim() || undefined,
-		src,
-		w: frameW,
-		h: frameH,
-		slots: cleaned,
-		custom: true
-	};
-	await idbPut(record);
-	rebuildStores(await idbListAll());
-	return record.id;
-}
-
-/**
- * @param {{ name: string; file: File }} opts
- */
-export async function addSticker({ name, file }) {
-	const [id] = await addStickers([{ name, file }]);
-	return id;
-}
-
-/**
- * @param {Array<{ name: string; file: File }>} items
- * @returns {Promise<string[]>}
- */
-export async function addStickers(items) {
-	if (!items.length) return [];
-
-	for (const { file } of items) {
-		assertAssetImageFile(file);
-	}
-
-	if (isCloudAssetsEnabled()) {
-		const ids = [];
-		for (const { name, file } of items) {
-			const src = await fileToDataUrl(file);
-			const created = await apiCreateAsset({
-				kind: 'sticker',
-				name: name.trim() || 'CUSTOM STICKER',
-				src
-			});
-			ids.push(created.id);
-		}
-		rebuildStores(await loadCustoms());
-		return ids;
-	}
-
-	const ids = [];
-	for (const { name, file } of items) {
-		const src = await fileToDataUrl(file);
-		/** @type {import('./idb.js').CustomAsset} */
-		const record = {
-			id: makeId('sticker'),
-			kind: 'sticker',
-			name: name.trim() || 'CUSTOM STICKER',
-			src,
-			custom: true
-		};
-		await idbPut(record);
-		ids.push(record.id);
-	}
-	rebuildStores(await idbListAll());
-	return ids;
-}
-
-/**
- * Rename / update slots on a custom asset (seeds are read-only).
- * @param {string} id
- * @param {{ name?: string; motif?: string; src?: string; w?: number; h?: number; slots?: FrameSlot[] }} patch
- */
-export async function updateAsset(id, patch) {
-	const hit = [...get(frames), ...get(stickers)].find((a) => a.id === id);
-	if (!hit?.custom) throw new Error('Only custom assets can be edited');
-
-	if (isCloudAssetsEnabled()) {
-		/** @type {Parameters<typeof apiPatchAsset>[1]} */
-		const apiPatch = {};
-		if (patch.name !== undefined) apiPatch.name = patch.name.trim() || hit.name;
-		if (patch.motif !== undefined) apiPatch.motif = patch.motif.trim() || undefined;
-		if (patch.src !== undefined) apiPatch.src = patch.src;
-		if (patch.w !== undefined) apiPatch.w = patch.w;
-		if (patch.h !== undefined) apiPatch.h = patch.h;
-		if (patch.slots !== undefined) {
-			const cleaned = normalizeSlots(patch.slots);
-			if (!cleaned?.length) throw new Error('Add at least one photo canvas');
-			apiPatch.slots = cleaned;
-		}
-		const kind = get(stickers).some((s) => s.id === id) ? 'sticker' : 'frame';
-		await apiPatchAsset(id, apiPatch, kind);
-		rebuildStores(await loadCustoms());
-		return;
-	}
-
-	const customs = await idbListAll();
-	const row = customs.find((a) => a.id === id);
-	if (!row) throw new Error('Only custom assets can be edited');
-	if (patch.name !== undefined) row.name = patch.name.trim() || row.name;
-	if (patch.motif !== undefined) row.motif = patch.motif.trim() || undefined;
-	if (patch.src !== undefined) row.src = patch.src;
-	if (patch.w !== undefined) row.w = patch.w;
-	if (patch.h !== undefined) row.h = patch.h;
-	if (patch.slots !== undefined) {
-		if (row.kind !== 'frame') throw new Error('Only frames have canvases');
-		const cleaned = normalizeSlots(patch.slots);
-		if (!cleaned?.length) throw new Error('Add at least one photo canvas');
-		row.slots = cleaned;
-	}
-	await idbPut(row);
-	rebuildStores(await idbListAll());
-}
-
-/**
- * Delete a custom asset by id.
- * @param {string} id
- */
-export async function removeCustomAsset(id) {
-	const hit = [...get(frames), ...get(stickers)].find((a) => a.id === id);
-	if (!hit?.custom) throw new Error('Seed assets cannot be deleted');
-
-	if (isCloudAssetsEnabled()) {
-		const kind = get(stickers).some((s) => s.id === id) ? 'sticker' : 'frame';
-		await apiDeleteAsset(id, kind);
-		rebuildStores(await loadCustoms());
-		return;
-	}
-
-	await idbDelete(id);
-	rebuildStores(await idbListAll());
-}
-
-/**
- * @param {number} ms
- */
-function sleep(ms) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * @param {string} id
- * @param {'frame' | 'sticker'} kind
- * @param {number} gapMs
- */
-async function deleteAssetWithRetry(id, kind, gapMs) {
-	for (let attempt = 1; attempt <= BULK_DELETE_MAX_ATTEMPTS; attempt++) {
-		try {
-			await apiDeleteAsset(id, kind);
-			return;
-		} catch (err) {
-			const status = err && typeof err === 'object' && 'status' in err ? Number(err.status) : 0;
-			const canRetry = status === 429 && attempt < BULK_DELETE_MAX_ATTEMPTS;
-			if (!canRetry) throw err;
-			await sleep(gapMs * attempt);
-		}
-	}
-}
-
-/**
- * Delete multiple custom assets in one rebuild.
- * Cloud deletes run sequentially with a gap to avoid rate limits.
- * @param {string[]} ids
- * @param {{
- *   onProgress?: (info: { index: number; total: number; id: string; name: string }) => void;
- *   gapMs?: number;
- * }} [opts]
- */
-export async function removeCustomAssets(ids, opts = {}) {
-	const gapMs = opts.gapMs ?? BULK_DELETE_GAP_MS;
-	const unique = [...new Set(ids)];
-	if (!unique.length) return;
-
-	const all = [...get(frames), ...get(stickers)];
-	const toDelete = unique.filter((id) => {
-		const hit = all.find((a) => a.id === id);
-		return hit?.custom;
-	});
-	if (!toDelete.length) return;
-
-	if (isCloudAssetsEnabled()) {
-		const total = toDelete.length;
-		for (let i = 0; i < toDelete.length; i++) {
-			const id = toDelete[i];
-			const hit = all.find((a) => a.id === id);
-			const name = hit?.name ?? id;
-			opts.onProgress?.({ index: i + 1, total, id, name });
-			const kind = get(stickers).some((s) => s.id === id) ? 'sticker' : 'frame';
-			await deleteAssetWithRetry(id, kind, gapMs);
-			if (i < toDelete.length - 1) await sleep(gapMs);
-		}
-		rebuildStores(await loadCustoms());
-		return;
-	}
-
-	for (const id of toDelete) {
-		await idbDelete(id);
-	}
-	rebuildStores(await idbListAll());
-}
-
-/**
- * Push IndexedDB customs to cloud (skips name+kind already present remotely).
- * @returns {Promise<{ uploaded: number; skipped: number }>}
- */
-export async function uploadLocalCustomsToCloud() {
-	if (!isCloudAssetsEnabled()) {
-		throw new Error('Set VITE_API_BASE to enable cloud storage.');
-	}
-
-	const local = await idbListAll();
-	if (!local.length) return { uploaded: 0, skipped: 0 };
-
-	const missingSlots = local.filter(
-		(row) => row.kind === 'frame' && !normalizeSlots(row.slots)?.length
-	);
-	if (missingSlots.length) {
-		const names = missingSlots.map((r) => r.name).join(', ');
-		throw new Error(`Cannot upload: frame(s) missing slots — ${names}`);
-	}
-
-	const cloud = await listCustoms();
-
-	let uploaded = 0;
-	let skipped = 0;
-
-	for (const row of local) {
-		if (cloud.some((c) => c.kind === row.kind && c.name === row.name)) {
-			skipped++;
-			continue;
-		}
-		try {
-			await apiCreateAsset({
-				kind: row.kind,
-				name: row.name,
-				motif: row.motif,
-				src: row.src,
-				w: row.w,
-				h: row.h,
-				slots: row.slots
-			});
-			uploaded++;
-		} catch (err) {
-			rebuildStores(await loadCustoms());
-			const detail = err instanceof Error ? err.message : String(err);
-			throw new Error(
-				`Upload stopped after ${uploaded} uploaded, ${skipped} skipped (failed on "${row.name}"): ${detail}`
-			);
-		}
-	}
-
-	rebuildStores(await loadCustoms());
-	return { uploaded, skipped };
-}
-
-/** @returns {Promise<object>} */
-export async function exportCatalog() {
-	const customs = await loadCustoms();
-	const assets = await Promise.all(
-		customs.map(async (a) => {
-			let src = a.src;
-			if (!src.startsWith('data:')) {
-				src = await fetchAsDataUrl(src);
-			}
-			return { ...a, src };
-		})
-	);
-
-	return {
-		version: 2,
-		exportedAt: new Date().toISOString(),
-		pin: getAdminPin(),
-		showSeedFrames: get(showSeedFrames),
-		assets
-	};
-}
-
-/**
- * @param {object} payload
- * @returns {import('./idb.js').CustomAsset[]}
- */
-function parseImportAssets(payload) {
-	if (!payload || typeof payload !== 'object') throw new Error('Invalid catalog file');
-	const raw = /** @type {{ assets?: unknown }} */ (payload);
-	const assets = Array.isArray(raw.assets) ? raw.assets : [];
-	/** @type {import('./idb.js').CustomAsset[]} */
-	const cleaned = [];
-	for (const item of assets) {
-		if (!item || typeof item !== 'object') continue;
-		const a = /** @type {Record<string, unknown>} */ (item);
-		if (a.kind !== 'frame' && a.kind !== 'sticker') continue;
-		if (typeof a.id !== 'string' || typeof a.src !== 'string' || typeof a.name !== 'string')
-			continue;
-		/** @type {import('./idb.js').CustomAsset} */
-		const row = {
-			id: a.id,
-			kind: a.kind,
-			name: a.name,
-			motif: typeof a.motif === 'string' ? a.motif : undefined,
-			src: a.src,
-			custom: true
-		};
-		if (a.kind === 'frame') {
-			const slots = normalizeSlots(a.slots);
-			if (slots) row.slots = slots;
-			if (typeof a.w === 'number' && typeof a.h === 'number') {
-				row.w = a.w;
-				row.h = a.h;
-			}
-		}
-		cleaned.push(row);
-	}
-	return cleaned;
-}
-
-/**
- * Replace all custom assets from an exported JSON payload.
- * @param {object} payload
- */
-export async function importCatalog(payload) {
-	const cleaned = parseImportAssets(payload);
-
-	if (isCloudAssetsEnabled()) {
-		const missingSlots = cleaned.filter(
-			(row) => row.kind === 'frame' && !normalizeSlots(row.slots)?.length
-		);
-		if (missingSlots.length) {
-			const names = missingSlots.map((r) => r.name).join(', ');
-			throw new Error(
-				`Import aborted: frame(s) missing slots — ${names}. Remote catalog was not deleted.`
-			);
-		}
-
-		const existing = await listCustoms();
-		for (const asset of existing) {
-			const kind = asset.kind === 'sticker' ? 'sticker' : 'frame';
-			await apiDeleteAsset(asset.id, kind);
-		}
-		for (const row of cleaned) {
-			await apiCreateAsset({
-				kind: row.kind,
-				name: row.name,
-				motif: row.motif,
-				src: row.src,
-				w: row.w,
-				h: row.h,
-				slots: row.slots
-			});
-		}
-	} else {
-		await idbReplaceAllCustoms(cleaned);
-	}
-
-	const raw = /** @type {{ pin?: string; showSeedFrames?: unknown }} */ (payload);
-	if (typeof raw.pin === 'string' && raw.pin.length > 0) {
-		setAdminPin(raw.pin);
-	}
-	if (typeof raw.showSeedFrames === 'boolean') {
-		showSeedFrames.set(raw.showSeedFrames);
-		writeFlag(SEED_FRAMES_KEY, raw.showSeedFrames);
-	}
-	rebuildStores(await loadCustoms());
 }
 
 export function getAdminPin() {
@@ -820,4 +285,4 @@ export function verifyAdminPin(attempt) {
 	return attempt === getAdminPin();
 }
 
-export { DEFAULT_PIN, normalizeSlots, makeId, isCloudAssetsEnabled };
+export { DEFAULT_PIN, normalizeSlots };

@@ -1,10 +1,8 @@
 /**
- * Booth → phone session handoff via Photobooth captures API; stub when offline.
+ * Booth → phone session handoff. Same-tab stub until a Cloudflare adapter lands.
  */
 import { toFullPath } from '../../router/index.js';
-import { getApiBase, stripDataUrl } from '../assets/assetApi.js';
 import { encodeHandoffImage } from '../utils/canvasRenderer.js';
-import { shouldRetryCaptureAsPng } from './captureRetry.js';
 import { encodeSes, decodeSes } from './sesCodec.js';
 import { stubCreateSession, stubLoadCapture } from './sessionStub.js';
 
@@ -20,10 +18,6 @@ import { stubCreateSession, stubLoadCapture } from './sessionStub.js';
 
 /** @type {{ src: string; promise: Promise<HandoffEncoded> } | null} */
 let primedHandoff = null;
-
-function useCloud() {
-	return !!getApiBase();
-}
 
 /**
  * Start JPEG encode as soon as Camera has the composite so Reveal does not wait on it.
@@ -52,53 +46,15 @@ function takePrimedHandoffEncode(imageDataUrl) {
 }
 
 /**
- * @param {string} imageBase64
- * @param {string | null} frameId
- * @param {string} contentType
- */
-async function postCapture(imageBase64, frameId, contentType) {
-	return fetch(`${getApiBase()}/api/photobooth/captures`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			imageBase64,
-			frameId,
-			contentType
-		})
-	});
-}
-
-/**
  * @param {{ imageDataUrl: string; frameId: string | null }} payload
  * @returns {Promise<{ id: string; key: string; frameId: string | null }>}
  */
 export async function createSession(payload) {
 	const encoded = await takePrimedHandoffEncode(payload.imageDataUrl);
-
-	if (!useCloud()) {
-		return stubCreateSession({
-			imageDataUrl: encoded.imageDataUrl,
-			frameId: payload.frameId
-		});
-	}
-
-	let imageDataUrl = encoded.imageDataUrl;
-	let contentType = encoded.contentType;
-	let res = await postCapture(stripDataUrl(imageDataUrl), payload.frameId, contentType);
-
-	if (shouldRetryCaptureAsPng(res.status, contentType)) {
-		imageDataUrl = encoded.toPng();
-		contentType = 'image/png';
-		res = await postCapture(stripDataUrl(imageDataUrl), payload.frameId, contentType);
-	}
-
-	if (!res.ok) {
-		const err = new Error('Capture create failed');
-		err.code = 'NETWORK';
-		throw err;
-	}
-	const data = await res.json();
-	return { id: data.id, key: data.key, frameId: data.frameId ?? payload.frameId ?? null };
+	return stubCreateSession({
+		imageDataUrl: encoded.imageDataUrl,
+		frameId: payload.frameId
+	});
 }
 
 /**
@@ -112,24 +68,7 @@ export async function loadCapture(id, key) {
 		err.code = 'NOT_FOUND';
 		throw err;
 	}
-	if (!useCloud()) return stubLoadCapture(id.trim(), key.trim());
-
-	const url = `${getApiBase()}/api/photobooth/captures/${encodeURIComponent(id.trim())}?key=${encodeURIComponent(key.trim())}`;
-	const res = await fetch(url);
-	if (res.status === 401 || res.status === 403) {
-		const err = new Error('Forbidden');
-		err.code = 'FORBIDDEN';
-		throw err;
-	}
-	if (!res.ok) {
-		const err = new Error('Session not found');
-		err.code = 'NOT_FOUND';
-		throw err;
-	}
-	const frameId = res.headers.get('X-Frame-Id');
-	const blob = await res.blob();
-	const imageDataUrl = URL.createObjectURL(blob);
-	return { imageDataUrl, frameId: frameId || null };
+	return stubLoadCapture(id.trim(), key.trim());
 }
 
 /**
@@ -154,6 +93,7 @@ export function studioSessionQuery(parts) {
 
 /**
  * Public URL for QR — use LAN hostname in production booths (VITE_PUBLIC_ORIGIN).
+ * Same-tab stub only until a capture backend is attached.
  * @param {{ id: string; key: string; showSeedFrames?: boolean }} parts
  * @returns {string}
  */

@@ -1,58 +1,39 @@
-# Photobooth Backend — Olympus Snap
+# Frontend attach contract — Olympus Snap
 
-Cloud mode talks to **OpenHouse Photobooth** (`/api/photobooth` on SFOpenHouseAPI). There is no Cloudflare Worker in this repo.
+The SPA ships with **no API**. Seed frames come from `src/lib/assets/catalog.js`. Capture QR is a **same-tab stub** (`sessionStub.js`). Phone scan fails until a backend (planned: Cloudflare) implements this contract.
 
 ## Environment
 
-**Defaults are in `vite.config.js`** — no `.env` required:
+| Var | Role |
+|-----|------|
+| `VITE_PUBLIC_ORIGIN` | Optional QR origin when guests must scan a different host than the tablet |
 
-| Mode | API base |
-|------|----------|
-| `npm run dev` | `http://localhost:6101` |
-| `npm run build` / production | `https://sfapi.smartfactory.forum` |
+No `VITE_API_BASE`. Admin is a local PIN (`olympus` default).
 
-Optional override: set `VITE_API_BASE` in the shell or a local `.env`.
+## Attach points
 
-**Admin Auth (runtime):** Unlock Admin with PIN + Photobooth `Auth` header value (session storage). Not configured via env.
+| Client API | Today | Next backend |
+|------------|--------|----------------|
+| `initAssets()` in [`assetStore.js`](../src/lib/assets/assetStore.js) | Seeds only | Merge remote frames/stickers |
+| `createSession()` in [`sessionClient.js`](../src/lib/session/sessionClient.js) | In-memory stub | Persist capture PNG |
+| `loadCapture(id, key)` | Same-tab Map | Fetch capture by capability |
 
-**QR origin:** Uses `location.origin` unless you set optional `VITE_PUBLIC_ORIGIN` (needed when the booth URL guests scan must differ from the tablet’s origin).
-
-**Security notes**
-
-- Production booth/guest origins must be on the API CORS allowlist.
-- Capture responses expose `X-Frame-Id`; the API CORS policy must use `WithExposedHeaders("X-Frame-Id")` so Studio can read frame context cross-origin.
-
-## Local vs production
-
-| Mode | `VITE_API_BASE` | Notes |
-|------|-----------------|-------|
-| Production build | *(default sfapi)* | From `vite.config.js` when `mode !== 'development'` |
-| Local `npm run dev` | *(default :6101)* | From `vite.config.js`; run SFOpenHouseAPI locally |
-| Override | set `VITE_API_BASE` | Shell or optional `.env` |
-
-```bash
-npm install
-npm run dev
-```
+Keep names. Swap the stub body.
 
 ## QR session (`ses`)
 
 Reveal creates a capture → `{ id, key, frameId }`.
 
-QR URL shape:
+QR URL:
 
 ```text
 {VITE_PUBLIC_ORIGIN}{base}/studio?ses={base64url(`${id}::${key}`)}
 ```
 
-Example path with Vite base: `/olympussnap/studio?ses=...`
+Example: `/olympussnap/studio?ses=...`
 
-- Guest Studio decodes `ses`, then `GET /api/photobooth/captures/{id}?key=...`
-- Captures are **reusable** (capability `id`+`key`), not one-time consume tokens
-- Offline stub mints local id/key and uses the same `ses` encoding
+Guest Studio decodes `ses`, then `loadCapture(id, key)`. Captures are **reusable** (`id`+`key`), not one-time tokens.
 
 ## Related docs
 
-- [storage-model.md](./storage-model.md) — frames, stickers, slots, capture handoff
-- [Photobooth API integration design](./superpowers/specs/2026-08-11-photobooth-api-integration-design.md)
-- Partner live API: `https://sfapi.smartfactory.forum/`
+- [storage-model.md](./storage-model.md) — frame/sticker/capture record shapes + slot math

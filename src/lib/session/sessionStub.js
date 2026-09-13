@@ -1,6 +1,6 @@
 /**
- * Dev stub — in-memory capture handoff until Photobooth API (Task 5 wires sessionClient).
- * Same-tab Map store holds full PNG data-URLs (localStorage quota cannot).
+ * Same-tab capture handoff until a Cloudflare adapter lands.
+ * In-memory Map holds full PNG data-URLs (localStorage quota cannot).
  */
 /** @typedef {{ imageDataUrl: string; frameId: string | null; key: string; createdAt: number }} StubCapture */
 

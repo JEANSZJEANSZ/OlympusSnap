@@ -1,8 +1,8 @@
 # Storage Model — Frames, Stickers & Capture Handoff
 
-This document explains **what gets saved**, **where**, and **how frame photo-canvas coordinates work**, so you can implement the same contract against **OpenHouse Photobooth** (or another production API) instead of local-only IndexedDB.
+This document explains **what gets saved**, **where**, and **how frame photo-canvas coordinates work**, so a future Cloudflare (or other) backend can implement the same contract.
 
-Cloud backend for this app: **Photobooth** (`/api/photobooth` on SFOpenHouseAPI). See [photobooth-backend.md](./photobooth-backend.md).
+Today the SPA is **seed-only**: frames from [`catalog.js`](../src/lib/assets/catalog.js), captures in [`sessionStub.js`](../src/lib/session/sessionStub.js). See [photobooth-backend.md](./photobooth-backend.md) for attach points.
 
 ---
 
@@ -14,7 +14,7 @@ Cloud backend for this app: **Photobooth** (`/api/photobooth` on SFOpenHouseAPI)
 | **Custom sticker** | PNG file | name | none |
 | **Capture (session)** | PNG composite | frameId | reusable capability `id` + `key` for QR |
 
-The app does **not** auto-detect transparent holes in frame PNGs. An admin **draws rectangles** on the frame in Admin → those become `slots`.
+The app does **not** auto-detect transparent holes in frame PNGs. Seed frames ship with pre-calculated `slots`. A future admin/backend must supply the same `{id,x,y,w,h}` array.
 
 ---
 
@@ -63,21 +63,9 @@ height = 0.7  × 800 = 560 px
 
 Same math at any export resolution — scale multiplies all four.
 
-### How slots are created (Admin)
+### How slots are authored
 
-1. Admin uploads/crops a frame PNG.
-2. `FrameSlotEditor` overlays the image; pointer positions convert to 0–1:
-
-   ```
-   x = (clientX - overlayLeft) / overlayWidth
-   y = (clientY - overlayTop)  / overlayHeight
-   ```
-
-3. Admin drag-draws one or more rectangles.
-4. On save, `normalizeSlots()` clamps values into valid ranges (min size 0.01, inside 0–1).
-5. Frame must have **at least one slot** before save.
-
-**Code:** [`src/lib/components/FrameSlotEditor.svelte`](../src/lib/components/FrameSlotEditor.svelte), [`src/lib/assets/assetStore.js`](../src/lib/assets/assetStore.js) (`normalizeSlots`).
+Slots are authored offline (seed generator or a future backend admin). `normalizeSlots()` in [`assetStore.js`](../src/lib/assets/assetStore.js) clamps values (min size 0.01, inside 0–1). Frames need **at least one slot**.
 
 ### How slots are consumed (booth + export)
 
@@ -162,38 +150,18 @@ Admin can upload **multiple PNGs at once**; each file becomes one sticker row.
 
 ## Capture handoff (QR → Studio)
 
-After Camera/Reveal, the booth uploads an **unstickered composite PNG** so the guest phone can open Studio and add stickers.
+After Camera/Reveal, the booth stores an **unstickered composite PNG** so Studio can add stickers. Today that store is in-memory (same tab). A backend should keep this create/load shape.
 
 ### Create (booth)
 
-**Request:** `POST /api/photobooth/captures`
+`createSession({ imageDataUrl, frameId })` → `{ id, key, frameId }`.
 
-```json
-{
-  "imageBase64": "<base64 PNG without data: prefix, or data-URL>",
-  "frameId": "frame-abc123",
-  "contentType": "image/png"
-}
-```
+### Load (guest, reusable)
 
-**Response:**
-
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "key": "<capability-secret>",
-  "frameId": "frame-abc123"
-}
-```
-
-### Load (guest phone, reusable)
-
-**Request:** `GET /api/photobooth/captures/:id?key=...`
-
-**Response:** raw PNG body + header `X-Frame-Id: frame-abc123`
+`loadCapture(id, key)` → `{ imageDataUrl, frameId }`.
 
 - Same `id`+`key` may be opened again (reusable capability, not one-time consume).
-- Missing/invalid key → 401/403/404.
+- Missing/invalid key → treat as 401/403/404.
 
 QR URL: `{VITE_PUBLIC_ORIGIN}{base}/studio?ses={base64url(`${id}::${key}`)}`
 
@@ -211,36 +179,18 @@ QR URL: `{VITE_PUBLIC_ORIGIN}{base}/studio?ses={base64url(`${id}::${key}`)}`
 
 ---
 
-## Current cloud stack (Photobooth)
+## Current stack (no API)
 
-```
-┌──────────────────┐     meta + enc blobs     ┌────────────────────┐
-│  Photobooth API  │◄─────────────────────────│  Booth / Admin /   │
-│  /api/photobooth │                          │  guest Studio      │
-│  frames/stickers │                          └────────────────────┘
-│  captures        │
-└──────────────────┘
-```
-
-| Mode | Trigger | Customs | Captures |
-|------|---------|---------|----------|
-| Cloud | `VITE_API_BASE` set | Photobooth frames/stickers | Photobooth captures (`id`+`key`) |
-| Offline | `VITE_API_BASE` empty | IndexedDB (data URL `src`) | In-memory stub (same `ses` shape) |
-
-Admin writes and recent-capture peek send header `Auth: {VITE_ADMIN_AUTH}`. Public GETs do not.
-
-### Offline fallback (no cloud)
-
-When `VITE_API_BASE` is unset:
-
-- **Assets:** IndexedDB, same JSON shape; `src` is a data URL instead of HTTP URL.
-- **Captures:** in-memory Map on the booth tab (same-machine / same-tab Studio).
+| Mode | Customs | Captures |
+|------|---------|----------|
+| Seed-only (now) | None — `catalog.js` frames | In-memory stub, same `{id,key}` shape |
+| Future Cloudflare | Remote frames/stickers | Persist capture PNG + capability key |
 
 ---
 
 ## Mapping to a production database
 
-Photobooth is the production-facing API for this app. If you host your own store, split **blobs** and **metadata** the same way:
+Split **blobs** and **metadata** the same way:
 
 ### Recommended schema
 
@@ -292,19 +242,18 @@ When reading a frame for the app, either return embedded `slots` JSON or `JOIN f
 | `frame_id` | UUID FK nullable | |
 | `created_at` | timestamptz | |
 
-### API contract the frontend expects (Photobooth)
+### API contract the frontend expects
 
-| Endpoint | Notes |
-|----------|-------|
-| `GET /api/photobooth/frames` + `.../stickers` | Merge into app `assets[]`; `slots` on frames |
-| `GET` frame/sticker image URLs | Stream PNG; **CORS** required for canvas |
-| `POST /api/photobooth/frames` or `.../stickers` | Multipart: `File`, `Name`, `Slots` / `Motif` (PascalCase) |
-| `PATCH` / `DELETE` on kind paths | Admin `Auth` header |
-| `POST /api/photobooth/captures` | Body with image + frameId → `{ id, key, frameId }` |
-| `GET /api/photobooth/captures/:id?key=` | PNG body + `X-Frame-Id`; reusable |
-| `GET /api/photobooth/admin/captures/recent` | Admin Auth; last few previews |
+Route names are up to the backend. Payloads must match:
 
-Frontend modules: [`assetApi.js`](../src/lib/assets/assetApi.js), [`assetStore.js`](../src/lib/assets/assetStore.js), [`sessionClient.js`](../src/lib/session/sessionClient.js).
+| Job | Notes |
+|-----|--------|
+| List frames + stickers | Merge into app `assets[]`; `slots` on frames |
+| Frame/sticker image URLs | Stream PNG; **CORS** required for canvas |
+| Create capture | Body with image + frameId → `{ id, key, frameId }` |
+| Load capture | Image + `frameId`; reusable `id`+`key` |
+
+Frontend modules: [`assetStore.js`](../src/lib/assets/assetStore.js), [`sessionClient.js`](../src/lib/session/sessionClient.js).
 
 ---
 
@@ -324,27 +273,19 @@ Frames and stickers: **PNG only**, transparency expected.
 
 ## End-to-end flow diagrams
 
-### Custom frame save
+### Frame catalog
 
 ```
-Admin draws slots on PNG
+catalog.js seeds (and later: remote list)
         │
         ▼
-slots[] normalized 0–1
-        │
-        ├── Cloud: POST /api/photobooth/frames (multipart)
-        │         → encrypted blob + meta on Photobooth
-        │
-        └── Local: IndexedDB record (src = data URL, slots inline)
-        │
-        ▼
-initAssets() → frames store
+initAssets() → frames / stickers stores
         │
         ▼
 Camera uses slots for hole CSS + snap count
         │
         ▼
-compositeFramePhotos() → Reveal → capture upload
+compositeFramePhotos() → Reveal → createSession()
 ```
 
 ### Capture handoff
@@ -353,13 +294,13 @@ compositeFramePhotos() → Reveal → capture upload
 Reveal composites photos + frame (no stickers)
         │
         ▼
-POST /api/photobooth/captures { imageBase64, frameId }
+createSession({ imageDataUrl, frameId })
         │
         ▼
-{ id, key, frameId }
+{ id, key, frameId }  — stub today, persist later
         │
         ▼
-QR → guest phone GET .../captures/{id}?key=...
+QR → loadCapture(id, key)
         │
         ▼
 Studio loads image + frameId → sticker editor
@@ -381,5 +322,4 @@ Studio loads image + frameId → sticker editor
 
 ## Related docs
 
-- [photobooth-backend.md](./photobooth-backend.md) — env, QR `ses`, offline vs cloud
-- [Photobooth API integration design](./superpowers/specs/2026-08-11-photobooth-api-integration-design.md)
+- [photobooth-backend.md](./photobooth-backend.md) — attach points, QR `ses`, seed-only vs future cloud

@@ -4,17 +4,16 @@ Web photobooth — Greek mythology × retro 16-bit pixels.
 
 **Stack:** Vite + Svelte 5 (SPA). No SvelteKit. History routing via `src/router/index.js`.
 
-**Backend:** OpenHouse Photobooth API (`/api/photobooth`). See [docs/photobooth-backend.md](./docs/photobooth-backend.md). Offline when `VITE_API_BASE` is empty (IndexedDB + session stub).
+**Backend:** None wired. Guest flow uses seed frames. Capture QR is same-tab stub until a Cloudflare adapter attaches. See [docs/photobooth-backend.md](./docs/photobooth-backend.md).
 
 ## Dev
 
 ```bash
 npm install
-cp .env.example .env   # optional — leave VITE_API_BASE empty for offline
 npm run dev
 ```
 
-Env vars: `VITE_API_BASE`, `VITE_ADMIN_AUTH`, `VITE_PUBLIC_ORIGIN` (see `.env.example`). Vite proxies `/api` → `http://localhost:6101` for local SFOpenHouseAPI.
+Optional: copy `.env.example` → `.env` and set `VITE_PUBLIC_ORIGIN` if the QR origin must differ from the tablet origin.
 
 ## Views (URL path)
 
@@ -24,8 +23,7 @@ Env vars: `VITE_API_BASE`, `VITE_ADMIN_AUTH`, `VITE_PUBLIC_ORIGIN` (see `.env.ex
 | `/frame` | Frame carousel |
 | `/camera` | Mirrored webcam + countdown |
 | `/studio` | Stickers (drag / scale / rotate) — guest QR uses `?ses=` |
-| `/reveal` | Rope cut + cloth unroll |
-| `/export` | Final image + QR |
-| `/admin` | Long-press brand → PIN `olympus` |
+| `/reveal` | Rope cut + cloth unroll + QR |
+| `/admin` | Long-press brand → PIN `olympus` (booth flags only) |
 
-App is served under Vite `base` `/olympussnap/`. Custom frames/stickers: Admin UI (Photobooth when cloud, else IndexedDB). Seeds: `public/assets/` + `src/lib/assets/catalog.js`.
+App is served under Vite `base` `/olympussnap/`. Seeds: `public/assets/` + `src/lib/assets/catalog.js`.

@@ -2,14 +2,12 @@
  * Booth operator session — locks the app except Studio (QR guests).
  */
 import { writable } from 'svelte/store';
-import { clearAdminAuth, getAdminAuth, setAdminAuth } from './adminAuth.js';
-import { isCloudAssetsEnabled, verifyAdminAuth } from './assetApi.js';
 import { verifyAdminPin } from './assetStore.js';
 
 const UNLOCKED_KEY = 'olympus-snap-booth-unlocked';
 
 /**
- * Vite `npm run dev` — skip Cerberus gate so frontend work needs no Photobooth Auth.
+ * Vite `npm run dev` — skip Cerberus gate so frontend work needs no PIN.
  * Production / preview builds still require unlock.
  * @returns {boolean}
  */
@@ -50,61 +48,18 @@ export function isBoothPublicRoute(nameOrPath) {
 
 function initialUnlocked() {
 	if (isBoothAuthBypassed()) return true;
-	if (!readSessionFlag(UNLOCKED_KEY, false)) return false;
-	if (isCloudAssetsEnabled()) return !!getAdminAuth();
-	return true;
+	return readSessionFlag(UNLOCKED_KEY, false);
 }
 
 /** @type {import('svelte/store').Writable<boolean>} */
 export const boothUnlocked = writable(initialUnlocked());
 
-if (
-	typeof window !== 'undefined' &&
-	!isBoothAuthBypassed() &&
-	initialUnlocked() &&
-	isCloudAssetsEnabled()
-) {
-	void verifyAdminAuth()
-		.then((ok) => {
-			if (!ok) lockBooth();
-		})
-		.catch(() => {
-			/* keep session on transient network errors */
-		});
-}
-
 /**
- * @param {{ auth?: string; pin?: string }} creds
+ * @param {{ pin?: string }} creds
  * @returns {Promise<void>}
  */
 export async function unlockBooth(creds = {}) {
 	if (isBoothAuthBypassed()) {
-		writeSessionFlag(UNLOCKED_KEY, true);
-		boothUnlocked.set(true);
-		return;
-	}
-
-	if (isCloudAssetsEnabled()) {
-		const auth = (creds.auth || '').trim();
-		if (!auth) {
-			throw new Error('Photobooth Auth required.');
-		}
-		setAdminAuth(auth);
-		let ok = false;
-		try {
-			ok = await verifyAdminAuth();
-		} catch (err) {
-			clearAdminAuth();
-			writeSessionFlag(UNLOCKED_KEY, false);
-			boothUnlocked.set(false);
-			throw err instanceof Error ? err : new Error('Could not reach the forge.');
-		}
-		if (!ok) {
-			clearAdminAuth();
-			writeSessionFlag(UNLOCKED_KEY, false);
-			boothUnlocked.set(false);
-			throw new Error('Auth rejected by the forge.');
-		}
 		writeSessionFlag(UNLOCKED_KEY, true);
 		boothUnlocked.set(true);
 		return;
@@ -125,7 +80,6 @@ export function lockBooth() {
 		boothUnlocked.set(true);
 		return;
 	}
-	clearAdminAuth();
 	writeSessionFlag(UNLOCKED_KEY, false);
 	boothUnlocked.set(false);
 }

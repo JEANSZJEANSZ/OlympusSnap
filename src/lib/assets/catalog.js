@@ -1,7 +1,7 @@
 /**
  * Seed (built-in) frames & stickers shipped with the app.
- * Custom art is added via the Admin UI (IndexedDB) — see assetStore.js.
- * Photobooth blank templates: regenerate SVGs with `node scripts/generate-seed-frames.mjs`.
+ * Custom art will come from a Cloudflare backend later — see assetStore.js.
+ * Blank templates: regenerate SVGs with `node scripts/generate-seed-frames.mjs`.
  */
 
 /** @typedef {{ id: string; x: number; y: number; w: number; h: number }} FrameSlot */
@@ -117,7 +117,7 @@ export const FRAMES = [
 	}
 ];
 
-/** Built-in seed stickers removed — custom uploads only via Admin. */
+/** Built-in seed stickers empty until a catalog or Cloudflare backend supplies them. */
 /** @type {StickerAsset[]} */
 export const STICKERS = [];
 
