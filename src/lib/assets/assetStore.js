@@ -1,9 +1,16 @@
 /**
- * Live asset catalog: seed frames/stickers now.
- * initAssets() is the attach point for a future Cloudflare custom catalog.
+ * Live asset catalog: seed frames/stickers + Cloudflare customs.
  */
 import { get, writable } from 'svelte/store';
+import {
+	createAsset as apiCreateAsset,
+	deleteAsset as apiDeleteAsset,
+	listCustoms,
+	patchAsset as apiPatchAsset,
+	resolveCloudAssetSrc
+} from './assetApi.js';
 import { FRAMES as SEED_FRAMES, STICKERS as SEED_STICKERS } from './catalog.js';
+import { measureImage } from '../utils/imageCrop.js';
 import { warmFrameImages } from '../utils/loadImageForCanvas.js';
 
 const SEED_FRAMES_KEY = 'olympus-snap-show-seed-frames';
@@ -144,6 +151,13 @@ export const oracleShuffleMs = writable(readOracleShuffleMs());
 /** @type {import('svelte/store').Writable<boolean>} */
 export const assetsReady = writable(false);
 
+/** Last remote catalog failure; null when load succeeded. */
+/** @type {import('svelte/store').Writable<string | null>} */
+export const catalogError = writable(null);
+
+/** @type {import('./assetApi.js').CloudAsset[]} */
+let cachedCustoms = [];
+
 function seedFrames() {
 	return SEED_FRAMES.map((f) => ({ ...f, custom: false }));
 }
@@ -180,10 +194,39 @@ function normalizeSlots(raw) {
 	return out.length ? out : undefined;
 }
 
-function rebuildStores() {
+/**
+ * @param {import('./assetApi.js').CloudAsset[]} [customs]
+ */
+function rebuildStores(customs = cachedCustoms) {
+	cachedCustoms = customs;
+	const customFrames = customs
+		.filter((a) => a.kind === 'frame')
+		.map((a) => {
+			const src = resolveCloudAssetSrc(a.src);
+			return {
+				id: a.id,
+				name: a.name,
+				src,
+				motif: a.motif,
+				thumb: src,
+				w: a.w,
+				h: a.h,
+				slots: normalizeSlots(a.slots),
+				custom: true
+			};
+		});
+	const customStickers = customs
+		.filter((a) => a.kind === 'sticker')
+		.map((a) => ({
+			id: a.id,
+			name: a.name,
+			src: resolveCloudAssetSrc(a.src),
+			custom: true
+		}));
+
 	const includeFrames = get(showSeedFrames);
-	frames.set(includeFrames ? seedFrames() : []);
-	stickers.set(seedStickers());
+	frames.set([...(includeFrames ? seedFrames() : []), ...customFrames]);
+	stickers.set([...seedStickers(), ...customStickers]);
 	warmCatalogImages();
 }
 
@@ -200,7 +243,7 @@ rebuildStores();
 export function setShowSeedFrames(on) {
 	showSeedFrames.set(!!on);
 	writeFlag(SEED_FRAMES_KEY, !!on);
-	rebuildStores();
+	rebuildStores(cachedCustoms);
 }
 
 /**
@@ -244,11 +287,126 @@ export function setOracleShuffleMs(ms) {
 }
 
 /**
- * Load seed catalog. Future Cloudflare customs merge here.
+ * Load seed catalog + remote customs. Seeds still work if the Worker is down.
  */
 export async function initAssets() {
-	rebuildStores();
-	assetsReady.set(true);
+	try {
+		const customs = await listCustoms();
+		rebuildStores(customs);
+		catalogError.set(null);
+	} catch (err) {
+		console.warn('[assets] Custom catalog unavailable, using seeds only', err);
+		catalogError.set(err instanceof Error ? err.message : String(err));
+		rebuildStores([]);
+	} finally {
+		assetsReady.set(true);
+	}
+}
+
+/**
+ * @param {File} file
+ * @returns {boolean}
+ */
+export function isAssetImageFile(file) {
+	if (file.type === 'image/png' || file.type === 'image/webp') return true;
+	if (!file.type && /\.(png|webp)$/i.test(file.name)) return true;
+	return false;
+}
+
+/**
+ * @param {File} file
+ * @returns {Promise<string>}
+ */
+export function fileToDataUrl(file) {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(/** @type {string} */ (reader.result));
+		reader.onerror = () => reject(reader.error ?? new Error('File read failed'));
+		reader.readAsDataURL(file);
+	});
+}
+
+/**
+ * @param {{ name: string; motif?: string; file?: File; src?: string; slots: import('./assetApi.js').FrameSlot[]; w?: number; h?: number }} opts
+ */
+export async function addFrame({ name, motif, file, src: srcIn, slots, w, h }) {
+	const cleaned = normalizeSlots(slots);
+	if (!cleaned?.length) throw new Error('Add at least one photo canvas');
+	let src = srcIn;
+	if (!src) {
+		if (!file) throw new Error('Frame image required');
+		if (!isAssetImageFile(file)) throw new Error('Frames must be PNG or WebP.');
+		src = await fileToDataUrl(file);
+	}
+	let frameW = w;
+	let frameH = h;
+	if (!frameW || !frameH) {
+		const dims = await measureImage(src);
+		frameW = dims.w;
+		frameH = dims.h;
+	}
+	await apiCreateAsset({
+		kind: 'frame',
+		name: name.trim() || 'CUSTOM FRAME',
+		motif: motif?.trim() || undefined,
+		src,
+		w: frameW,
+		h: frameH,
+		slots: cleaned
+	});
+	await initAssets();
+}
+
+/**
+ * @param {Array<{ name: string; file: File }>} items
+ */
+export async function addStickers(items) {
+	if (!items.length) return;
+	for (const { file } of items) {
+		if (!isAssetImageFile(file)) throw new Error('Stickers must be PNG or WebP.');
+	}
+	for (const { name, file } of items) {
+		const src = await fileToDataUrl(file);
+		await apiCreateAsset({
+			kind: 'sticker',
+			name: name.trim() || 'CUSTOM STICKER',
+			src
+		});
+	}
+	await initAssets();
+}
+
+/**
+ * @param {string} id
+ * @param {{ name?: string; motif?: string; src?: string; w?: number; h?: number; slots?: import('./assetApi.js').FrameSlot[] }} patch
+ */
+export async function updateAsset(id, patch) {
+	const hit = [...get(frames), ...get(stickers)].find((a) => a.id === id);
+	if (!hit?.custom) throw new Error('Only custom assets can be edited');
+	/** @type {Parameters<typeof apiPatchAsset>[1]} */
+	const apiPatch = {};
+	if (patch.name !== undefined) apiPatch.name = patch.name.trim() || hit.name;
+	if (patch.motif !== undefined) apiPatch.motif = patch.motif.trim() || undefined;
+	if (patch.src !== undefined) apiPatch.src = patch.src;
+	if (patch.w !== undefined) apiPatch.w = patch.w;
+	if (patch.h !== undefined) apiPatch.h = patch.h;
+	if (patch.slots !== undefined) {
+		const cleaned = normalizeSlots(patch.slots);
+		if (!cleaned?.length) throw new Error('Add at least one photo canvas');
+		apiPatch.slots = cleaned;
+	}
+	const kind = get(stickers).some((s) => s.id === id) ? 'sticker' : 'frame';
+	await apiPatchAsset(id, apiPatch, kind);
+	await initAssets();
+}
+
+/** @param {string} id */
+export async function removeCustomAsset(id) {
+	const hit = [...get(frames), ...get(stickers)].find((a) => a.id === id);
+	if (!hit?.custom) throw new Error('Seed assets cannot be deleted');
+	const kind = get(stickers).some((s) => s.id === id) ? 'sticker' : 'frame';
+	await apiDeleteAsset(id, kind);
+	await initAssets();
 }
 
 /**
@@ -258,18 +416,6 @@ export async function initAssets() {
 export function getLiveFrameById(id) {
 	if (!id) return undefined;
 	return get(frames).find((f) => f.id === id);
-}
-
-/** @returns {string} */
-function configuredAdminPin() {
-	return String(import.meta.env.VITE_ADMIN_PIN || '').trim();
-}
-
-/** @param {string} attempt */
-export function verifyAdminPin(attempt) {
-	const expected = configuredAdminPin();
-	if (!expected) return false;
-	return attempt === expected;
 }
 
 export { normalizeSlots };

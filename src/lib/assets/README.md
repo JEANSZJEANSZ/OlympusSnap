@@ -1,15 +1,17 @@
 # Frames & stickers
 
-## Seeds (no backend)
+## Seeds
 
 Built-in frames live in [`catalog.js`](./catalog.js) and `public/assets/frames/`. Guest flow reads the live stores from [`assetStore.js`](./assetStore.js).
 
-`STICKERS` is empty until a catalog or Cloudflare backend supplies them. Studio still works.
+`STICKERS` is empty until Admin uploads customs (or a catalog seed is added). Studio still works.
 
 ## Admin
 
-Long-press `OLYMPUS_SNAP` → PIN from `VITE_ADMIN_PIN` in `.env`. Settings only: seed-frame toggle, booth-flow flags. No upload. Change the PIN in `.env`, not in Admin.
+Long-press `OLYMPUS_SNAP` → type the Worker `ADMIN_PIN` at Cerberus (production). Guest landing / frame / camera never ask. Dev (`npm run dev`) skips the Admin gate.
 
-## Future Cloudflare catalog
+Admin uploads frames (crop + photo canvases) and stickers to the Worker. Seeds stay read-only. Session photos are not managed here — they wipe nightly.
 
-Merge remote frames/stickers in `initAssets()`. Keep the record shapes in [docs/storage-model.md](../../../docs/storage-model.md).
+## Cloudflare catalog
+
+`initAssets()` merges `GET /api/frames` and `GET /api/stickers` with seeds. Record shapes: [docs/storage-model.md](../../../docs/storage-model.md).

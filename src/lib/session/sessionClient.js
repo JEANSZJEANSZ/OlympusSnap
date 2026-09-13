@@ -1,7 +1,8 @@
 /**
- * Booth → phone session handoff. Same-tab stub until a Cloudflare adapter lands.
+ * Booth → phone session handoff via Cloudflare Worker; same-tab stub if API is down.
  */
 import { toFullPath } from '../../router/index.js';
+import { getApiBase, stripDataUrl } from '../assets/assetApi.js';
 import { encodeHandoffImage } from '../utils/canvasRenderer.js';
 import { encodeSes, decodeSes } from './sesCodec.js';
 import { stubCreateSession, stubLoadCapture } from './sessionStub.js';
@@ -51,10 +52,25 @@ function takePrimedHandoffEncode(imageDataUrl) {
  */
 export async function createSession(payload) {
 	const encoded = await takePrimedHandoffEncode(payload.imageDataUrl);
-	return stubCreateSession({
-		imageDataUrl: encoded.imageDataUrl,
-		frameId: payload.frameId
-	});
+	try {
+		const res = await fetch(`${getApiBase()}/api/captures`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				imageBase64: stripDataUrl(encoded.imageDataUrl),
+				frameId: payload.frameId,
+				contentType: encoded.contentType
+			})
+		});
+		if (!res.ok) throw new Error('Capture create failed');
+		const data = await res.json();
+		return { id: data.id, key: data.key, frameId: data.frameId ?? payload.frameId ?? null };
+	} catch {
+		return stubCreateSession({
+			imageDataUrl: encoded.imageDataUrl,
+			frameId: payload.frameId
+		});
+	}
 }
 
 /**
@@ -68,7 +84,26 @@ export async function loadCapture(id, key) {
 		err.code = 'NOT_FOUND';
 		throw err;
 	}
-	return stubLoadCapture(id.trim(), key.trim());
+	try {
+		const url = `${getApiBase()}/api/captures/${encodeURIComponent(id.trim())}?key=${encodeURIComponent(key.trim())}`;
+		const res = await fetch(url);
+		if (res.status === 401 || res.status === 403) {
+			const err = new Error('Forbidden');
+			err.code = 'FORBIDDEN';
+			throw err;
+		}
+		if (!res.ok) {
+			const err = new Error('Session not found');
+			err.code = 'NOT_FOUND';
+			throw err;
+		}
+		const frameId = res.headers.get('X-Frame-Id');
+		const blob = await res.blob();
+		return { imageDataUrl: URL.createObjectURL(blob), frameId: frameId || null };
+	} catch (err) {
+		if (err && typeof err === 'object' && 'code' in err) throw err;
+		return stubLoadCapture(id.trim(), key.trim());
+	}
 }
 
 /**
@@ -93,7 +128,6 @@ export function studioSessionQuery(parts) {
 
 /**
  * Public URL for QR — use LAN hostname in production booths (VITE_PUBLIC_ORIGIN).
- * Same-tab stub only until a capture backend is attached.
  * @param {{ id: string; key: string; showSeedFrames?: boolean }} parts
  * @returns {string}
  */

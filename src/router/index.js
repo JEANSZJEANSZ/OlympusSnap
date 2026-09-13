@@ -1,9 +1,7 @@
 /**
  * Tiny history router (Vue Router–style), no library.
- * Browser URLs always include the deploy folder:
- *   /olympussnap/ | /olympussnap/frame | /olympussnap/camera | …
- *
- * Must match Vite `base` in vite.config.js (same as IIS / Cloudflare Pages path).
+ * Browser URLs follow Vite `base` (Cloudflare Workers assets at `/`).
+ *   / | /frame | /camera | …
  */
 import { writable, derived } from 'svelte/store';
 import { routes, routesByName, routesByPath, landingRoute } from './routes.js';
@@ -16,7 +14,7 @@ import { routes, routesByName, routesByPath, landingRoute } from './routes.js';
 const FALLBACK = landingRoute;
 
 /** Deploy subpath — keep in sync with vite.config.js `base`. */
-const APP_BASE = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/olympussnap';
+const APP_BASE = import.meta.env.BASE_URL.replace(/\/+$/, '');
 
 /**
  * Normalize pathname: strip trailing slash (except root), drop query/hash.

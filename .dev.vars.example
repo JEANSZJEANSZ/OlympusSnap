@@ -1,0 +1,2 @@
+# Copy to .dev.vars (gitignored). Used by `wrangler dev`.
+ADMIN_PIN=

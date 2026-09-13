@@ -18,6 +18,7 @@
 		setOracleShuffleMs
 	} from '../lib/assets/assetStore.js';
 	import { lockBooth } from '../lib/assets/boothSession.js';
+	import AdminCatalog from '../lib/components/AdminCatalog.svelte';
 	import PixelButton from '../lib/components/PixelButton.svelte';
 	import BoothOlympusBackdrop from '../lib/components/BoothOlympusBackdrop.svelte';
 
@@ -85,15 +86,17 @@
 			<p class="eyebrow">HEPHAESTUS FORGE · BOOTH RITES · CART 01</p>
 			<h1>ADMIN ARMORY</h1>
 			<p class="tagline">
-				Booth flags for this tablet. Custom frames and stickers come later via Cloudflare.
+				Custom frames and stickers sync to Cloudflare (R2+D1). PIN is a Worker secret, typed
+				at the booth lock.
 			</p>
 		</header>
+
+		<AdminCatalog />
 
 		<div class="seed-panel forge-panel">
 			<p class="panel-kicker">SEED RELICS</p>
 			<p class="seed-copy">
-				Shipped blanks for testing. Turn off only when a backend supplies frames — seed-off
-				with no backend leaves Frame Select empty.
+				Shipped blanks for testing. Turn off so Frame Select uses cloud customs only.
 			</p>
 			<div class="seed-toggles">
 				<button
@@ -106,7 +109,7 @@
 						setShowSeedFrames(next);
 						status = next
 							? 'Seed frames ON — guests can pick blanks.'
-							: 'Seed frames OFF — Frame Select empty until a backend supplies frames.';
+							: 'Seed frames OFF — Frame Select uses cloud customs only.';
 					}}
 				>
 					<span class="seed-toggle-label">FRAMES</span>
@@ -205,8 +208,7 @@
 		<div class="seed-panel forge-panel">
 			<p class="panel-kicker">BOOTH SESSION</p>
 			<p class="seed-copy">
-				This tablet is unlocked with the Admin PIN for this tab. Log out to seal the booth
-				again.
+				This tab stays signed into Admin until you log out. Guests never see this PIN.
 			</p>
 			<div class="actions">
 				<PixelButton label="LOG OUT" variant="ghost" onclick={onLogout} />
@@ -221,7 +223,7 @@
 			<PixelButton label="EXIT ADMIN" variant="primary" onclick={goBack} />
 		</div>
 		<p class="hint">
-			Seeds ship with the app. Custom frames/stickers attach later via Cloudflare.
+			Session photos wipe nightly. Frames and stickers stay on the cloud forge.
 		</p>
 	</div>
 </section>
@@ -340,35 +342,6 @@
 		color: var(--primary);
 	}
 
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-		font-size: 0.45rem;
-		color: color-mix(in srgb, var(--cream-ink) 72%, transparent);
-	}
-
-	.field input {
-		font-family: var(--font-pixel);
-		font-size: 0.55rem;
-		padding: 0.65rem 0.75rem;
-		border: none;
-		background: #fffdf8;
-		color: var(--cream-ink);
-		box-shadow:
-			0 0 0 3px var(--text),
-			3px 3px 0 var(--primary);
-	}
-
-	.field input:focus-visible {
-		outline: 3px solid var(--gold-bright);
-		outline-offset: 2px;
-	}
-
-	.field input::placeholder {
-		color: color-mix(in srgb, var(--cream-ink) 45%, transparent);
-	}
-
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
@@ -393,8 +366,7 @@
 		margin: 0;
 		font-size: 0.4rem;
 		line-height: 1.7;
-		color: #f3d9bb;
-		text-shadow: 1px 1px 0 #06152d;
+		color: var(--cream-ink);
 	}
 
 	.seed-toggles {

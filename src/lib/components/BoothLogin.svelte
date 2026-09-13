@@ -26,17 +26,17 @@
 	<BoothOlympusBackdrop />
 	<div class="content">
 		<header class="head">
-			<p class="eyebrow">BOOTH SEAL · CERBERUS WATCHES</p>
-			<h1>OLYMPUS LOCKED</h1>
+			<p class="eyebrow">ADMIN SEAL · CERBERUS WATCHES</p>
+			<h1>FORGE LOCKED</h1>
 			<p class="tagline">
-				Operator login required for booth flow. Guests with a QR still enter Studio freely.
+				Admin PIN required to enter the forge. Guests never see this screen.
 			</p>
 		</header>
 
 		<div class="gate">
 			<DialogBox
 				speaker="CERBERUS"
-				text="Speak the Admin PIN to open the booth."
+				text="Speak the Admin PIN to enter the forge."
 				typewriter={false}
 			/>
 			<label class="field">

@@ -1,0 +1,30 @@
+name = "olympus-snap"
+main = "worker/index.js"
+compatibility_date = "2026-09-13"
+
+# Replace after: npx wrangler d1 create olympus-snap
+[[d1_databases]]
+binding = "DB"
+database_name = "olympus-snap"
+database_id = "d29a4739-482d-48ec-afd8-df51fa94a679"
+migrations_dir = "worker/migrations"
+
+# Create with: npx wrangler r2 bucket create olympus-snap
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "olympus-snap"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+# Wipe capture metadata at 00:00 UTC. R2 lifecycle expires captures/ blobs.
+[triggers]
+crons = ["0 0 * * *"]
+
+# Set with: npx wrangler secret put ADMIN_PIN
+# Local: copy .dev.vars.example → .dev.vars
+[vars]
+# no secrets here

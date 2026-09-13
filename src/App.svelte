@@ -38,7 +38,7 @@
 	import { get } from 'svelte/store';
 	import { adminReturnTo, currentRoute, go, route } from './router/index.js';
 	import { initAssets } from './lib/assets/assetStore.js';
-	import { boothUnlocked, isBoothAuthBypassed, isBoothPublicRoute } from './lib/assets/boothSession.js';
+	import { boothUnlocked, isBoothAuthBypassed } from './lib/assets/boothSession.js';
 	import FrameHandoffOverlay from './lib/components/FrameHandoffOverlay.svelte';
 	import ImageHandoffOverlay from './lib/components/ImageHandoffOverlay.svelte';
 	import BoothCursor from './lib/components/BoothCursor.svelte';
@@ -50,7 +50,7 @@
 	let suppressClick = false;
 
 	const showBoothGate = $derived(
-		!isBoothAuthBypassed() && !$boothUnlocked && !isBoothPublicRoute($route)
+		!isBoothAuthBypassed() && !$boothUnlocked && $route === 'admin'
 	);
 	const lockBrandHome = $derived($route === 'studio');
 

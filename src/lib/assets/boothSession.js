@@ -1,14 +1,15 @@
 /**
- * Booth operator session — locks the app except Studio (QR guests).
+ * Operator session — PIN gates Admin only. Guest booth routes stay open.
  */
 import { writable } from 'svelte/store';
-import { verifyAdminPin } from './assetStore.js';
+import { clearAdminAuth, getAdminAuth, setAdminAuth } from './adminAuth.js';
+import { verifyAdminAuth } from './assetApi.js';
 
 const UNLOCKED_KEY = 'olympus-snap-booth-unlocked';
 
 /**
- * Vite `npm run dev` — skip Cerberus gate so frontend work needs no PIN.
- * Production / preview builds still require unlock.
+ * Vite `npm run dev` — skip Cerberus so local Admin needs no PIN.
+ * Production still requires Worker Auth to enter Admin.
  * @returns {boolean}
  */
 export function isBoothAuthBypassed() {
@@ -43,12 +44,12 @@ export function isBoothPublicRoute(nameOrPath) {
 	const raw = (nameOrPath || '').trim();
 	if (!raw) return false;
 	const name = raw.startsWith('/') ? raw.replace(/^\//, '').split(/[?#]/)[0] : raw;
-	return name === 'studio';
+	return name !== 'admin';
 }
 
 function initialUnlocked() {
 	if (isBoothAuthBypassed()) return true;
-	return readSessionFlag(UNLOCKED_KEY, false);
+	return readSessionFlag(UNLOCKED_KEY, false) && !!getAdminAuth();
 }
 
 /** @type {import('svelte/store').Writable<boolean>} */
@@ -66,11 +67,27 @@ export async function unlockBooth(creds = {}) {
 	}
 
 	const pin = (creds.pin || '').trim();
-	if (!verifyAdminPin(pin)) {
+	if (!pin) {
+		throw new Error('PIN required.');
+	}
+
+	setAdminAuth(pin);
+	let ok = false;
+	try {
+		ok = await verifyAdminAuth();
+	} catch (err) {
+		clearAdminAuth();
+		writeSessionFlag(UNLOCKED_KEY, false);
+		boothUnlocked.set(false);
+		throw err instanceof Error ? err : new Error('Could not reach the forge.');
+	}
+	if (!ok) {
+		clearAdminAuth();
 		writeSessionFlag(UNLOCKED_KEY, false);
 		boothUnlocked.set(false);
 		throw new Error('Wrong PIN.');
 	}
+
 	writeSessionFlag(UNLOCKED_KEY, true);
 	boothUnlocked.set(true);
 }
@@ -80,6 +97,7 @@ export function lockBooth() {
 		boothUnlocked.set(true);
 		return;
 	}
+	clearAdminAuth();
 	writeSessionFlag(UNLOCKED_KEY, false);
 	boothUnlocked.set(false);
 }

@@ -3,9 +3,8 @@
 #
 # COMMIT these (not listed here):
 #   - All source under src/, public/, docs/, worker/src/, worker/migrations/
-#   - Config templates: .env.example, worker/.dev.vars.example
-#   - Worker deploy config: worker/wrangler.toml, worker/package.json,
-#     worker/package-lock.json
+#   - Config templates: .env.example, .dev.vars.example
+#   - Worker deploy config: wrangler.toml, worker/index.js, worker/migrations/
 #   - Root package.json, package-lock.json, vite.config.js, index.html, etc.
 #
 # NEVER COMMIT secrets or local-only files (listed below).
@@ -33,11 +32,17 @@ graphify-out
 .svelte-kit
 .output
 
-# Env secrets — commit .env.example only (see negation below)
+# Env secrets — commit .env.example / .dev.vars.example only
 .env
 .env.*
 !.env.example
 !.env.test
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Wrangler local state
+.wrangler
 
 # Vite local overrides
 *.local

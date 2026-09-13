@@ -1,0 +1,17 @@
+{
+	"rules": [
+		{
+			"id": "expire-captures",
+			"enabled": true,
+			"conditions": {
+				"prefix": "captures/"
+			},
+			"deleteObjectsTransition": {
+				"condition": {
+					"maxAge": 86400,
+					"type": "Age"
+				}
+			}
+		}
+	]
+}

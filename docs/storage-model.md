@@ -1,8 +1,8 @@
 # Storage Model — Frames, Stickers & Capture Handoff
 
-This document explains **what gets saved**, **where**, and **how frame photo-canvas coordinates work**, so a future Cloudflare (or other) backend can implement the same contract.
+This document explains **what gets saved**, **where**, and **how frame photo-canvas coordinates work**.
 
-Today the SPA is **seed-only**: frames from [`catalog.js`](../src/lib/assets/catalog.js), captures in [`sessionStub.js`](../src/lib/session/sessionStub.js). See [photobooth-backend.md](./photobooth-backend.md) for attach points.
+The live stack is Cloudflare: Worker API + R2 blobs + D1 metadata. Seeds still ship from [`catalog.js`](../src/lib/assets/catalog.js). Captures fall back to [`sessionStub.js`](../src/lib/session/sessionStub.js) only if the API is down. See [photobooth-backend.md](./photobooth-backend.md) for routes.
 
 ---
 
@@ -14,7 +14,7 @@ Today the SPA is **seed-only**: frames from [`catalog.js`](../src/lib/assets/cat
 | **Custom sticker** | PNG file | name | none |
 | **Capture (session)** | PNG composite | frameId | reusable capability `id` + `key` for QR |
 
-The app does **not** auto-detect transparent holes in frame PNGs. Seed frames ship with pre-calculated `slots`. A future admin/backend must supply the same `{id,x,y,w,h}` array.
+The app does **not** auto-detect transparent holes in frame PNGs. Seed frames ship with pre-calculated `slots`. Admin crop + slot editors (and the Worker) store the same `{id,x,y,w,h}` array.
 
 ---
 
@@ -65,7 +65,7 @@ Same math at any export resolution — scale multiplies all four.
 
 ### How slots are authored
 
-Slots are authored offline (seed generator or a future backend admin). `normalizeSlots()` in [`assetStore.js`](../src/lib/assets/assetStore.js) clamps values (min size 0.01, inside 0–1). Frames need **at least one slot**.
+Slots are authored in Admin (`FrameSlotEditor`) or offline for seeds. `normalizeSlots()` in [`assetStore.js`](../src/lib/assets/assetStore.js) clamps values (min size 0.01, inside 0–1). Frames need **at least one slot**.
 
 ### How slots are consumed (booth + export)
 
@@ -150,7 +150,7 @@ Admin can upload **multiple PNGs at once**; each file becomes one sticker row.
 
 ## Capture handoff (QR → Studio)
 
-After Camera/Reveal, the booth stores an **unstickered composite PNG** so Studio can add stickers. Today that store is in-memory (same tab). A backend should keep this create/load shape.
+After Camera/Reveal, the booth stores an **unstickered composite** (JPEG preferred) so Studio can add stickers. The Worker writes `captures/{id}` in R2 and a D1 row with a hashed capability key. Same-tab stub is fallback only.
 
 ### Create (booth)
 
@@ -179,12 +179,17 @@ QR URL: `{VITE_PUBLIC_ORIGIN}{base}/studio?ses={base64url(`${id}::${key}`)}`
 
 ---
 
-## Current stack (no API)
+## Current stack
 
-| Mode | Customs | Captures |
-|------|---------|----------|
-| Seed-only (now) | None — `catalog.js` frames | In-memory stub, same `{id,key}` shape |
-| Future Cloudflare | Remote frames/stickers | Persist capture PNG + capability key |
+| Piece | Role |
+|-------|------|
+| Cloudflare Workers + Assets | SPA (`dist`) + `/api/*` |
+| R2 `olympus-snap` | Blobs: `frames/`, `stickers/`, `captures/` |
+| D1 `olympus-snap` | Asset metadata + capture `{id,key_hash,frame_id}` |
+| Cron `0 0 * * *` | `DELETE FROM captures` (metadata only) |
+| R2 lifecycle | Expire `captures/` after 1 day |
+
+Seeds remain in the client. Customs persist. Session photos wipe.
 
 ---
 
@@ -297,7 +302,7 @@ Reveal composites photos + frame (no stickers)
 createSession({ imageDataUrl, frameId })
         │
         ▼
-{ id, key, frameId }  — stub today, persist later
+{ id, key, frameId }  — Worker persist, stub fallback
         │
         ▼
 QR → loadCapture(id, key)
@@ -322,4 +327,4 @@ Studio loads image + frameId → sticker editor
 
 ## Related docs
 
-- [photobooth-backend.md](./photobooth-backend.md) — attach points, QR `ses`, seed-only vs future cloud
+- [photobooth-backend.md](./photobooth-backend.md) — attach points, QR `ses`, Worker + R2 + D1

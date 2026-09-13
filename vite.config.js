@@ -1,9 +1,6 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
-// Deploy base — IIS / Cloudflare Pages serve the app at /olympussnap/
-const APP_BASE = '/olympussnap';
-
 export default defineConfig({
 	plugins: [
 		svelte({
@@ -12,8 +9,14 @@ export default defineConfig({
 			}
 		})
 	],
-	base: `${APP_BASE}/`,
+	base: '/',
 	server: {
-		https: false
+		https: false,
+		proxy: {
+			'/api': {
+				target: 'http://127.0.0.1:8787',
+				changeOrigin: true
+			}
+		}
 	}
 });
