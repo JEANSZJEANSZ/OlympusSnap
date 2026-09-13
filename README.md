@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-Optional: copy `.env.example` → `.env` and set `VITE_PUBLIC_ORIGIN` if the QR origin must differ from the tablet origin.
+Copy `.env.example` → `.env`. Set `VITE_ADMIN_PIN` (required for production / `vite preview`). Optional: `VITE_PUBLIC_ORIGIN` if the QR origin must differ from the tablet origin. Never commit `.env`.
 
 ## Views (URL path)
 
@@ -24,6 +24,6 @@ Optional: copy `.env.example` → `.env` and set `VITE_PUBLIC_ORIGIN` if the QR 
 | `/camera` | Mirrored webcam + countdown |
 | `/studio` | Stickers (drag / scale / rotate) — guest QR uses `?ses=` |
 | `/reveal` | Rope cut + cloth unroll + QR |
-| `/admin` | Long-press brand → PIN `olympus` (booth flags only) |
+| `/admin` | Long-press brand → PIN from `.env` (booth flags only) |
 
 App is served under Vite `base` `/olympussnap/`. Seeds: `public/assets/` + `src/lib/assets/catalog.js`.

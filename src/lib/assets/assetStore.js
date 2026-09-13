@@ -6,8 +6,6 @@ import { get, writable } from 'svelte/store';
 import { FRAMES as SEED_FRAMES, STICKERS as SEED_STICKERS } from './catalog.js';
 import { warmFrameImages } from '../utils/loadImageForCanvas.js';
 
-const PIN_KEY = 'olympus-snap-admin-pin';
-const DEFAULT_PIN = 'olympus';
 const SEED_FRAMES_KEY = 'olympus-snap-show-seed-frames';
 const RANDOM_FRAME_KEY = 'olympus-snap-random-frame';
 const GESTURE_SNAP_KEY = 'olympus-snap-gesture-snap';
@@ -262,27 +260,16 @@ export function getLiveFrameById(id) {
 	return get(frames).find((f) => f.id === id);
 }
 
-export function getAdminPin() {
-	try {
-		return localStorage.getItem(PIN_KEY) || DEFAULT_PIN;
-	} catch {
-		return DEFAULT_PIN;
-	}
-}
-
-/** @param {string} pin */
-export function setAdminPin(pin) {
-	const next = pin.trim() || DEFAULT_PIN;
-	try {
-		localStorage.setItem(PIN_KEY, next);
-	} catch {
-		/* ignore quota / private mode */
-	}
+/** @returns {string} */
+function configuredAdminPin() {
+	return String(import.meta.env.VITE_ADMIN_PIN || '').trim();
 }
 
 /** @param {string} attempt */
 export function verifyAdminPin(attempt) {
-	return attempt === getAdminPin();
+	const expected = configuredAdminPin();
+	if (!expected) return false;
+	return attempt === expected;
 }
 
-export { DEFAULT_PIN, normalizeSlots };
+export { normalizeSlots };

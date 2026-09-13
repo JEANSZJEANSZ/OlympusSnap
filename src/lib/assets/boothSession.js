@@ -69,7 +69,7 @@ export async function unlockBooth(creds = {}) {
 	if (!verifyAdminPin(pin)) {
 		writeSessionFlag(UNLOCKED_KEY, false);
 		boothUnlocked.set(false);
-		throw new Error('Wrong PIN. Default seed: olympus');
+		throw new Error('Wrong PIN.');
 	}
 	writeSessionFlag(UNLOCKED_KEY, true);
 	boothUnlocked.set(true);

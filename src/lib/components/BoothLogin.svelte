@@ -36,7 +36,7 @@
 		<div class="gate">
 			<DialogBox
 				speaker="CERBERUS"
-				text="Speak the Admin PIN to open the booth. Default: olympus"
+				text="Speak the Admin PIN to open the booth."
 				typewriter={false}
 			/>
 			<label class="field">

@@ -8,7 +8,7 @@ Built-in frames live in [`catalog.js`](./catalog.js) and `public/assets/frames/`
 
 ## Admin
 
-Long-press `OLYMPUS_SNAP` → PIN `olympus`. Settings only: seed-frame toggle, booth-flow flags, PIN. No upload.
+Long-press `OLYMPUS_SNAP` → PIN from `VITE_ADMIN_PIN` in `.env`. Settings only: seed-frame toggle, booth-flow flags. No upload. Change the PIN in `.env`, not in Admin.
 
 ## Future Cloudflare catalog
 

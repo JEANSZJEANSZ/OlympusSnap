@@ -15,9 +15,7 @@
 		setRandomFrame,
 		setGestureSnap,
 		setGestureFrame,
-		setOracleShuffleMs,
-		getAdminPin,
-		setAdminPin
+		setOracleShuffleMs
 	} from '../lib/assets/assetStore.js';
 	import { lockBooth } from '../lib/assets/boothSession.js';
 	import PixelButton from '../lib/components/PixelButton.svelte';
@@ -39,8 +37,6 @@
 	);
 
 	let status = $state('');
-	let showPinChange = $state(false);
-	let newPin = $state('');
 
 	function onLogout() {
 		lockBooth();
@@ -77,16 +73,6 @@
 		go(returnTo);
 	}
 
-	function savePin() {
-		if (!newPin.trim()) {
-			status = 'PIN cannot be empty.';
-			return;
-		}
-		setAdminPin(newPin.trim());
-		showPinChange = false;
-		newPin = '';
-		status = 'PIN updated.';
-	}
 </script>
 
 <section class="admin-view" class:exiting {@attach attachRoot}>
@@ -102,27 +88,6 @@
 				Booth flags for this tablet. Custom frames and stickers come later via Cloudflare.
 			</p>
 		</header>
-
-		{#if showPinChange}
-			<div class="pin-change forge-panel">
-				<p class="panel-kicker">CHANGE PIN</p>
-				<label class="field">
-					<span>New PIN</span>
-					<input type="text" bind:value={newPin} placeholder={getAdminPin()} />
-				</label>
-				<div class="actions">
-					<PixelButton label="SAVE PIN" variant="gold" onclick={savePin} />
-					<PixelButton
-						label="CANCEL"
-						variant="ghost"
-						onclick={() => {
-							showPinChange = false;
-							newPin = '';
-						}}
-					/>
-				</div>
-			</div>
-		{/if}
 
 		<div class="seed-panel forge-panel">
 			<p class="panel-kicker">SEED RELICS</p>
@@ -253,7 +218,6 @@
 		{/if}
 
 		<div class="footer-actions">
-			<PixelButton label="CHANGE PIN" variant="ghost" onclick={() => (showPinChange = true)} />
 			<PixelButton label="EXIT ADMIN" variant="primary" onclick={goBack} />
 		</div>
 		<p class="hint">

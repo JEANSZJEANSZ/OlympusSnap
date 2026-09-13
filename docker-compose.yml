@@ -1,8 +1,0 @@
-services:
-  olympus-snap:
-    build: .
-    image: olympus-snap:latest
-    container_name: olympus-snap
-    restart: unless-stopped
-    ports:
-      - "8082:80"

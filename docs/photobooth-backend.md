@@ -6,9 +6,10 @@ The SPA ships with **no API**. Seed frames come from `src/lib/assets/catalog.js`
 
 | Var | Role |
 |-----|------|
+| `VITE_ADMIN_PIN` | Admin unlock. Lives in `.env` only. Empty = unlock always fails |
 | `VITE_PUBLIC_ORIGIN` | Optional QR origin when guests must scan a different host than the tablet |
 
-No `VITE_API_BASE`. Admin is a local PIN (`olympus` default).
+No `VITE_API_BASE`. Admin PIN is `VITE_ADMIN_PIN` in `.env` only — never hardcode it.
 
 ## Attach points
 

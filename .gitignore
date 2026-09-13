@@ -60,10 +60,6 @@ vite.config.ts.timestamp-*
 
 # Playwright artifacts
 test-results
-docker-compose.yml
-Dockerfile
-nginx.conf
-.gitea
 .cursor
 
 
